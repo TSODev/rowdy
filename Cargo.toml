@@ -11,14 +11,22 @@ categories = ["development-tools", "database"]
 repository = "https://github.com/TSODev/rowdy"
 
 [dependencies]
-# L'interface graphique de terminal
+# Interface graphique de terminal
 ratatui = "0.26"
 crossterm = "0.27"
 
-# Le moteur asynchrone et la gestion des canaux
+# Moteur asynchrone
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 
-# La couche base de données (ici configurée pour SQLite et Postgres en mode async)
-sqlx = { version = "0.7", features = [ "runtime-tokio-native-tls", "sqlite", "postgres" ] }
+# Couche base de données
+sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "postgres", "mysql"] }
+# redis = { version = "0.24", features = ["tokio-comp"] }  # à activer pour le support Redis
+
+# Sérialisation et configuration
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# Gestion des erreurs
+thiserror = "1"
 
