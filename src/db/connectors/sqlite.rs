@@ -103,23 +103,11 @@ fn sqlite_value(row: &SqliteRow, index: usize) -> Value {
     if raw.is_null() {
         return Value::Null;
     }
-    let type_info = raw.type_info();
-    match type_info.name() {
-        "INTEGER" | "INT" => row
-            .try_get::<i64, _>(index)
-            .map(Value::Int)
-            .unwrap_or(Value::Null),
-        "REAL" => row
-            .try_get::<f64, _>(index)
-            .map(Value::Float)
-            .unwrap_or(Value::Null),
-        "BLOB" => row
-            .try_get::<Vec<u8>, _>(index)
-            .map(Value::Bytes)
-            .unwrap_or(Value::Null),
-        _ => row
-            .try_get::<String, _>(index)
-            .map(Value::Text)
-            .unwrap_or(Value::Null),
-    }
+    // SQLite has dynamic typing: the declared column type is advisory, not enforced.
+    // Try each storage class in priority order instead of matching on type names.
+    if let Ok(v) = row.try_get::<i64, _>(index)     { return Value::Int(v);   }
+    if let Ok(v) = row.try_get::<f64, _>(index)     { return Value::Float(v); }
+    if let Ok(v) = row.try_get::<String, _>(index)  { return Value::Text(v);  }
+    if let Ok(v) = row.try_get::<Vec<u8>, _>(index) { return Value::Bytes(v); }
+    Value::Null
 }

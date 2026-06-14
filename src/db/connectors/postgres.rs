@@ -106,12 +106,19 @@ fn pg_value(row: &PgRow, index: usize) -> Value {
     if raw.is_null() {
         return Value::Null;
     }
-    let type_info = raw.type_info();
-    match type_info.name() {
-        "BOOL"                              => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or(Value::Null),
-        "INT2" | "INT4" | "INT8"           => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or(Value::Null),
-        "FLOAT4" | "FLOAT8" | "NUMERIC"    => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or(Value::Null),
-        "BYTEA"                             => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or(Value::Null),
+    match raw.type_info().name() {
+        "BOOL"    => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or(Value::Null),
+        // Each integer width requires its own Rust type in sqlx
+        "INT2"    => row.try_get::<i16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
+        "INT4"    => row.try_get::<i32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
+        "INT8"    => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or(Value::Null),
+        "FLOAT4"  => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or(Value::Null),
+        "FLOAT8"  => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or(Value::Null),
+        // NUMERIC: try String (text protocol) then parse to f64; keep as Text if not parseable
+        "NUMERIC" => row.try_get::<String, _>(index).ok()
+            .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
+            .unwrap_or(Value::Null),
+        "BYTEA"   => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or(Value::Null),
         _ => row.try_get::<String, _>(index).map(Value::Text).unwrap_or(Value::Null),
     }
 }

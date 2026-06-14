@@ -4,6 +4,7 @@ mod db;
 mod events;
 mod ui;
 
+use clap::Parser;
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -11,8 +12,26 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[derive(Parser)]
+#[command(
+    name    = "rowdy-db",
+    version,
+    about   = "A TUI database management client for PostgreSQL, SQLite, MySQL and Redis.",
+    long_about = None,
+)]
+struct Cli {}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // clap handles --version and --help itself (prints + std::process::exit)
+    let _cli = Cli::parse();
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(run_tui())
+}
+
+async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;

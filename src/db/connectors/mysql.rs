@@ -106,12 +106,26 @@ fn mysql_value(row: &MySqlRow, index: usize) -> Value {
     if raw.is_null() {
         return Value::Null;
     }
-    let type_info = raw.type_info();
-    match type_info.name() {
-        "BOOLEAN" | "TINYINT(1)"                                    => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or(Value::Null),
-        "TINYINT" | "SMALLINT" | "INT" | "MEDIUMINT" | "BIGINT"    => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or(Value::Null),
-        "FLOAT" | "DOUBLE" | "DECIMAL"                              => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or(Value::Null),
-        "BLOB" | "MEDIUMBLOB" | "LONGBLOB" | "BINARY" | "VARBINARY" => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or(Value::Null),
+    match raw.type_info().name() {
+        "BOOLEAN" | "TINYINT(1)"             => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or(Value::Null),
+        // Signed integers — each width needs its own Rust type
+        "TINYINT"                            => row.try_get::<i8, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
+        "SMALLINT"                           => row.try_get::<i16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
+        "INT" | "MEDIUMINT"                  => row.try_get::<i32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
+        "BIGINT"                             => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or(Value::Null),
+        // Unsigned variants
+        "TINYINT UNSIGNED"                   => row.try_get::<u8, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
+        "SMALLINT UNSIGNED"                  => row.try_get::<u16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
+        "INT UNSIGNED" | "MEDIUMINT UNSIGNED"=> row.try_get::<u32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
+        "BIGINT UNSIGNED"                    => row.try_get::<u64, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
+        "FLOAT"                              => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or(Value::Null),
+        "DOUBLE"                             => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or(Value::Null),
+        // DECIMAL: MySQL wire sends it as text — parse to f64, keep as Text if not parseable
+        "DECIMAL"                            => row.try_get::<String, _>(index).ok()
+            .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
+            .unwrap_or(Value::Null),
+        "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "BINARY" | "VARBINARY"
+                                             => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or(Value::Null),
         _ => row.try_get::<String, _>(index).map(Value::Text).unwrap_or(Value::Null),
     }
 }

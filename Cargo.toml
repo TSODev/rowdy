@@ -31,4 +31,5 @@ toml = "0.8"
 # Gestion des erreurs
 thiserror = "1"
 tui-textarea = "0.5"
+clap = { version = "4", features = ["derive"] }
 
