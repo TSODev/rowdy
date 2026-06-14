@@ -182,9 +182,9 @@ fn pg_value(row: &PgRow, index: usize) -> Value {
         "INT8"           => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or_else(|_| marker()),
         "FLOAT4"         => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or_else(|_| marker()),
         "FLOAT8"         => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or_else(|_| marker()),
-        "NUMERIC"        => row.try_get::<String, _>(index).ok()
-                               .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
-                               .unwrap_or_else(marker),
+        "NUMERIC"        => row.try_get::<bigdecimal::BigDecimal, _>(index)
+                               .map(|d| Value::Text(d.to_string()))
+                               .unwrap_or_else(|_| marker()),
         "BYTEA"          => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or_else(|_| marker()),
         // Dates and times
         "DATE"           => row.try_get::<NaiveDate, _>(index).map(|d| Value::Text(d.to_string())).unwrap_or_else(|_| marker()),

@@ -167,9 +167,9 @@ fn mysql_value(row: &MySqlRow, index: usize) -> Value {
         "BIGINT UNSIGNED"                     => row.try_get::<u64, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
         "FLOAT"                               => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or_else(|_| marker()),
         "DOUBLE"                              => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or_else(|_| marker()),
-        "DECIMAL"                             => row.try_get::<String, _>(index).ok()
-                                                    .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
-                                                    .unwrap_or_else(marker),
+        "DECIMAL"                             => row.try_get::<bigdecimal::BigDecimal, _>(index)
+                                                    .map(|d| Value::Text(d.to_string()))
+                                                    .unwrap_or_else(|_| marker()),
         "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "BINARY" | "VARBINARY"
                                               => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or_else(|_| marker()),
         // Dates and times
