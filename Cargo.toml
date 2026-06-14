@@ -8,6 +8,7 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["database", "tui", "terminal", "postgres"]
 categories = ["development-tools", "database"]
+repository = "https://github.com/TSODev/rowdy"
 
 [dependencies]
 # L'interface graphique de terminal
