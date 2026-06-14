@@ -152,27 +152,25 @@ Le compteur affiche `Tables (N / total)` quand un filtre est actif.
 Depuis la vue liste des tables, appuyez sur `Enter` pour ouvrir une table.
 
 ```
- users │ row 2/1000 │ col 3/8  (LIMIT 1000)
+ users │ row 2/3 │ col 2/4 │ 3/150 rows  [name≈ob]
 ┌─────┬──────────────────┬─────────────────────┬ cr… ┬──────────────────────┐
 │ id  │ name             │ email               │  …  │ created_at           │
 ├─────┼──────────────────┼─────────────────────┼─────┼──────────────────────┤
-│   1 │ Alice            │ alice@example.com   │  …  │ 2024-01-15 08:30:00  │
-│ > 2 │ Bob              │ bob@example.com     │  …  │ 2024-02-20 14:10:00  │
-│   3 │ Charlie          │ charlie@example.com │  …  │ 2024-03-05 09:45:00  │
+│   2 │ Bob              │ bob@example.com     │  …  │ 2024-02-20 14:10:00  │
 └─────┴──────────────────┴─────────────────────┴─────┴──────────────────────┘
-  j/k: rows   h/l: cols   g/G: first/last   PgUp/Dn: page   Space: collapse   q: back
+  j/k: rows   h/l: cols   g/G: first/last   Space: collapse   f: filter   F: clear   q: back
 ```
 
 ### Navigation
 
 | Touche | Action |
 |--------|--------|
-| `j` / `↓` | Ligne suivante |
+| `j` / `↓` | Ligne suivante — charge la page suivante si dernière ligne atteinte |
 | `k` / `↑` | Ligne précédente |
 | `h` / `←` | Colonne précédente |
 | `l` / `→` | Colonne suivante |
 | `g` | Première ligne |
-| `G` | Dernière ligne |
+| `G` | Dernière ligne chargée |
 | `PgDown` | +10 lignes |
 | `PgUp` | -10 lignes |
 | `Space` | Réduire / agrandir la colonne sélectionnée |
@@ -180,14 +178,30 @@ Depuis la vue liste des tables, appuyez sur `Enter` pour ouvrir une table.
 
 ### Colonnes
 
-- La **colonne sélectionnée** est indiquée par un en-tête souligné en jaune (`h/l` pour naviguer entre colonnes).
-- `Space` **réduit** une colonne à 3 caractères pour gagner de la place, ou la **restaure** à sa largeur naturelle.
+- La **colonne sélectionnée** est indiquée par un en-tête souligné en jaune (`h/l` pour naviguer).
+- Les **colonnes filtrées** sont mises en évidence en cyan dans l'en-tête.
+- `Space` **réduit** une colonne à 3 caractères pour gagner de la place, ou la **restaure**.
 - Les colonnes défilent automatiquement pour garder la colonne sélectionnée toujours visible.
-- La largeur naturelle est calculée automatiquement d'après le contenu (max 25 caractères).
-- Les valeurs longues sont tronquées avec `…`.
+- La largeur naturelle est calculée d'après le contenu (max 25 caractères). Valeurs longues tronquées avec `…`.
 
-> **Note :** les données sont limitées à 1000 lignes (`LIMIT 1000`).  
-> Redis n'est pas supporté dans le Data Grid (utiliser la vue liste des clés).
+### Pagination (infinite scroll)
+
+Les données sont chargées par pages de **200 lignes**. Appuyer sur `j` à la dernière ligne déclenche automatiquement le chargement de la page suivante. La barre d'info affiche `chargé/total rows` dès que le `COUNT(*)` est disponible, et `N+ rows` dans l'intervalle.
+
+### Filtres cumulatifs
+
+| Touche | Action |
+|--------|--------|
+| `f` | Ouvrir la saisie de filtre pour la colonne sélectionnée |
+| `Enter` | Appliquer le filtre (recharge depuis le début) |
+| `Esc` | Annuler la saisie sans appliquer |
+| `d` | Supprimer le filtre de la colonne courante et recharger |
+| `F` | Effacer tous les filtres et recharger |
+
+Les filtres utilisent `LIKE '%valeur%'` et s'accumulent sur plusieurs colonnes (AND). La valeur de filtre active s'affiche dans la barre d'info : `[name≈bob] [email≈@gmail]`.
+
+> **Note :** `LIKE` est sensible à la casse sur PostgreSQL. Sur SQLite et MySQL les comparaisons ASCII sont insensibles à la casse. Pour les colonnes non-texte (entiers, dates), PostgreSQL peut retourner une erreur — filtrer de préférence sur des colonnes de type texte.  
+> Redis n'est pas supporté dans le Data Grid (utiliser l'éditeur SQL).
 
 ### Roadmap — expansion par clé étrangère _(à venir)_
 

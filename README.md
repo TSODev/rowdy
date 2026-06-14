@@ -23,7 +23,9 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Saved connection profiles (`~/.config/rowdy/config.toml`) | ✅ |
 | Vim-style keyboard navigation (`h j k l`, `/` to filter) | ✅ |
 | Table list with live filter | ✅ |
-| Data Grid — column scroll, collapse/expand, pagination | ✅ |
+| Data Grid — column scroll, collapse/expand | ✅ |
+| Data Grid — infinite scroll pagination (200 rows/page + COUNT) | ✅ |
+| Data Grid — cumulative column filters (`f` / `d` / `F`) | ✅ |
 | SQL Editor — multi-line, F5 to execute, results table | ✅ |
 | Async I/O — UI never blocks during queries | ✅ |
 | Inline cell editing | 🔲 planned |
@@ -112,6 +114,9 @@ Profiles appear in the left panel of the connection screen at startup.
 | `g` / `G` | First / last row |
 | `PgDn` / `PgUp` | ±10 rows |
 | `Space` | Collapse / expand selected column |
+| `f` | Open filter input for selected column |
+| `d` | Remove filter on selected column |
+| `F` | Clear all filters |
 | `q` | Back to table list |
 
 ### SQL Editor

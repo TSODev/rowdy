@@ -16,6 +16,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.0] — 2026-06-14
+
+### Added
+
+#### Data Grid — column filters (cumulative)
+- `f` opens a filter input for the selected column (`LIKE '%value%'`, case-insensitive on MySQL/SQLite)
+- Multiple column filters combined with AND — cumulative across columns
+- `d` removes the filter on the selected column and reloads
+- `F` clears all filters and reloads
+- Single-quote escaping (`'` → `''`) prevents SQL injection
+- Filtered column headers highlighted in **cyan**; active filters shown in info bar as `[col≈value]`
+- Filter state preserved across page loads; cleared on table re-open
+
+#### Data Grid — pagination (infinite scroll)
+- `PAGE_SIZE = 200` rows per fetch (`SELECT … LIMIT 200 OFFSET N`)
+- Auto-loads next page when `j` is pressed on the last loaded row (seamless infinite scroll)
+- `COUNT(*)` query runs in parallel for total row count
+- Info bar shows `loaded/total rows` (or `N+ rows` while count is pending)
+- Loading indicator `⏳` during async fetches
+- `has_more` / `loading` flags prevent duplicate concurrent requests
+
+---
+
 ## [0.2.0] — 2026-06-14
 
 ### Added
@@ -100,6 +123,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/TSODev/rowdy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TSODev/rowdy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/TSODev/rowdy/releases/tag/v0.1.0

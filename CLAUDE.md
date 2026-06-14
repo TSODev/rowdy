@@ -168,7 +168,9 @@ src/
 - [x] Connexion async avec retour d'état via `DbEvent`
 - [x] Vue liste des tables : navigation j/k, filtre `/`, chargement async
 - [x] `~/.config/rowdy/config.toml` (profils de connexion)
-- [x] Data Grid : défilement lignes/colonnes, collapse/expand colonnes, LIMIT 1000
+- [x] Data Grid : défilement lignes/colonnes, collapse/expand colonnes
+- [x] Data Grid : pagination infinite scroll (PAGE_SIZE=200, OFFSET progressif, COUNT parallèle)
+- [x] Data Grid : filtres cumulatifs par colonne (`f/d/F`, `LIKE '%val%'`, BTreeMap, réinjection sûre)
 - [x] Éditeur SQL multi-lignes (`tui-textarea`) : F5/Ctrl+Enter, focus editor/résultats, SELECT vs DML
 
 ### Roadmap
