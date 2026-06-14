@@ -1,5 +1,13 @@
 # 🤠 Rowdy
 
+[![Crates.io](https://img.shields.io/crates/v/rowdy-db)](https://crates.io/crates/rowdy-db)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#-license)
+![Rust](https://img.shields.io/badge/rust-2024_edition-orange?logo=rust)
+![ratatui](https://img.shields.io/badge/ratatui-0.27-blueviolet)
+![sqlx](https://img.shields.io/badge/sqlx-0.7-blue)
+![tokio](https://img.shields.io/badge/tokio-1-green)
+![tui-textarea](https://img.shields.io/badge/tui--textarea-0.5-purple)
+
 A fast, modern, and rowdy **Terminal User Interface (TUI)** database management tool written in Rust.
 
 Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to inspect, query, and manage their databases without ever leaving their terminal or touching a mouse. Built on `ratatui` and `sqlx`, it compiles into a single standalone binary with no runtime dependencies.
