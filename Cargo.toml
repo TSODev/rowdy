@@ -21,7 +21,7 @@ async-trait = "0.1"
 
 # Couche base de données
 sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "postgres", "mysql"] }
-# redis = { version = "0.24", features = ["tokio-comp"] }  # à activer pour le support Redis
+redis = { version = "0.24", features = ["tokio-comp"] }
 
 # Sérialisation et configuration
 serde = { version = "1", features = ["derive"] }
