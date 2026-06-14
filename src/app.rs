@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use crossterm::event::{Event, EventStream, KeyCode, KeyModifiers};
 use futures::StreamExt;
 use ratatui::{backend::Backend, Terminal};
@@ -7,9 +8,9 @@ use tokio::{
     time::{timeout, Duration},
 };
 use crate::config::Config;
-use crate::db::{connectors, traits::{KvClient, SqlClient}, types::DbQueryResult};
+use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{DbQueryResult, Value}};
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
-use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen};
+use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen, PAGE_SIZE};
 use crate::ui::screens::sql_editor::{SqlEditorAction, SqlEditorScreen};
 use crate::ui::screens::table_list::{TableListAction, TableListScreen};
 
@@ -28,7 +29,9 @@ pub enum DbEvent {
     ConnectionFailed(String),
     TablesLoaded(Vec<String>),
     TablesLoadFailed(String),
-    DataLoaded(DbQueryResult),
+    DataLoaded(DbQueryResult),      // initial page — replaces all rows
+    DataPageLoaded(DbQueryResult),  // next page   — appended to existing rows
+    DataCountLoaded(u64),           // COUNT(*) result
     DataLoadFailed(String),
     QueryRows(DbQueryResult),
     QueryExecuted(u64),
@@ -139,6 +142,8 @@ impl App {
             AppState::DataGrid => {
                 match self.data_grid_screen.handle_key(key) {
                     DataGridAction::Back => self.state = AppState::TableList,
+                    DataGridAction::ApplyFilter => self.spawn_reload_filters(),
+                    DataGridAction::LoadMore => self.spawn_load_more(),
                     DataGridAction::None => {}
                 }
             }
@@ -157,7 +162,7 @@ impl App {
         }
     }
 
-    // ── Open SQL editor ───────────────────────────────────────────────────────
+    // ── SQL editor ────────────────────────────────────────────────────────────
 
     fn open_sql_editor(&mut self) {
         let db_info = self.table_list_screen.db_info.clone();
@@ -222,33 +227,50 @@ impl App {
         self.data_grid_screen = DataGridScreen::new(table_name.clone());
         self.state = AppState::DataGrid;
 
-        match &self.active_client {
-            Some(ActiveClient::Sql(c)) => {
-                let c = Arc::clone(c);
-                let tx = self.db_tx.clone();
-                tokio::spawn(async move {
-                    let query = format!("SELECT * FROM \"{table_name}\" LIMIT 1000");
-                    let ev = match c.fetch_all(&query).await {
-                        Ok(r)  => DbEvent::DataLoaded(r),
-                        Err(e) => DbEvent::DataLoadFailed(e.to_string()),
-                    };
-                    let _ = tx.send(ev).await;
-                });
-            }
-            Some(ActiveClient::Kv(_)) => {
-                self.data_grid_screen.set_error(
-                    "Data Grid not available for key-value stores (Redis). \
-                     Use the SQL Editor for queries."
-                    .into(),
-                );
-            }
-            None => {
-                self.data_grid_screen.set_error("Not connected".into());
-            }
+        if let Some(ActiveClient::Sql(c)) = &self.active_client {
+            let empty = BTreeMap::new();
+            spawn_sql_page(Arc::clone(c), &table_name, &empty, 0, true, self.db_tx.clone());
+            spawn_sql_count(Arc::clone(c), &table_name, &empty, self.db_tx.clone());
+        } else if let Some(ActiveClient::Kv(_)) = &self.active_client {
+            self.data_grid_screen.set_error(
+                "Data Grid not available for key-value stores. Use the SQL Editor.".into(),
+            );
+        } else {
+            self.data_grid_screen.set_error("Not connected".into());
         }
     }
 
-    // ── Async SQL execution ───────────────────────────────────────────────────
+    // Load next page (infinite scroll — triggered when user reaches last row)
+    fn spawn_load_more(&mut self) {
+        if self.data_grid_screen.loading { return; }
+        self.data_grid_screen.loading = true;
+
+        let table   = self.data_grid_screen.table_name.clone();
+        let filters = self.data_grid_screen.filters.clone();
+        let offset  = self.data_grid_screen.loaded_count;
+
+        if let Some(ActiveClient::Sql(c)) = &self.active_client {
+            spawn_sql_page(Arc::clone(c), &table, &filters, offset, false, self.db_tx.clone());
+        }
+    }
+
+    // Re-fetch from page 0 with the current filters (after filter add/remove)
+    fn spawn_reload_filters(&mut self) {
+        let table   = self.data_grid_screen.table_name.clone();
+        let filters = self.data_grid_screen.filters.clone();
+        self.data_grid_screen.reset_data(); // keeps table_name + filters
+        // reset_data sets loading=true but doesn't spawn — we do it here
+        self.data_grid_screen.total_count = None;
+
+        if let Some(ActiveClient::Sql(c)) = &self.active_client {
+            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, self.db_tx.clone());
+            spawn_sql_count(Arc::clone(c), &table, &filters, self.db_tx.clone());
+        } else {
+            self.data_grid_screen.set_error("Not connected to a SQL database".into());
+        }
+    }
+
+    // ── Async SQL execution (SQL editor) ──────────────────────────────────────
 
     fn spawn_execute_query(&mut self, sql: String) {
         self.sql_editor_screen.set_running();
@@ -314,6 +336,12 @@ impl App {
             DbEvent::DataLoaded(result) => {
                 self.data_grid_screen.set_result(result);
             }
+            DbEvent::DataPageLoaded(result) => {
+                self.data_grid_screen.append_rows(result);
+            }
+            DbEvent::DataCountLoaded(n) => {
+                self.data_grid_screen.set_total(n);
+            }
             DbEvent::DataLoadFailed(msg) => {
                 self.data_grid_screen.set_error(msg);
             }
@@ -330,6 +358,8 @@ impl App {
     }
 }
 
+// ── SQL query helpers ─────────────────────────────────────────────────────────
+
 fn is_select_query(sql: &str) -> bool {
     let upper = sql.trim_start().to_uppercase();
     upper.starts_with("SELECT")
@@ -338,4 +368,72 @@ fn is_select_query(sql: &str) -> bool {
         || upper.starts_with("SHOW")
         || upper.starts_with("DESCRIBE")
         || upper.starts_with("PRAGMA")
+}
+
+// ── Data grid query builders ──────────────────────────────────────────────────
+
+fn build_where(filters: &BTreeMap<String, String>) -> String {
+    if filters.is_empty() { return String::new(); }
+    let clauses: Vec<String> = filters.iter()
+        .map(|(col, val)| {
+            let escaped = val.replace('\'', "''");
+            format!("\"{}\" LIKE '%{}%'", col, escaped)
+        })
+        .collect();
+    format!(" WHERE {}", clauses.join(" AND "))
+}
+
+fn build_data_query(table: &str, filters: &BTreeMap<String, String>, offset: usize) -> String {
+    let wh = build_where(filters);
+    format!("SELECT * FROM \"{table}\"{wh} LIMIT {PAGE_SIZE} OFFSET {offset}")
+}
+
+fn build_count_query(table: &str, filters: &BTreeMap<String, String>) -> String {
+    let wh = build_where(filters);
+    format!("SELECT COUNT(*) AS _count FROM \"{table}\"{wh}")
+}
+
+fn parse_count(result: &DbQueryResult) -> u64 {
+    result.rows.first()
+        .and_then(|r| r.values.first())
+        .map(|v| match v {
+            Value::Int(n)  => *n as u64,
+            Value::Text(s) => s.parse().unwrap_or(0),
+            _              => 0,
+        })
+        .unwrap_or(0)
+}
+
+// ── Async spawn helpers ───────────────────────────────────────────────────────
+
+fn spawn_sql_page(
+    client: Arc<dyn SqlClient>,
+    table: &str,
+    filters: &BTreeMap<String, String>,
+    offset: usize,
+    initial: bool,
+    tx: mpsc::Sender<DbEvent>,
+) {
+    let query = build_data_query(table, filters, offset);
+    tokio::spawn(async move {
+        let ev = match client.fetch_all(&query).await {
+            Ok(r)  => if initial { DbEvent::DataLoaded(r) } else { DbEvent::DataPageLoaded(r) },
+            Err(e) => DbEvent::DataLoadFailed(e.to_string()),
+        };
+        let _ = tx.send(ev).await;
+    });
+}
+
+fn spawn_sql_count(
+    client: Arc<dyn SqlClient>,
+    table: &str,
+    filters: &BTreeMap<String, String>,
+    tx: mpsc::Sender<DbEvent>,
+) {
+    let query = build_count_query(table, filters);
+    tokio::spawn(async move {
+        if let Ok(r) = client.fetch_all(&query).await {
+            let _ = tx.send(DbEvent::DataCountLoaded(parse_count(&r))).await;
+        }
+    });
 }

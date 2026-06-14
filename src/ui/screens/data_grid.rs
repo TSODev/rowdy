@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -8,13 +8,27 @@ use ratatui::{
 };
 use crate::db::types::{DbQueryResult, Value};
 
+pub const PAGE_SIZE: usize = 200;
 const COLLAPSED_WIDTH: u16 = 3;
 const MAX_COL_WIDTH: u16 = 25;
+
+// ── Filter input (in-progress edit) ──────────────────────────────────────────
+
+pub struct FilterInput {
+    pub col_name: String,
+    pub value: String,
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
 
 pub enum DataGridAction {
     None,
     Back,
+    ApplyFilter,
+    LoadMore,
 }
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 pub struct DataGridScreen {
     pub table_name: String,
@@ -24,6 +38,14 @@ pub struct DataGridScreen {
     pub col_offset: usize,
     pub collapsed_cols: HashSet<usize>,
     pub status: Option<String>,
+    // Filtering
+    pub filters: BTreeMap<String, String>,
+    pub filter_input: Option<FilterInput>,
+    // Pagination
+    pub loaded_count: usize,
+    pub total_count: Option<u64>,
+    pub has_more: bool,
+    pub loading: bool,
 }
 
 impl DataGridScreen {
@@ -38,20 +60,185 @@ impl DataGridScreen {
             col_offset: 0,
             collapsed_cols: HashSet::new(),
             status: Some("Loading…".into()),
+            filters: BTreeMap::new(),
+            filter_input: None,
+            loaded_count: 0,
+            total_count: None,
+            has_more: true,
+            loading: true,
         }
     }
 
+    // Initial/replacement load (resets everything)
     pub fn set_result(&mut self, result: DbQueryResult) {
+        let count = result.rows.len();
+        self.has_more = count == PAGE_SIZE;
+        self.loaded_count = count;
         self.status = None;
+        self.loading = false;
         self.selected_col = 0;
         self.col_offset = 0;
         self.collapsed_cols.clear();
+        self.table_state = TableState::default();
+        self.table_state.select(if count > 0 { Some(0) } else { None });
         self.result = Some(result);
-        self.table_state.select(Some(0));
+    }
+
+    // Append next page rows
+    pub fn append_rows(&mut self, result: DbQueryResult) {
+        let new_count = result.rows.len();
+        self.has_more = new_count == PAGE_SIZE;
+        self.loading = false;
+        self.loaded_count += new_count;
+        if let Some(ref mut existing) = self.result {
+            existing.rows.extend(result.rows);
+        } else {
+            self.table_state.select(Some(0));
+            self.result = Some(result);
+        }
+    }
+
+    // Update COUNT(*) result
+    pub fn set_total(&mut self, count: u64) {
+        self.total_count = Some(count);
+    }
+
+    // Reset data but keep table_name, filters, selected_col, collapsed_cols
+    pub fn reset_data(&mut self) {
+        self.result = None;
+        self.table_state = TableState::default();
+        self.col_offset = 0;
+        self.status = Some("Loading…".into());
+        self.loaded_count = 0;
+        self.total_count = None;
+        self.has_more = true;
+        self.loading = true;
+        self.filter_input = None;
     }
 
     pub fn set_error(&mut self, msg: String) {
         self.status = Some(format!("Error: {msg}"));
+        self.loading = false;
+    }
+
+    // ── Key handling ──────────────────────────────────────────────────────────
+
+    pub fn handle_key(&mut self, key: KeyEvent) -> DataGridAction {
+        // Filter input mode takes priority
+        if let Some(ref mut fi) = self.filter_input {
+            return match key.code {
+                KeyCode::Esc => {
+                    self.filter_input = None;
+                    DataGridAction::None
+                }
+                KeyCode::Enter => {
+                    let col_name = fi.col_name.clone();
+                    let value = fi.value.trim().to_string();
+                    self.filter_input = None;
+                    if value.is_empty() {
+                        self.filters.remove(&col_name);
+                    } else {
+                        self.filters.insert(col_name, value);
+                    }
+                    DataGridAction::ApplyFilter
+                }
+                KeyCode::Backspace => {
+                    fi.value.pop();
+                    DataGridAction::None
+                }
+                KeyCode::Char(c) => {
+                    fi.value.push(c);
+                    DataGridAction::None
+                }
+                _ => DataGridAction::None,
+            };
+        }
+
+        // Normal mode
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => DataGridAction::Back,
+
+            KeyCode::Char('j') | KeyCode::Down => {
+                let was_last = self.is_at_last_row();
+                self.move_row(1);
+                if was_last && self.has_more && !self.loading {
+                    DataGridAction::LoadMore
+                } else {
+                    DataGridAction::None
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.move_row(-1);
+                DataGridAction::None
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                self.move_col(1);
+                DataGridAction::None
+            }
+            KeyCode::Char('h') | KeyCode::Left => {
+                self.move_col(-1);
+                DataGridAction::None
+            }
+            KeyCode::Char('g') => {
+                self.go_first();
+                DataGridAction::None
+            }
+            KeyCode::Char('G') => {
+                self.go_last();
+                DataGridAction::None
+            }
+            KeyCode::PageDown => {
+                self.move_row(10);
+                DataGridAction::None
+            }
+            KeyCode::PageUp => {
+                self.move_row(-10);
+                DataGridAction::None
+            }
+            KeyCode::Char(' ') => {
+                self.toggle_collapse();
+                DataGridAction::None
+            }
+
+            // Filter: open input for selected column
+            KeyCode::Char('f') => {
+                self.start_filter();
+                DataGridAction::None
+            }
+            // Remove filter on selected column
+            KeyCode::Char('d') => {
+                if let Some(name) = self.selected_col_name() {
+                    if self.filters.remove(&name).is_some() {
+                        return DataGridAction::ApplyFilter;
+                    }
+                }
+                DataGridAction::None
+            }
+            // Clear all filters
+            KeyCode::Char('F') => {
+                if !self.filters.is_empty() {
+                    self.filters.clear();
+                    DataGridAction::ApplyFilter
+                } else {
+                    DataGridAction::None
+                }
+            }
+
+            _ => DataGridAction::None,
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    fn start_filter(&mut self) {
+        if let Some(name) = self.selected_col_name() {
+            let existing = self.filters.get(&name).cloned().unwrap_or_default();
+            self.filter_input = Some(FilterInput { col_name: name, value: existing });
+        }
+    }
+
+    fn selected_col_name(&self) -> Option<String> {
+        self.result.as_ref()?.columns.get(self.selected_col).map(|c| c.name.clone())
     }
 
     fn row_count(&self) -> usize {
@@ -64,6 +251,11 @@ impl DataGridScreen {
 
     fn selected_row(&self) -> usize {
         self.table_state.selected().unwrap_or(0)
+    }
+
+    fn is_at_last_row(&self) -> bool {
+        let count = self.row_count();
+        count > 0 && self.selected_row() >= count - 1
     }
 
     fn effective_col_width(&self, col_idx: usize) -> u16 {
@@ -84,32 +276,16 @@ impl DataGridScreen {
     fn visible_columns(&self, available_width: u16) -> Vec<usize> {
         let col_count = self.col_count();
         let mut visible = vec![];
-        let mut used = 1u16; // left border
+        let mut used = 1u16;
         for i in self.col_offset..col_count {
             let w = self.effective_col_width(i);
-            used += w + 1; // +1 for column separator
+            used += w + 1;
             if used > available_width {
                 break;
             }
             visible.push(i);
         }
         visible
-    }
-
-    pub fn handle_key(&mut self, key: KeyEvent) -> DataGridAction {
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Esc      => DataGridAction::Back,
-            KeyCode::Char('j') | KeyCode::Down     => { self.move_row(1);   DataGridAction::None }
-            KeyCode::Char('k') | KeyCode::Up       => { self.move_row(-1);  DataGridAction::None }
-            KeyCode::Char('l') | KeyCode::Right    => { self.move_col(1);   DataGridAction::None }
-            KeyCode::Char('h') | KeyCode::Left     => { self.move_col(-1);  DataGridAction::None }
-            KeyCode::Char('g')                     => { self.go_first();    DataGridAction::None }
-            KeyCode::Char('G')                     => { self.go_last();     DataGridAction::None }
-            KeyCode::PageDown                      => { self.move_row(10);  DataGridAction::None }
-            KeyCode::PageUp                        => { self.move_row(-10); DataGridAction::None }
-            KeyCode::Char(' ')                     => { self.toggle_collapse(); DataGridAction::None }
-            _ => DataGridAction::None,
-        }
     }
 
     fn move_row(&mut self, delta: i64) {
@@ -124,11 +300,9 @@ impl DataGridScreen {
         if count == 0 { return; }
         let next = (self.selected_col as i64 + delta).clamp(0, count as i64 - 1) as usize;
         self.selected_col = next;
-        // Scroll left: keep col_offset ≤ selected_col
         if next < self.col_offset {
             self.col_offset = next;
         }
-        // Scroll right: handled in draw() once we know terminal width
     }
 
     fn go_first(&mut self) {
@@ -153,6 +327,8 @@ impl DataGridScreen {
         }
     }
 
+    // ── Draw ──────────────────────────────────────────────────────────────────
+
     pub fn draw(f: &mut Frame<'_>, screen: &mut DataGridScreen) {
         let area = f.size();
 
@@ -161,36 +337,49 @@ impl DataGridScreen {
             .constraints([
                 Constraint::Length(1), // info bar
                 Constraint::Min(0),    // data table
-                Constraint::Length(3), // help bar
+                Constraint::Length(3), // help / filter bar
             ])
             .split(area);
 
         // ── Info bar ──────────────────────────────────────────────────────────
-        let info = if let Some(ref r) = screen.result {
-            let row_info = if r.rows.is_empty() {
-                "no rows".to_string()
-            } else {
-                format!("row {}/{}", screen.selected_row() + 1, r.rows.len())
-            };
-            format!(
-                " {} │ {} │ col {}/{}  (LIMIT 1000) ",
-                screen.table_name,
-                row_info,
-                screen.selected_col + 1,
-                r.columns.len(),
-            )
-        } else {
-            format!(" {} ", screen.table_name)
+        let row_info = screen.result.as_ref().map_or_else(
+            || screen.status.clone().unwrap_or_default(),
+            |r| {
+                if r.rows.is_empty() {
+                    "no rows".to_string()
+                } else {
+                    format!("row {}/{}", screen.selected_row() + 1, r.rows.len())
+                }
+            },
+        );
+        let col_info = screen.result.as_ref().map_or(String::new(), |r| {
+            format!("col {}/{}", screen.selected_col + 1, r.columns.len())
+        });
+        let count_info = match (screen.total_count, screen.has_more) {
+            (Some(total), _) => format!("{}/{} rows", screen.loaded_count, total),
+            (None, true)     => format!("{}+ rows", screen.loaded_count),
+            (None, false)    => format!("{} rows", screen.loaded_count),
         };
+        let filter_info = if screen.filters.is_empty() {
+            String::new()
+        } else {
+            let parts: Vec<String> = screen.filters.iter()
+                .map(|(k, v)| format!("[{}≈{}]", k, v))
+                .collect();
+            format!("  {}", parts.join(" "))
+        };
+        let loading_label = if screen.loading { "  ⏳" } else { "" };
+
         f.render_widget(
-            Paragraph::new(info)
-                .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Paragraph::new(format!(
+                " {} │ {} │ {} │ {}{}{}",
+                screen.table_name, row_info, col_info, count_info, filter_info, loading_label
+            ))
+            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             chunks[0],
         );
 
-        // ── Data table ────────────────────────────────────────────────────────
-
-        // Adjust col_offset so selected_col is always in view
+        // ── Adjust col_offset ─────────────────────────────────────────────────
         if screen.selected_col < screen.col_offset {
             screen.col_offset = screen.selected_col;
         }
@@ -204,9 +393,10 @@ impl DataGridScreen {
 
         let visible = screen.visible_columns(chunks[1].width);
 
+        // ── Data table ────────────────────────────────────────────────────────
         match &screen.result {
             None => {
-                let msg = screen.status.clone().unwrap_or_else(|| "No data".into());
+                let msg = screen.status.clone().unwrap_or_else(|| "Loading…".into());
                 f.render_widget(
                     Paragraph::new(msg)
                         .block(Block::default().borders(Borders::ALL))
@@ -216,14 +406,13 @@ impl DataGridScreen {
             }
             Some(result) if result.rows.is_empty() => {
                 f.render_widget(
-                    Paragraph::new("Table is empty")
+                    Paragraph::new("Table is empty (or no rows match the current filters)")
                         .block(Block::default().borders(Borders::ALL))
                         .style(Style::default().fg(Color::DarkGray)),
                     chunks[1],
                 );
             }
             Some(result) => {
-                // Owned copies so we can borrow screen mutably for table_state below
                 let widths: Vec<Constraint> = visible
                     .iter()
                     .map(|&i| Constraint::Length(screen.effective_col_width(i)))
@@ -232,15 +421,24 @@ impl DataGridScreen {
                 let header_cells: Vec<Cell> = visible
                     .iter()
                     .map(|&i| {
+                        let col_name = &result.columns[i].name;
+                        let is_filtered = screen.filters.contains_key(col_name);
                         let name = if screen.collapsed_cols.contains(&i) {
                             "…".to_string()
                         } else {
-                            truncate(&result.columns[i].name, screen.effective_col_width(i) as usize)
+                            truncate(col_name, screen.effective_col_width(i) as usize)
                         };
+                        // Selected + filtered → yellow underlined
+                        // Selected only       → yellow underlined
+                        // Filtered only       → cyan bold
+                        // Normal              → bold
                         let style = if i == screen.selected_col {
-                            Style::default()
+                            let base = Style::default()
                                 .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+                                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+                            if is_filtered { base.bg(Color::DarkGray) } else { base }
+                        } else if is_filtered {
+                            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
                         } else {
                             Style::default().add_modifier(Modifier::BOLD)
                         };
@@ -290,23 +488,44 @@ impl DataGridScreen {
             }
         }
 
-        // ── Help bar ──────────────────────────────────────────────────────────
-        let collapse_label = if screen.collapsed_cols.contains(&screen.selected_col) {
-            "Space: expand"
+        // ── Help / filter bar ─────────────────────────────────────────────────
+        if let Some(ref fi) = screen.filter_input {
+            let prompt = format!(" Filter [{}] > {}", fi.col_name, fi.value);
+            f.render_widget(
+                Paragraph::new(prompt.clone())
+                    .block(Block::default().borders(Borders::ALL))
+                    .style(Style::default().fg(Color::Yellow)),
+                chunks[2],
+            );
+            f.set_cursor(
+                chunks[2].x + 1 + prompt.len() as u16,
+                chunks[2].y + 1,
+            );
         } else {
-            "Space: collapse"
-        };
-        f.render_widget(
-            Paragraph::new(format!(
-                " j/k: rows   h/l: cols   g/G: first/last   PgUp/Dn: page   {}   q: back ",
-                collapse_label
-            ))
-            .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::DarkGray)),
-            chunks[2],
-        );
+            let collapse_label = if screen.collapsed_cols.contains(&screen.selected_col) {
+                "Space: expand"
+            } else {
+                "Space: collapse"
+            };
+            let filter_hint = if screen.filters.is_empty() {
+                "f: filter col"
+            } else {
+                "f: edit filter   d: rm col filter   F: clear all"
+            };
+            f.render_widget(
+                Paragraph::new(format!(
+                    " j/k: rows   h/l: cols   g/G: first/last   {}   {}   q: back",
+                    collapse_label, filter_hint
+                ))
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default().fg(Color::DarkGray)),
+                chunks[2],
+            );
+        }
     }
 }
+
+// ── Formatting helpers ────────────────────────────────────────────────────────
 
 fn value_display(v: &Value) -> String {
     match v {
@@ -320,7 +539,7 @@ fn value_display(v: &Value) -> String {
 }
 
 fn truncate(s: &str, max_chars: usize) -> String {
-    let max = max_chars.saturating_sub(1); // leave room for possible '…'
+    let max = max_chars.saturating_sub(1);
     if s.chars().count() <= max_chars {
         s.to_string()
     } else {
