@@ -465,8 +465,8 @@ impl App {
             DbEvent::SchemaLoaded(schema) => {
                 self.data_grid_screen.schema = Some(schema);
             }
-            DbEvent::SchemaLoadFailed(_) => {
-                // Non-fatal: schema is optional for viewing; edit will show a warning
+            DbEvent::SchemaLoadFailed(msg) => {
+                self.data_grid_screen.status = Some(format!("Schema error: {msg}"));
             }
             DbEvent::QueryRows(result) => {
                 self.sql_editor_screen.set_rows(result);

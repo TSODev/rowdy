@@ -103,33 +103,44 @@ impl SqlClient for PostgresConnector {
     async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {
         let pool = self.pool()?;
         let safe = table.replace('\'', "").replace('"', "");
-        // pg_catalog is more reliable than information_schema for FK detection:
-        // constraint_column_usage returns *referenced* cols (not source cols) and
-        // its schema join silently drops cross-schema FKs.
+        // Correlated subqueries avoid JOIN fan-out and the array_position()
+        // type-resolution edge-cases that silently broke the previous query.
         let query = format!(
-            r#"SELECT DISTINCT ON (a.attnum)
-                a.attname::text                                            AS column_name,
-                pg_catalog.format_type(a.atttypid, a.atttypmod)           AS data_type,
-                (NOT a.attnotnull)                                         AS is_nullable,
-                (pk.contype IS NOT NULL)                                   AS is_pk,
-                fk_tbl.relname::text                                       AS foreign_table_name,
-                fk_att.attname::text                                       AS foreign_column_name
-            FROM pg_attribute           a
-            JOIN pg_class               cl      ON cl.oid      = a.attrelid
-            JOIN pg_namespace           n       ON n.oid       = cl.relnamespace
-            LEFT JOIN pg_constraint     pk      ON pk.conrelid = a.attrelid
-                                                AND pk.contype  = 'p'
-                                                AND a.attnum    = ANY(pk.conkey)
-            LEFT JOIN pg_constraint     fk      ON fk.conrelid = a.attrelid
-                                                AND fk.contype  = 'f'
-                                                AND a.attnum    = ANY(fk.conkey)
-            LEFT JOIN pg_class          fk_tbl  ON fk_tbl.oid  = fk.confrelid
-            LEFT JOIN pg_attribute      fk_att  ON fk_att.attrelid = fk.confrelid
-                                                AND fk_att.attnum   =
-                                                    fk.confkey[array_position(fk.conkey, a.attnum)]
-            WHERE n.nspname   = 'public'
-              AND cl.relname  = '{safe}'
-              AND a.attnum    > 0
+            r#"SELECT
+                a.attname::text AS column_name,
+                pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+                (NOT a.attnotnull) AS is_nullable,
+                EXISTS(
+                    SELECT 1 FROM pg_constraint c
+                    WHERE c.conrelid = a.attrelid
+                      AND c.contype  = 'p'
+                      AND a.attnum   = ANY(c.conkey)
+                ) AS is_pk,
+                (
+                    SELECT rc.relname::text
+                    FROM pg_constraint c
+                    JOIN pg_class rc ON rc.oid = c.confrelid
+                    WHERE c.conrelid = a.attrelid
+                      AND c.contype  = 'f'
+                      AND a.attnum   = ANY(c.conkey)
+                    LIMIT 1
+                ) AS foreign_table_name,
+                (
+                    SELECT ra.attname::text
+                    FROM pg_constraint c
+                    JOIN pg_attribute ra ON ra.attrelid = c.confrelid
+                                        AND ra.attnum   = c.confkey[1]
+                    WHERE c.conrelid = a.attrelid
+                      AND c.contype  = 'f'
+                      AND a.attnum   = ANY(c.conkey)
+                    LIMIT 1
+                ) AS foreign_column_name
+            FROM pg_attribute a
+            JOIN pg_class     cl ON cl.oid = a.attrelid
+            JOIN pg_namespace n  ON n.oid  = cl.relnamespace
+            WHERE n.nspname  = 'public'
+              AND cl.relname = '{safe}'
+              AND a.attnum   > 0
               AND NOT a.attisdropped
             ORDER BY a.attnum"#
         );
