@@ -81,6 +81,7 @@ Les profils apparaissent dans le panneau gauche de l'écran de connexion au dém
 | `k` / `↑` | Profil précédent |
 | `Enter` | Se connecter avec le profil sélectionné |
 | `n` | Passer en mode saisie manuelle |
+| `D` | Supprimer le profil sélectionné (avec confirmation) |
 | `q` | Quitter Rowdy |
 | `Ctrl-C` | Quitter Rowdy (toujours disponible) |
 
@@ -92,7 +93,29 @@ Les profils apparaissent dans le panneau gauche de l'écran de connexion au dém
 | _(frappe)_ | Saisir l'URL de connexion |
 | `Backspace` | Effacer un caractère |
 | `Enter` | Se connecter à l'URL saisie |
+| `Ctrl+S` | Sauvegarder la connexion (ouvre le champ Nom) |
 | `Esc` | Annuler et revenir en mode Normal |
+
+### Mode Sauvegarde (`Ctrl+S`)
+
+| Touche | Action |
+|--------|--------|
+| _(frappe)_ | Saisir le nom du profil |
+| `Backspace` | Effacer un caractère |
+| `Enter` | Enregistrer dans `~/.config/rowdy/config.toml` |
+| `Esc` | Annuler et revenir en mode Saisie |
+
+Si l'URL existe déjà dans le fichier, le profil est mis à jour (nom + type). Le profil sauvegardé apparaît immédiatement dans la liste de gauche et est sélectionné.
+
+### Mode Confirmation de suppression (`D`)
+
+La barre d'aide affiche en rouge : `Delete "nom"? y: delete from file   n: remove from list only   Esc: cancel`
+
+| Touche | Action |
+|--------|--------|
+| `y` | Supprime le profil de la liste **et** du fichier de config |
+| `n` | Supprime le profil de la liste seulement (fichier intact) |
+| `Esc` | Annule, revient en mode Normal |
 
 **Formats d'URL :**
 

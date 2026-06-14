@@ -172,6 +172,8 @@ src/
 - [x] Data Grid : pagination infinite scroll (PAGE_SIZE=200, OFFSET progressif, COUNT parallèle)
 - [x] Data Grid : filtres cumulatifs par colonne (`f/d/F`, `LIKE '%val%'`, BTreeMap, réinjection sûre)
 - [x] Éditeur SQL multi-lignes (`tui-textarea`) : F5/Ctrl+Enter, focus editor/résultats, SELECT vs DML
+- [x] Sauvegarde d'une nouvelle connexion dans `~/.config/rowdy/config.toml` (Ctrl+S → nom → Entrée)
+- [x] Suppression d'un profil avec confirmation (D → y: fichier+liste / n: liste seulement)
 
 ### Roadmap
 - [ ] Édition inline de cellules

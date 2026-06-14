@@ -16,6 +16,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.0] — 2026-06-14
+
+### Added
+
+#### Connection screen — profile management
+- **Save a new connection** : `Ctrl+S` in editing mode opens a "Save as (name)" field; `Enter` writes the profile to `~/.config/rowdy/config.toml` (updates in place if the URL already exists); the list refreshes and the new profile is selected
+- **Delete a profile** : `D` in normal mode enters a `ConfirmDelete` mode — the profile is highlighted in red and the help bar shows: `Delete "name"? y: delete from file   n: remove from list only   Esc: cancel`
+  - `y` → removes from the list **and** from the config file
+  - `n` / `Esc` → removes only from the in-memory list (file unchanged)
+
+---
+
 ## [0.3.0] — 2026-06-14
 
 ### Added
@@ -123,7 +135,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/TSODev/rowdy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/TSODev/rowdy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TSODev/rowdy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/TSODev/rowdy/releases/tag/v0.1.0

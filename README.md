@@ -21,6 +21,8 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | SQLite, PostgreSQL, MySQL/MariaDB connectors | ✅ |
 | Redis connector (key listing) | ✅ |
 | Saved connection profiles (`~/.config/rowdy/config.toml`) | ✅ |
+| Save new connection with `Ctrl+S` — persists to config file | ✅ |
+| Delete profile with confirmation (`D` → `y` / `n`) | ✅ |
 | Vim-style keyboard navigation (`h j k l`, `/` to filter) | ✅ |
 | Table list with live filter | ✅ |
 | Data Grid — column scroll, collapse/expand | ✅ |
@@ -93,6 +95,8 @@ Profiles appear in the left panel of the connection screen at startup.
 | `Enter` | Connect to selected profile |
 | `n` | Enter a new connection URL |
 | `Tab` | Cycle database type (postgres → sqlite → mysql → redis) |
+| `Ctrl+S` | Save current URL as a named profile |
+| `D` | Delete selected profile (with confirmation) |
 | `q` | Quit |
 
 ### Table list
