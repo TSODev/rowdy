@@ -1,8 +1,9 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
+    text::{Line, Span},
     widgets::{Block, Borders, Cell, Paragraph, Row as RatRow, Table, TableState},
     Frame,
 };
@@ -458,6 +459,13 @@ impl DataGridScreen {
                 let sel_row = screen.table_state.selected().unwrap_or(usize::MAX);
                 let sel_col = screen.selected_col;
 
+                // Build column-name → FK table map from schema (if loaded)
+                let fk_map: HashMap<&str, &str> = screen.schema.as_ref()
+                    .map(|s| s.iter()
+                        .filter_map(|cs| cs.fk.as_ref().map(|fk| (cs.name.as_str(), fk.table.as_str())))
+                        .collect())
+                    .unwrap_or_default();
+
                 let data_rows: Vec<RatRow> = result
                     .rows
                     .iter()
@@ -469,21 +477,33 @@ impl DataGridScreen {
                             .map(|&col_idx| {
                                 let val = row.values.get(col_idx).unwrap_or(&Value::Null);
                                 let s = value_display(val);
-                                let display = if screen.collapsed_cols.contains(&col_idx) {
-                                    s.chars().next()
+                                let col_width = screen.effective_col_width(col_idx) as usize;
+                                let col_name = result.columns[col_idx].name.as_str();
+                                let fk_table = fk_map.get(col_name).copied();
+
+                                let (val_display, badge) = if screen.collapsed_cols.contains(&col_idx) {
+                                    let abbrev = s.chars().next()
                                         .map(|c| format!("{c}…"))
-                                        .unwrap_or_else(|| "…".into())
+                                        .unwrap_or_else(|| "…".into());
+                                    (abbrev, String::new())
+                                } else if let Some(tbl) = fk_table {
+                                    let badge = format!(" [{}]", tbl);
+                                    let avail = col_width.saturating_sub(badge.len());
+                                    if avail >= 2 {
+                                        (truncate(&s, avail), badge)
+                                    } else {
+                                        (truncate(&s, col_width), String::new())
+                                    }
                                 } else {
-                                    truncate(&s, screen.effective_col_width(col_idx) as usize)
+                                    (truncate(&s, col_width), String::new())
                                 };
+
                                 let style = if is_sel_row && col_idx == sel_col {
-                                    // Cell cursor: blue bg + white text
                                     Style::default()
                                         .fg(Color::White)
                                         .bg(Color::Blue)
                                         .add_modifier(Modifier::BOLD)
                                 } else if is_sel_row {
-                                    // Rest of selected row: yellow bg
                                     Style::default()
                                         .fg(Color::Black)
                                         .bg(Color::Yellow)
@@ -493,7 +513,13 @@ impl DataGridScreen {
                                 } else {
                                     Style::default()
                                 };
-                                Cell::from(display).style(style)
+
+                                let badge_style = Style::default().fg(Color::Magenta);
+                                let cell_line = Line::from(vec![
+                                    Span::styled(val_display, style),
+                                    Span::styled(badge, badge_style),
+                                ]);
+                                Cell::from(cell_line).style(style)
                             })
                             .collect();
                         RatRow::new(cells).height(1)
