@@ -146,9 +146,54 @@ Le compteur affiche `Tables (N / total)` quand un filtre est actif.
 
 ---
 
-## Data Grid _(à venir)_
+## Data Grid
 
-Affichage paginé des données d'une table avec défilement.
+Depuis la vue liste des tables, appuyez sur `Enter` pour ouvrir une table.
+
+```
+ users │ row 2/1000 │ col 3/8  (LIMIT 1000)
+┌─────┬──────────────────┬─────────────────────┬ cr… ┬──────────────────────┐
+│ id  │ name             │ email               │  …  │ created_at           │
+├─────┼──────────────────┼─────────────────────┼─────┼──────────────────────┤
+│   1 │ Alice            │ alice@example.com   │  …  │ 2024-01-15 08:30:00  │
+│ > 2 │ Bob              │ bob@example.com     │  …  │ 2024-02-20 14:10:00  │
+│   3 │ Charlie          │ charlie@example.com │  …  │ 2024-03-05 09:45:00  │
+└─────┴──────────────────┴─────────────────────┴─────┴──────────────────────┘
+  j/k: rows   h/l: cols   g/G: first/last   PgUp/Dn: page   Space: collapse   q: back
+```
+
+### Navigation
+
+| Touche | Action |
+|--------|--------|
+| `j` / `↓` | Ligne suivante |
+| `k` / `↑` | Ligne précédente |
+| `h` / `←` | Colonne précédente |
+| `l` / `→` | Colonne suivante |
+| `g` | Première ligne |
+| `G` | Dernière ligne |
+| `PgDown` | +10 lignes |
+| `PgUp` | -10 lignes |
+| `Space` | Réduire / agrandir la colonne sélectionnée |
+| `q` / `Esc` | Retour à la liste des tables |
+
+### Colonnes
+
+- La **colonne sélectionnée** est indiquée par un en-tête souligné en jaune (`h/l` pour naviguer entre colonnes).
+- `Space` **réduit** une colonne à 3 caractères pour gagner de la place, ou la **restaure** à sa largeur naturelle.
+- Les colonnes défilent automatiquement pour garder la colonne sélectionnée toujours visible.
+- La largeur naturelle est calculée automatiquement d'après le contenu (max 25 caractères).
+- Les valeurs longues sont tronquées avec `…`.
+
+> **Note :** les données sont limitées à 1000 lignes (`LIMIT 1000`).  
+> Redis n'est pas supporté dans le Data Grid (utiliser la vue liste des clés).
+
+### Roadmap — expansion par clé étrangère _(à venir)_
+
+Lorsqu'une colonne contient une clé étrangère (FK), il sera possible d'afficher
+sur les lignes du dessous les enregistrements de la table liée, à la manière
+d'un expandable row. Cette fonctionnalité nécessite l'introspection du schéma
+(`information_schema` / `PRAGMA foreign_key_list`) et est prévue dans une version future.
 
 ---
 

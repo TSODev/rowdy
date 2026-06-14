@@ -9,7 +9,7 @@ pub fn draw(f: &mut Frame<'_>, app: &mut App) {
         crate::app::AppState::TableList =>
             screens::table_list::TableListScreen::draw(f, &mut app.table_list_screen),
         crate::app::AppState::DataGrid =>
-            screens::data_grid::DataGridScreen::draw(f),
+            screens::data_grid::DataGridScreen::draw(f, &mut app.data_grid_screen),
         crate::app::AppState::SqlEditor =>
             screens::sql_editor::SqlEditorScreen::draw(f),
         crate::app::AppState::Quit => {}

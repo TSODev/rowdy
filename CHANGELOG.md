@@ -8,11 +8,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### In progress
-- Data Grid screen (paginated display of `DbQueryResult`)
+- FK expandable rows (display related records below a row when a column is a foreign key)
 - Inline cell editing
 - Multi-line SQL editor (`tui-textarea` + syntax highlighting)
 - Status bar component
 - Confirmation / error modal
+- Redis key-detail view in Data Grid
 
 ---
 
@@ -49,6 +50,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Right panel: DB type selector (`Tab` cycles postgres / sqlite / mysql / redis), URL input, cursor positioned
 - Two modes: `Normal` (profile list) and `Editing` (manual DSN entry)
 - Async connection with "Connecting…" feedback; errors displayed inline
+
+#### UI — Data Grid screen (`AppState::DataGrid`)
+- Paginated table view via `ratatui::widgets::Table` + `TableState` (auto-scroll)
+- Column width calculated from content, capped at 25 chars
+- Horizontal column scroll (`h/l`) with automatic `col_offset` adjustment
+- Column collapse/expand with `Space` (collapsed → 3 chars wide, header shows `…`)
+- Selected column highlighted with yellow underlined header
+- `g/G` first/last row, `PgUp/PgDn` ±10 rows
+- Data loaded asynchronously via `SELECT * FROM "table" LIMIT 1000`
+- Graceful error display for KV stores (Redis) and load failures
+- Values: `NULL`, bool, int, float, text (newlines → `↵`), bytes (`<N bytes>`)
+- `q` / `Esc` → back to table list
 
 #### UI — Table list screen (`AppState::TableList`)
 - Header: active connection info (`[db_type] url`)
