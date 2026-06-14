@@ -177,6 +177,9 @@ src/
 - [x] Data Grid : curseur cellule (croisement ligne × colonne en bleu, reste de la ligne en jaune)
 - [x] Introspection du schéma `get_schema()` — PK, FK, types (SQLite PRAGMA, PostgreSQL + MySQL information_schema)
 - [x] Écran EditRecord : édition champ par champ, curseur complet (←/→/Backspace/Del/Home/End), badges [PK]/[→FK], aperçu SQL live, Ctrl+S sauvegarde
+- [x] Décodage complet des types PostgreSQL : DATE/TIME/TIMESTAMP/TIMESTAMPTZ (chrono), UUID (uuid), JSON/JSONB (serde_json), tableaux `_TYPE` (Vec), INTERVAL/INET/CIDR/MACADDR/XML (String)
+- [x] Décodage complet des types MySQL : DATE/TIME/DATETIME/TIMESTAMP (chrono), YEAR (u16), JSON (serde_json), ENUM/SET (String)
+- [x] Marqueur `<?TYPE?>` universel sur les 3 connecteurs pour tout type non décodable (aide au debug)
 
 ### Roadmap
 - [ ] FK expandable rows (Enter sur une cellule FK → sous-grille avec les enregistrements liés)

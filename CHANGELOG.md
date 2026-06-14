@@ -7,6 +7,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed / Added (post-0.5.0, pending next release)
+
+#### Type decoding — PostgreSQL
+- **DATE / TIME / TIMESTAMP / TIMESTAMPTZ** : now decoded via `chrono` (previously returned `NULL`)
+- **UUID** : decoded via `uuid::Uuid` → hyphenated string
+- **JSON / JSONB** : decoded via `serde_json::Value` → compact JSON string
+- **Arrays** (`_TEXT`, `_INT4`, `_BOOL`, …) : decoded as `Vec<String|i64|bool>` → `[a, b, c]`
+- **INTERVAL, INET, CIDR, MACADDR, XML** and other text-compatible types : decoded as `String` via the catch-all arm
+
+#### Type decoding — MySQL
+- **DATE / TIME / DATETIME / TIMESTAMP** : now decoded via `chrono`
+- **YEAR** : decoded as `u16` → integer
+- **JSON** : decoded via `serde_json::Value` → compact JSON string
+- **ENUM / SET** : decoded as `String` (catch-all arm, already worked)
+
+#### Fallback marker
+- All three connectors now show `<?TYPE?>` instead of `NULL` when a value cannot be decoded, making gaps immediately visible in the grid
+
 ### In progress
 - FK expandable rows (sub-grid with linked records when pressing Enter on an FK cell)
 - Status bar component
