@@ -8,10 +8,14 @@
 
 | Rôle | Crate |
 |---|---|
-| TUI | `ratatui` 0.26 + `crossterm` 0.27 |
+| TUI | `ratatui` 0.26 + `crossterm` 0.27 (event-stream) |
 | Async runtime | `tokio` (full) |
-| Base de données | `sqlx` 0.7 — SQLite + PostgreSQL |
+| Base de données | `sqlx` 0.7 — SQLite + PostgreSQL + MySQL |
+| Key-value | `redis` 0.24 (tokio-comp) |
 | Traits async | `async-trait` |
+| Configuration | `serde` + `toml` |
+| Erreurs | `thiserror` |
+| Streams async | `futures` |
 
 ## Architecture
 
@@ -30,16 +34,53 @@ Rowdy utilise une architecture découplée séparant le thread de rendu UI des o
         └───────────────────────┘   └───────────────────────┘  └───────────────────────┘
 ```
 
-Chaque connecteur implémente le trait commun `DatabaseClient` :
+Les connecteurs sont partagés via `Arc<dyn SqlClient>` / `Arc<dyn KvClient>` pour permettre l'accès concurrent depuis les tâches tokio sans déplacer la propriété.
+
+### Traits
 
 ```rust
+// src/db/traits/sql_client.rs
 #[async_trait]
-pub trait DatabaseClient: Send + Sync {
+pub trait SqlClient: Send + Sync {
     async fn connect(&mut self, url: &str) -> Result<(), DbError>;
+    async fn disconnect(&mut self) -> Result<(), DbError>;
     async fn execute(&self, query: &str) -> Result<u64, DbError>;
     async fn fetch_all(&self, query: &str) -> Result<DbQueryResult, DbError>;
-    async fn get_tables(&self, query: &str) -> Result<Vec<String>, DbError>;
+    async fn get_tables(&self) -> Result<Vec<String>, DbError>;
 }
+
+// src/db/traits/kv_client.rs
+#[async_trait]
+pub trait KvClient: Send + Sync {
+    async fn connect(&mut self, url: &str) -> Result<(), DbError>;
+    async fn disconnect(&mut self) -> Result<(), DbError>;
+    async fn get(&self, key: &str) -> Result<Option<String>, DbError>;
+    async fn set(&self, key: &str, value: &str) -> Result<(), DbError>;
+    async fn del(&self, key: &str) -> Result<bool, DbError>;
+    async fn keys(&self, pattern: &str) -> Result<Vec<String>, DbError>;
+}
+```
+
+### Flux de connexion async
+
+```
+User → Enter  →  ConnectionAction::Connect { url, db_type }
+             →  App::spawn_connect()  →  tokio::spawn
+                                              ↓ async
+                                     connectors::connect_sql/kv()
+                                              ↓
+                                     DbEvent::SqlConnected(Arc<dyn SqlClient>)
+                                              ↓ mpsc channel (≤ 50 ms)
+                                     App::handle_db_event()
+                                     → active_client = Some(...)
+                                     → AppState::TableList
+                                     → spawn_load_tables()
+                                              ↓ async
+                                     get_tables() / keys("*")
+                                              ↓
+                                     DbEvent::TablesLoaded(Vec<String>)
+                                              ↓
+                                     table_list_screen.set_tables(...)
 ```
 
 ## Configuration
@@ -58,30 +99,69 @@ type = "sqlite"
 url = "/path/to/local/analytics.db"
 ```
 
+## Structure des modules
+
+```
+src/
+├── main.rs                        # bootstrap tokio + TUI
+├── app.rs                         # machine à états + event loop (50 ms tick)
+├── config.rs                      # chargement ~/.config/rowdy/config.toml
+├── events/
+│   ├── app_event.rs               # AppEvent enum
+│   └── handler.rs                 # dispatch clavier (stub)
+├── db/
+│   ├── error.rs                   # DbError (thiserror)
+│   ├── types.rs                   # Column, Row, Value, DbQueryResult
+│   ├── traits/
+│   │   ├── sql_client.rs          # trait SqlClient
+│   │   └── kv_client.rs           # trait KvClient
+│   └── connectors/
+│       ├── mod.rs                 # connect_sql() / connect_kv() factories
+│       ├── postgres.rs            # ✅ implémenté
+│       ├── sqlite.rs              # ✅ implémenté
+│       ├── mysql.rs               # ✅ implémenté
+│       └── redis.rs               # ✅ implémenté (KvClient)
+└── ui/
+    ├── layout.rs                  # dispatch draw() selon AppState
+    ├── screens/
+    │   ├── connection.rs          # ✅ implémenté
+    │   ├── table_list.rs          # ✅ implémenté
+    │   ├── data_grid.rs           # 🔲 stub
+    │   └── sql_editor.rs          # 🔲 stub
+    └── components/
+        ├── status_bar.rs          # 🔲 stub
+        └── modal.rs               # 🔲 stub
+```
+
 ## Avancement
 
 ### Fait
 - [x] Boilerplate initial du projet
 - [x] Crate renommé `rowdy-db` (conflit de nom sur crates.io)
-- [x] Mise à jour de l'URL du dépôt
-- [x] Mise à jour de l'auteur dans `Cargo.toml`
-- [x] `main.rs` : initialisation du terminal TUI et affichage d'un écran de démarrage
-
-### En cours
-- [ ] Architecture des modules (ui, db, app)
+- [x] Licences MIT et Apache 2.0
+- [x] Architecture des modules (ui, db, events, app, config)
+- [x] Trait `SqlClient` (connect / disconnect / execute / fetch_all / get_tables)
+- [x] Trait `KvClient` (connect / disconnect / get / set / del / keys)
+- [x] Connecteur SQLite (sqlx)
+- [x] Connecteur PostgreSQL (sqlx)
+- [x] Connecteur MySQL / MariaDB (sqlx)
+- [x] Connecteur Redis (redis-rs, tokio-comp)
+- [x] Factory `connect_sql()` / `connect_kv()`
+- [x] Écran de connexion : liste de profils + saisie DSN + sélecteur de type
+- [x] Event loop async (EventStream + mpsc channel, tick 50 ms)
+- [x] Connexion async avec retour d'état via `DbEvent`
+- [x] Vue liste des tables : navigation j/k, filtre `/`, chargement async
+- [x] `~/.config/rowdy/config.toml` (profils de connexion)
 
 ### Roadmap
-- [ ] Couche d'abstraction base de données (`trait DatabaseClient`)
-- [ ] Connexion SQLite
-- [ ] Connexion PostgreSQL
-- [ ] Écran de connexion (saisie DSN)
-- [ ] Navigation Vim (`h j k l /`)
-- [ ] Vue liste des tables
-- [ ] Data Grid avec pagination mémoire
+- [ ] Data Grid : pagination mémoire, défilement, affichage `DbQueryResult`
 - [ ] Édition inline de cellules
 - [ ] Éditeur SQL multi-lignes (`tui-textarea` + coloration syntaxique)
-- [ ] Support MySQL/MariaDB
-- [ ] Support Redis
+- [ ] Barre de statut (mode, connexion, nombre de lignes)
+- [ ] Modal de confirmation / erreur
+- [ ] Vue détail d'une table (colonnes, types, index)
+- [ ] Export CSV / JSON
+- [ ] Tests d'intégration sur les connecteurs
 
 ## Commandes utiles
 
@@ -94,6 +174,7 @@ cargo clippy       # linter
 
 ## Conventions
 
-- Navigation : bindings Vim (`h j k l`, `/` pour rechercher)
-- Édition 2024, async/await partout via `tokio`
-- Binaire standalone : pas de dépendances runtime système
+- Navigation : bindings Vim (`j k`, `/` pour filtrer, `q` pour quitter/reculer)
+- Async partout via `tokio` ; jamais de blocage dans le thread UI
+- `Arc<dyn Trait>` pour partager un connecteur entre tâches sans mutex
+- Binaire standalone, pas de dépendances runtime système
