@@ -120,7 +120,7 @@ Après une connexion réussie, Rowdy charge automatiquement la liste des tables 
 │   ...                                                │
 │                                                      │
 └──────────────────────────────────────────────────────┘
-  j/k: move   Enter: open   /: filter   q: disconnect
+  j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect
 ```
 
 ### Navigation

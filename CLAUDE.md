@@ -8,7 +8,8 @@
 
 | Rôle | Crate |
 |---|---|
-| TUI | `ratatui` 0.26 + `crossterm` 0.27 (event-stream) |
+| TUI | `ratatui` 0.27 + `crossterm` 0.27 (event-stream) |
+| Éditeur multi-lignes | `tui-textarea` 0.5 |
 | Async runtime | `tokio` (full) |
 | Base de données | `sqlx` 0.7 — SQLite + PostgreSQL + MySQL |
 | Key-value | `redis` 0.24 (tokio-comp) |
@@ -83,6 +84,21 @@ User → Enter  →  ConnectionAction::Connect { url, db_type }
                                      table_list_screen.set_tables(...)
 ```
 
+### Flux d'exécution SQL (éditeur)
+
+```
+User → F5/Ctrl+Enter  →  SqlEditorAction::Execute(sql)
+                      →  App::spawn_execute_query(sql)  →  tokio::spawn
+                                                                ↓ async
+                                              is_select_query() ?
+                                              ↙ true            ↘ false
+                                 fetch_all(sql)             execute(sql)
+                                      ↓                          ↓
+                             DbEvent::QueryRows(r)   DbEvent::QueryExecuted(n)
+                                              ↓ mpsc channel
+                                     sql_editor_screen.set_rows() / set_affected()
+```
+
 ## Configuration
 
 Rowdy recherche un fichier de configuration dans `~/.config/rowdy/config.toml` pour sauvegarder les profils de connexion :
@@ -126,8 +142,8 @@ src/
     ├── screens/
     │   ├── connection.rs          # ✅ implémenté
     │   ├── table_list.rs          # ✅ implémenté
-    │   ├── data_grid.rs           # 🔲 stub
-    │   └── sql_editor.rs          # 🔲 stub
+    │   ├── data_grid.rs           # ✅ implémenté
+    │   └── sql_editor.rs          # ✅ implémenté
     └── components/
         ├── status_bar.rs          # 🔲 stub
         └── modal.rs               # 🔲 stub
@@ -152,15 +168,17 @@ src/
 - [x] Connexion async avec retour d'état via `DbEvent`
 - [x] Vue liste des tables : navigation j/k, filtre `/`, chargement async
 - [x] `~/.config/rowdy/config.toml` (profils de connexion)
+- [x] Data Grid : défilement lignes/colonnes, collapse/expand colonnes, LIMIT 1000
+- [x] Éditeur SQL multi-lignes (`tui-textarea`) : F5/Ctrl+Enter, focus editor/résultats, SELECT vs DML
 
 ### Roadmap
-- [ ] Data Grid : pagination mémoire, défilement, affichage `DbQueryResult`
 - [ ] Édition inline de cellules
-- [ ] Éditeur SQL multi-lignes (`tui-textarea` + coloration syntaxique)
 - [ ] Barre de statut (mode, connexion, nombre de lignes)
 - [ ] Modal de confirmation / erreur
 - [ ] Vue détail d'une table (colonnes, types, index)
 - [ ] Export CSV / JSON
+- [ ] FK expandable rows (afficher les enregistrements liés sous une ligne)
+- [ ] Vue clé-détail Redis dans le Data Grid
 - [ ] Tests d'intégration sur les connecteurs
 
 ## Commandes utiles
@@ -178,3 +196,5 @@ cargo clippy       # linter
 - Async partout via `tokio` ; jamais de blocage dans le thread UI
 - `Arc<dyn Trait>` pour partager un connecteur entre tâches sans mutex
 - Binaire standalone, pas de dépendances runtime système
+- `Frame<'_>` sans générique Backend (ratatui 0.27)
+- `Table::new(rows, widths)` — ratatui 0.27 requiert les widths en 2e argument
