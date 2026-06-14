@@ -7,7 +7,7 @@ use tokio::{
     sync::mpsc,
     time::{timeout, Duration},
 };
-use crate::config::Config;
+use crate::config::{Config, ConnectionProfile};
 use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{DbQueryResult, Value}};
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
 use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen, PAGE_SIZE};
@@ -122,6 +122,48 @@ impl App {
                     ConnectionAction::Quit => self.should_quit = true,
                     ConnectionAction::Connect { url, db_type } => {
                         self.spawn_connect(url, db_type);
+                    }
+                    ConnectionAction::DeleteProfile { idx, persist } => {
+                        if idx < self.connection_screen.profiles.len() {
+                            let profile = self.connection_screen.profiles.remove(idx);
+                            let len = self.connection_screen.profiles.len();
+                            if len == 0 {
+                                self.connection_screen.list_state.select(None);
+                            } else {
+                                self.connection_screen.list_state.select(Some(idx.min(len - 1)));
+                            }
+                            if persist {
+                                match Config::delete_profile(&profile.url) {
+                                    Ok(()) => {
+                                        self.connection_screen.status =
+                                            Some(format!("Deleted \"{}\"", profile.name));
+                                    }
+                                    Err(e) => {
+                                        self.connection_screen.status =
+                                            Some(format!("Error deleting: {e}"));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ConnectionAction::SaveProfile { name, url, db_type } => {
+                        let profile = ConnectionProfile { name: name.clone(), db_type, url };
+                        match Config::save_profile(profile) {
+                            Ok(()) => {
+                                let profiles = Config::load().unwrap_or_default().connections;
+                                let idx = profiles.iter().position(|p| p.name == name);
+                                self.connection_screen.profiles = profiles;
+                                if let Some(i) = idx {
+                                    self.connection_screen.list_state.select(Some(i));
+                                }
+                                self.connection_screen.status =
+                                    Some(format!("Saved \"{name}\""));
+                            }
+                            Err(e) => {
+                                self.connection_screen.status =
+                                    Some(format!("Error saving: {e}"));
+                            }
+                        }
                     }
                     ConnectionAction::None => {}
                 }
