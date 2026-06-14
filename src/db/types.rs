@@ -25,3 +25,18 @@ pub struct DbQueryResult {
     pub rows: Vec<Row>,
     pub rows_affected: u64,
 }
+
+#[derive(Debug, Clone)]
+pub struct ForeignKey {
+    pub table: String,
+    pub column: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ColumnSchema {
+    pub name: String,
+    pub type_name: String,
+    pub is_pk: bool,
+    pub is_nullable: bool,
+    pub fk: Option<ForeignKey>,
+}

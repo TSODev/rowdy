@@ -5,7 +5,7 @@ use sqlx::{
 };
 use crate::db::error::DbError;
 use crate::db::traits::SqlClient;
-use crate::db::types::{Column, DbQueryResult, Row, Value};
+use crate::db::types::{Column, ColumnSchema, DbQueryResult, ForeignKey, Row, Value};
 
 pub struct MySqlConnector {
     pool: Option<MySqlPool>,
@@ -98,6 +98,50 @@ impl SqlClient for MySqlConnector {
             .iter()
             .map(|r| r.try_get::<String, _>(0).unwrap_or_default())
             .collect())
+    }
+
+    async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {
+        let pool = self.pool()?;
+        let safe = table.replace('\'', "").replace('\\', "");
+        let query = format!(
+            "SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE, c.COLUMN_KEY, \
+             kcu.REFERENCED_TABLE_NAME AS FK_TABLE, kcu.REFERENCED_COLUMN_NAME AS FK_COLUMN \
+             FROM information_schema.COLUMNS c \
+             LEFT JOIN information_schema.KEY_COLUMN_USAGE kcu \
+                 ON kcu.TABLE_SCHEMA = c.TABLE_SCHEMA \
+                 AND kcu.TABLE_NAME = c.TABLE_NAME \
+                 AND kcu.COLUMN_NAME = c.COLUMN_NAME \
+                 AND kcu.REFERENCED_TABLE_NAME IS NOT NULL \
+             WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = '{safe}' \
+             ORDER BY c.ORDINAL_POSITION"
+        );
+
+        let rows: Vec<MySqlRow> = sqlx::query(&query)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+
+        let mut schema = vec![];
+        for row in &rows {
+            let name: String = row.try_get("COLUMN_NAME").unwrap_or_default();
+            let type_name: String = row.try_get("DATA_TYPE").unwrap_or_default();
+            let is_nullable: String = row.try_get("IS_NULLABLE").unwrap_or_else(|_| "YES".into());
+            let column_key: String = row.try_get("COLUMN_KEY").unwrap_or_default();
+            let fk_table: Option<String> = row.try_get::<Option<String>, _>("FK_TABLE").unwrap_or(None);
+            let fk_col: Option<String> = row.try_get::<Option<String>, _>("FK_COLUMN").unwrap_or(None);
+            let fk = match (fk_table, fk_col) {
+                (Some(t), Some(c)) if !t.is_empty() => Some(ForeignKey { table: t, column: c }),
+                _ => None,
+            };
+            schema.push(ColumnSchema {
+                name,
+                type_name,
+                is_pk: column_key == "PRI",
+                is_nullable: is_nullable == "YES",
+                fk,
+            });
+        }
+        Ok(schema)
     }
 }
 

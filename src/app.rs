@@ -8,9 +8,10 @@ use tokio::{
     time::{timeout, Duration},
 };
 use crate::config::{Config, ConnectionProfile};
-use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{DbQueryResult, Value}};
+use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{ColumnSchema, DbQueryResult, Value}};
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
 use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen, PAGE_SIZE};
+use crate::ui::screens::edit_record::{EditRecordAction, EditRecordScreen};
 use crate::ui::screens::sql_editor::{SqlEditorAction, SqlEditorScreen};
 use crate::ui::screens::table_list::{TableListAction, TableListScreen};
 
@@ -29,13 +30,17 @@ pub enum DbEvent {
     ConnectionFailed(String),
     TablesLoaded(Vec<String>),
     TablesLoadFailed(String),
-    DataLoaded(DbQueryResult),      // initial page — replaces all rows
-    DataPageLoaded(DbQueryResult),  // next page   — appended to existing rows
-    DataCountLoaded(u64),           // COUNT(*) result
+    DataLoaded(DbQueryResult),
+    DataPageLoaded(DbQueryResult),
+    DataCountLoaded(u64),
     DataLoadFailed(String),
+    SchemaLoaded(Vec<ColumnSchema>),
+    SchemaLoadFailed(String),
     QueryRows(DbQueryResult),
     QueryExecuted(u64),
     QueryFailed(String),
+    EditSaved,
+    EditFailed(String),
 }
 
 // ── App state machine ─────────────────────────────────────────────────────────
@@ -45,6 +50,7 @@ pub enum AppState {
     Connection,
     TableList,
     DataGrid,
+    EditRecord,
     SqlEditor,
     Quit,
 }
@@ -57,6 +63,7 @@ pub struct App {
     pub connection_screen: ConnectionScreen,
     pub table_list_screen: TableListScreen,
     pub data_grid_screen: DataGridScreen,
+    pub edit_record_screen: EditRecordScreen,
     pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
     db_tx: mpsc::Sender<DbEvent>,
@@ -66,13 +73,14 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         let profiles = Config::load().unwrap_or_default().connections;
-        let (db_tx, db_rx) = mpsc::channel(8);
+        let (db_tx, db_rx) = mpsc::channel(16);
         Self {
             state: AppState::Connection,
             should_quit: false,
             connection_screen: ConnectionScreen::new(profiles),
             table_list_screen: TableListScreen::new(),
             data_grid_screen: DataGridScreen::new(String::new()),
+            edit_record_screen: EditRecordScreen::new(String::new(), vec![], vec![]),
             sql_editor_screen: SqlEditorScreen::new(String::new()),
             active_client: None,
             db_tx,
@@ -186,10 +194,15 @@ impl App {
                     DataGridAction::Back => self.state = AppState::TableList,
                     DataGridAction::ApplyFilter => self.spawn_reload_filters(),
                     DataGridAction::LoadMore => self.spawn_load_more(),
-                    DataGridAction::EnterCell => {
-                        // placeholder — FK sub-grid will be wired here
-                    }
+                    DataGridAction::EnterCell => self.open_edit_record(),
                     DataGridAction::None => {}
+                }
+            }
+            AppState::EditRecord => {
+                match self.edit_record_screen.handle_key(key) {
+                    EditRecordAction::Back => self.state = AppState::DataGrid,
+                    EditRecordAction::Save(sql) => self.spawn_save_record(sql),
+                    EditRecordAction::None => {}
                 }
             }
             AppState::SqlEditor => {
@@ -203,6 +216,56 @@ impl App {
                 if key.code == KeyCode::Char('q') {
                     self.should_quit = true;
                 }
+            }
+        }
+    }
+
+    // ── Edit record ───────────────────────────────────────────────────────────
+
+    fn open_edit_record(&mut self) {
+        let result = match self.data_grid_screen.result.as_ref() {
+            Some(r) => r,
+            None => return,
+        };
+        let schema = match self.data_grid_screen.schema.as_ref() {
+            Some(s) => s.clone(),
+            None => {
+                self.data_grid_screen.status = Some("Schema loading, please wait…".into());
+                return;
+            }
+        };
+        let sel_row = self.data_grid_screen.table_state.selected().unwrap_or(0);
+        let row = match result.rows.get(sel_row) {
+            Some(r) => r,
+            None => return,
+        };
+        let table_name = self.data_grid_screen.table_name.clone();
+        let values: Vec<String> = schema.iter().map(|col| {
+            result.columns.iter().position(|c| c.name == col.name)
+                .and_then(|i| row.values.get(i))
+                .map(value_to_string)
+                .unwrap_or_else(|| "NULL".into())
+        }).collect();
+        self.edit_record_screen = EditRecordScreen::new(table_name, schema, values);
+        self.state = AppState::EditRecord;
+    }
+
+    fn spawn_save_record(&mut self, sql: String) {
+        self.edit_record_screen.status = Some("Saving…".into());
+        let tx = self.db_tx.clone();
+        match &self.active_client {
+            Some(ActiveClient::Sql(c)) => {
+                let c = Arc::clone(c);
+                tokio::spawn(async move {
+                    let ev = match c.execute(&sql).await {
+                        Ok(_)  => DbEvent::EditSaved,
+                        Err(e) => DbEvent::EditFailed(e.to_string()),
+                    };
+                    let _ = tx.send(ev).await;
+                });
+            }
+            _ => {
+                self.edit_record_screen.set_error("Not connected to a SQL database".into());
             }
         }
     }
@@ -276,6 +339,15 @@ impl App {
             let empty = BTreeMap::new();
             spawn_sql_page(Arc::clone(c), &table_name, &empty, 0, true, self.db_tx.clone());
             spawn_sql_count(Arc::clone(c), &table_name, &empty, self.db_tx.clone());
+            let tx = self.db_tx.clone();
+            let client = Arc::clone(c);
+            tokio::spawn(async move {
+                let ev = match client.get_schema(&table_name).await {
+                    Ok(s)  => DbEvent::SchemaLoaded(s),
+                    Err(e) => DbEvent::SchemaLoadFailed(e.to_string()),
+                };
+                let _ = tx.send(ev).await;
+            });
         } else if let Some(ActiveClient::Kv(_)) = &self.active_client {
             self.data_grid_screen.set_error(
                 "Data Grid not available for key-value stores. Use the SQL Editor.".into(),
@@ -390,6 +462,12 @@ impl App {
             DbEvent::DataLoadFailed(msg) => {
                 self.data_grid_screen.set_error(msg);
             }
+            DbEvent::SchemaLoaded(schema) => {
+                self.data_grid_screen.schema = Some(schema);
+            }
+            DbEvent::SchemaLoadFailed(_) => {
+                // Non-fatal: schema is optional for viewing; edit will show a warning
+            }
             DbEvent::QueryRows(result) => {
                 self.sql_editor_screen.set_rows(result);
             }
@@ -399,7 +477,34 @@ impl App {
             DbEvent::QueryFailed(msg) => {
                 self.sql_editor_screen.set_error(msg);
             }
+            DbEvent::EditSaved => {
+                self.state = AppState::DataGrid;
+                let table   = self.data_grid_screen.table_name.clone();
+                let filters = self.data_grid_screen.filters.clone();
+                self.data_grid_screen.reset_data();
+                self.data_grid_screen.total_count = None;
+                if let Some(ActiveClient::Sql(c)) = &self.active_client {
+                    spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, self.db_tx.clone());
+                    spawn_sql_count(Arc::clone(c), &table, &filters, self.db_tx.clone());
+                }
+            }
+            DbEvent::EditFailed(msg) => {
+                self.edit_record_screen.set_error(msg);
+            }
         }
+    }
+}
+
+// ── Value display helpers ─────────────────────────────────────────────────────
+
+fn value_to_string(v: &Value) -> String {
+    match v {
+        Value::Null     => "NULL".into(),
+        Value::Bool(b)  => b.to_string(),
+        Value::Int(i)   => i.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Text(s)  => s.clone(),
+        Value::Bytes(b) => format!("<{} bytes>", b.len()),
     }
 }
 

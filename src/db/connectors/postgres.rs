@@ -5,7 +5,7 @@ use sqlx::{
 };
 use crate::db::error::DbError;
 use crate::db::traits::SqlClient;
-use crate::db::types::{Column, DbQueryResult, Row, Value};
+use crate::db::types::{Column, ColumnSchema, DbQueryResult, ForeignKey, Row, Value};
 
 pub struct PostgresConnector {
     pool: Option<PgPool>,
@@ -98,6 +98,71 @@ impl SqlClient for PostgresConnector {
             .iter()
             .map(|r| r.try_get::<String, _>(0).unwrap_or_default())
             .collect())
+    }
+
+    async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {
+        let pool = self.pool()?;
+        let safe = table.replace('\'', "");
+        let query = format!(
+            r#"
+            SELECT
+                c.column_name,
+                c.data_type,
+                c.is_nullable,
+                COALESCE(pk.is_pk, false) AS is_pk,
+                fk.foreign_table_name,
+                fk.foreign_column_name
+            FROM information_schema.columns c
+            LEFT JOIN (
+                SELECT kcu.column_name, true AS is_pk
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                    AND tc.table_name = kcu.table_name
+                WHERE tc.table_schema = 'public' AND tc.table_name = '{safe}'
+                  AND tc.constraint_type = 'PRIMARY KEY'
+            ) pk ON pk.column_name = c.column_name
+            LEFT JOIN (
+                SELECT kcu.column_name,
+                       ccu.table_name AS foreign_table_name,
+                       ccu.column_name AS foreign_column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                    AND tc.table_name = kcu.table_name
+                JOIN information_schema.constraint_column_usage ccu
+                    ON tc.constraint_name = ccu.constraint_name
+                    AND tc.table_schema = ccu.table_schema
+                WHERE tc.table_schema = 'public' AND tc.table_name = '{safe}'
+                  AND tc.constraint_type = 'FOREIGN KEY'
+            ) fk ON fk.column_name = c.column_name
+            WHERE c.table_schema = 'public' AND c.table_name = '{safe}'
+            ORDER BY c.ordinal_position
+            "#
+        );
+
+        let rows: Vec<PgRow> = sqlx::query(&query)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+
+        let mut schema = vec![];
+        for row in &rows {
+            let name: String = row.try_get("column_name").unwrap_or_default();
+            let type_name: String = row.try_get("data_type").unwrap_or_default();
+            let is_nullable: String = row.try_get("is_nullable").unwrap_or_else(|_| "YES".into());
+            let is_pk: bool = row.try_get("is_pk").unwrap_or(false);
+            let fk_table: Option<String> = row.try_get::<Option<String>, _>("foreign_table_name").unwrap_or(None);
+            let fk_col: Option<String> = row.try_get::<Option<String>, _>("foreign_column_name").unwrap_or(None);
+            let fk = match (fk_table, fk_col) {
+                (Some(t), Some(c)) if !t.is_empty() => Some(ForeignKey { table: t, column: c }),
+                _ => None,
+            };
+            schema.push(ColumnSchema { name, type_name, is_pk, is_nullable: is_nullable == "YES", fk });
+        }
+        Ok(schema)
     }
 }
 

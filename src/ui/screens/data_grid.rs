@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Paragraph, Row as RatRow, Table, TableState},
     Frame,
 };
-use crate::db::types::{DbQueryResult, Value};
+use crate::db::types::{ColumnSchema, DbQueryResult, Value};
 
 pub const PAGE_SIZE: usize = 200;
 const COLLAPSED_WIDTH: u16 = 3;
@@ -34,6 +34,7 @@ pub enum DataGridAction {
 pub struct DataGridScreen {
     pub table_name: String,
     pub result: Option<DbQueryResult>,
+    pub schema: Option<Vec<ColumnSchema>>,
     pub table_state: TableState,
     pub selected_col: usize,
     pub col_offset: usize,
@@ -56,6 +57,7 @@ impl DataGridScreen {
         Self {
             table_name,
             result: None,
+            schema: None,
             table_state,
             selected_col: 0,
             col_offset: 0,

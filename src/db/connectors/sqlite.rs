@@ -5,7 +5,7 @@ use sqlx::{
 };
 use crate::db::error::DbError;
 use crate::db::traits::SqlClient;
-use crate::db::types::{Column, DbQueryResult, Row, Value};
+use crate::db::types::{Column, ColumnSchema, DbQueryResult, ForeignKey, Row, Value};
 
 pub struct SqliteConnector {
     pool: Option<SqlitePool>,
@@ -95,6 +95,41 @@ impl SqlClient for SqliteConnector {
             .iter()
             .map(|r| r.try_get::<String, _>(0).unwrap_or_default())
             .collect())
+    }
+
+    async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {
+        use std::collections::HashMap;
+        let pool = self.pool()?;
+        let safe = table.replace('"', "");
+
+        let info_rows: Vec<SqliteRow> = sqlx::query(&format!("PRAGMA table_info(\"{}\")", safe))
+            .fetch_all(pool)
+            .await
+            .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+
+        let fk_rows: Vec<SqliteRow> = sqlx::query(&format!("PRAGMA foreign_key_list(\"{}\")", safe))
+            .fetch_all(pool)
+            .await
+            .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+
+        let mut fk_map: HashMap<String, ForeignKey> = HashMap::new();
+        for row in &fk_rows {
+            let from: String = row.try_get("from").unwrap_or_default();
+            let to_table: String = row.try_get("table").unwrap_or_default();
+            let to_col: String = row.try_get("to").unwrap_or_default();
+            fk_map.insert(from, ForeignKey { table: to_table, column: to_col });
+        }
+
+        let mut schema = vec![];
+        for row in &info_rows {
+            let name: String = row.try_get("name").unwrap_or_default();
+            let type_name: String = row.try_get("type").unwrap_or_default();
+            let notnull: i64 = row.try_get("notnull").unwrap_or(0);
+            let pk: i64 = row.try_get("pk").unwrap_or(0);
+            let fk = fk_map.get(&name).cloned();
+            schema.push(ColumnSchema { name, type_name, is_pk: pk > 0, is_nullable: notnull == 0, fk });
+        }
+        Ok(schema)
     }
 }
 
