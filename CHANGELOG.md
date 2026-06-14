@@ -7,6 +7,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-06-14
+
+### Fixed
+
+- **FK badge display** : colonnes FK affichées en magenta `[table_liée]` à côté de la valeur
+  - Requête `get_schema` PostgreSQL réécrite avec `pg_catalog` (sous-requêtes corrélées) — `information_schema.constraint_column_usage` retournait les colonnes référencées et non les colonnes sources
+  - Condition `avail >= 2` supprimée : le badge s'affiche toujours, la valeur est tronquée à l'espace restant (cas courant : entier court + badge qui remplit presque la colonne)
+
 ## [0.5.1] — 2026-06-14
 
 ### Fixed / Added
