@@ -9,6 +9,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.5.2] — 2026-06-14
 
+### Added
+
+#### FK expandable rows (`AppState::FkGrid`)
+- **Enter sur une cellule FK** (`[table_liée]`) ouvre une sous-grille affichant l'enregistrement lié via `SELECT * FROM ref_table WHERE ref_col = val`
+- **Navigation récursive** : Enter sur une FK dans la sous-grille ouvre un nouveau niveau (profondeur illimitée) — pile `fk_history` conservant l'état de chaque niveau
+- **Esc / q** remonte d'un niveau ; au niveau racine, retour à la Data Grid parente
+- **Enter sur une cellule non-FK** dans la sous-grille ouvre EditRecord (avec retour correct à la sous-grille)
+- Schéma et badges FK chargés sur chaque niveau → la récursivité fonctionne aussi sur les FK de 2ᵉ/3ᵉ niveau
+
 ### Fixed
 
 - **FK badge display** : colonnes FK affichées en magenta `[table_liée]` à côté de la valeur
@@ -192,7 +201,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/TSODev/rowdy/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/TSODev/rowdy/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/TSODev/rowdy/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/TSODev/rowdy/compare/v0.3.0...v0.4.0

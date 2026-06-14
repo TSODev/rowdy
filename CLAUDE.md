@@ -181,9 +181,9 @@ src/
 - [x] Décodage complet des types MySQL : DATE/TIME/DATETIME/TIMESTAMP (chrono), YEAR (u16), JSON (serde_json), ENUM/SET (String)
 - [x] Marqueur `<?TYPE?>` universel sur les 3 connecteurs pour tout type non décodable (aide au debug)
 - [x] Data Grid : badge magenta `[table_liée]` sur les cellules FK (introspection via `pg_catalog` pour PostgreSQL, `information_schema` pour MySQL, `PRAGMA foreign_key_list` pour SQLite)
+- [x] FK expandable rows : Enter sur badge FK → sous-grille `FkGrid` avec navigation récursive (pile `fk_history`, Esc remonte d'un niveau, Enter sur non-FK → EditRecord)
 
 ### Roadmap
-- [ ] FK expandable rows (Enter sur une cellule FK → sous-grille avec les enregistrements liés)
 - [ ] Barre de statut (mode, connexion, nombre de lignes)
 - [ ] Modal de confirmation / erreur
 - [ ] Export CSV / JSON
