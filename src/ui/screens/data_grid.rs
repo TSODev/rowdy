@@ -487,13 +487,11 @@ impl DataGridScreen {
                                         .unwrap_or_else(|| "…".into());
                                     (abbrev, String::new())
                                 } else if let Some(tbl) = fk_table {
+                                    // Always show the FK badge; truncate the value to whatever
+                                    // space remains (can be 0 if the badge fills the column).
                                     let badge = format!(" [{}]", tbl);
                                     let avail = col_width.saturating_sub(badge.len());
-                                    if avail >= 2 {
-                                        (truncate(&s, avail), badge)
-                                    } else {
-                                        (truncate(&s, col_width), String::new())
-                                    }
+                                    (truncate(&s, avail), badge)
                                 } else {
                                     (truncate(&s, col_width), String::new())
                                 };
