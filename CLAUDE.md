@@ -174,14 +174,15 @@ src/
 - [x] Éditeur SQL multi-lignes (`tui-textarea`) : F5/Ctrl+Enter, focus editor/résultats, SELECT vs DML
 - [x] Sauvegarde d'une nouvelle connexion dans `~/.config/rowdy/config.toml` (Ctrl+S → nom → Entrée)
 - [x] Suppression d'un profil avec confirmation (D → y: fichier+liste / n: liste seulement)
+- [x] Data Grid : curseur cellule (croisement ligne × colonne en bleu, reste de la ligne en jaune)
+- [x] Introspection du schéma `get_schema()` — PK, FK, types (SQLite PRAGMA, PostgreSQL + MySQL information_schema)
+- [x] Écran EditRecord : édition champ par champ, curseur complet (←/→/Backspace/Del/Home/End), badges [PK]/[→FK], aperçu SQL live, Ctrl+S sauvegarde
 
 ### Roadmap
-- [ ] Édition inline de cellules
+- [ ] FK expandable rows (Enter sur une cellule FK → sous-grille avec les enregistrements liés)
 - [ ] Barre de statut (mode, connexion, nombre de lignes)
 - [ ] Modal de confirmation / erreur
-- [ ] Vue détail d'une table (colonnes, types, index)
 - [ ] Export CSV / JSON
-- [ ] FK expandable rows (afficher les enregistrements liés sous une ligne)
 - [ ] Vue clé-détail Redis dans le Data Grid
 - [ ] Tests d'intégration sur les connecteurs
 

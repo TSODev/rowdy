@@ -8,11 +8,40 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### In progress
-- FK expandable rows (display related records below a row when a column is a foreign key)
-- Inline cell editing
+- FK expandable rows (sub-grid with linked records when pressing Enter on an FK cell)
 - Status bar component
 - Confirmation / error modal
 - Redis key-detail view in Data Grid
+- Export CSV / JSON
+
+---
+
+## [0.5.0] — 2026-06-14
+
+### Added
+
+#### Schema introspection
+- New `SqlClient::get_schema(table)` trait method returning `Vec<ColumnSchema>` (name, type, is_pk, is_nullable, FK target)
+- **SQLite**: implemented via `PRAGMA table_info` + `PRAGMA foreign_key_list`
+- **PostgreSQL**: implemented via `information_schema` join (PK + FK detection)
+- **MySQL**: implemented via `information_schema.COLUMNS` + `KEY_COLUMN_USAGE`
+- Schema loads in parallel with data when opening any table; stored in `DataGridScreen`
+
+#### Cell cursor in Data Grid
+- Selected cell highlighted with **blue background** at the row×column intersection
+- Rest of the selected row highlighted in yellow
+- `Enter` on a cell opens the Edit Record screen for that row
+
+#### Edit Record screen (`AppState::EditRecord`)
+- One field per line; `j/k` navigate between fields
+- `Enter` or `i` activates a field for inline editing
+- Full cursor support: `←/→` moves within the value, `Backspace`/`Del` deletes, `Home`/`End` jumps
+- **PK fields** are read-only (grayed out, `[PK]` badge in cyan)
+- **FK fields** display a `[→table]` badge in magenta (future: opens sub-grid on Enter)
+- Modified fields highlighted in **green**
+- Live **SQL preview** pane shows the `UPDATE "table" SET … WHERE "pk" = …` statement as you type
+- `Ctrl+S` executes the UPDATE, reloads the Data Grid, and returns automatically
+- `Esc` / `q` returns to Data Grid without saving
 
 ---
 
@@ -135,7 +164,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/TSODev/rowdy/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/TSODev/rowdy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/TSODev/rowdy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TSODev/rowdy/compare/v0.1.0...v0.2.0

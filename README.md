@@ -28,9 +28,12 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Data Grid — column scroll, collapse/expand | ✅ |
 | Data Grid — infinite scroll pagination (200 rows/page + COUNT) | ✅ |
 | Data Grid — cumulative column filters (`f` / `d` / `F`) | ✅ |
+| Data Grid — cell cursor (row × column highlight) | ✅ |
 | SQL Editor — multi-line, F5 to execute, results table | ✅ |
+| Schema introspection — PK, FK, types (all 3 SQL engines) | ✅ |
+| Inline record editing — `Enter` on cell, live SQL preview, `Ctrl+S` saves | ✅ |
 | Async I/O — UI never blocks during queries | ✅ |
-| Inline cell editing | 🔲 planned |
+| FK expandable sub-grid | 🔲 planned |
 | Export CSV / JSON | 🔲 planned |
 | Status bar & modal dialogs | 🔲 planned |
 
@@ -121,7 +124,20 @@ Profiles appear in the left panel of the connection screen at startup.
 | `f` | Open filter input for selected column |
 | `d` | Remove filter on selected column |
 | `F` | Clear all filters |
+| `Enter` | Open Edit Record for the selected row |
 | `q` | Back to table list |
+
+### Edit Record
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Next / previous field |
+| `Enter` / `i` | Edit the selected field |
+| `←` / `→` | Move cursor within field |
+| `Home` / `End` | Jump to start / end of field |
+| `Backspace` / `Del` | Delete character |
+| `Ctrl+S` | Save changes (executes UPDATE) |
+| `Esc` / `q` | Back to Data Grid without saving |
 
 ### SQL Editor
 

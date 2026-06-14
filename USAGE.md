@@ -197,6 +197,7 @@ Depuis la vue liste des tables, appuyez sur `Enter` pour ouvrir une table.
 | `PgDown` | +10 lignes |
 | `PgUp` | -10 lignes |
 | `Space` | Réduire / agrandir la colonne sélectionnée |
+| `Enter` | Ouvrir l'écran d'édition pour la ligne sélectionnée |
 | `q` / `Esc` | Retour à la liste des tables |
 
 ### Colonnes
@@ -226,12 +227,62 @@ Les filtres utilisent `LIKE '%valeur%'` et s'accumulent sur plusieurs colonnes (
 > **Note :** `LIKE` est sensible à la casse sur PostgreSQL. Sur SQLite et MySQL les comparaisons ASCII sont insensibles à la casse. Pour les colonnes non-texte (entiers, dates), PostgreSQL peut retourner une erreur — filtrer de préférence sur des colonnes de type texte.  
 > Redis n'est pas supporté dans le Data Grid (utiliser l'éditeur SQL).
 
-### Roadmap — expansion par clé étrangère _(à venir)_
+### Cellule sélectionnée
 
-Lorsqu'une colonne contient une clé étrangère (FK), il sera possible d'afficher
-sur les lignes du dessous les enregistrements de la table liée, à la manière
-d'un expandable row. Cette fonctionnalité nécessite l'introspection du schéma
-(`information_schema` / `PRAGMA foreign_key_list`) et est prévue dans une version future.
+La cellule courante (intersection ligne × colonne) est mise en évidence en **bleu**. Le reste de la ligne sélectionnée est jaune. Appuyez sur `Enter` pour ouvrir l'écran d'édition de l'enregistrement.
+
+---
+
+## Édition d'un enregistrement
+
+Depuis le Data Grid, appuyez sur `Enter` pour ouvrir la vue d'édition de la ligne sélectionnée.
+
+```
+┌─ Edit: books ──────────────────────────────────────────────────────┐
+│   id           [PK]      5                                         │
+│ > title                  The Great Journey — vol. 5               │
+│   author_id    [→authors] 3                                        │
+│   isbn                   978-2-07-036024-5                        │
+└────────────────────────────────────────────────────────────────────┘
+┌─ SQL Preview ──────────────────────────────────────────────────────┐
+│  UPDATE "books" SET "title" = 'The Great Journey — vol. 5'        │
+│  WHERE "id" = 5                                                    │
+└────────────────────────────────────────────────────────────────────┘
+  j/k: field   Enter/i: edit   Ctrl+S: save   Esc: back
+```
+
+### Navigation (mode Normal)
+
+| Touche | Action |
+|--------|--------|
+| `j` / `↓` | Champ suivant |
+| `k` / `↑` | Champ précédent |
+| `Enter` / `i` | Activer l'édition du champ sélectionné |
+| `Ctrl+S` | Sauvegarder (exécute l'UPDATE et recharge la grille) |
+| `Esc` / `q` | Retour au Data Grid sans sauvegarder |
+
+### Édition d'un champ (mode Édition)
+
+| Touche | Action |
+|--------|--------|
+| _(frappe)_ | Insérer un caractère à la position du curseur |
+| `←` / `→` | Déplacer le curseur |
+| `Home` | Aller au début |
+| `End` | Aller à la fin |
+| `Backspace` | Effacer le caractère avant le curseur |
+| `Delete` | Effacer le caractère après le curseur |
+| `Enter` / `Esc` | Valider et revenir en mode Normal |
+
+### Badges
+
+| Badge | Signification |
+|-------|---------------|
+| `[PK]` (cyan) | Clé primaire — lecture seule, non éditable |
+| `[→table]` (magenta) | Clé étrangère pointant vers `table` |
+
+Les champs modifiés sont surlignés en **vert**. L'aperçu SQL se met à jour en temps réel et n'affiche `-- No changes` que si aucune valeur n'a été modifiée.
+
+> **Note :** si la table ne possède pas de clé primaire, `Ctrl+S` affiche `-- No primary key` et la sauvegarde est impossible.
 
 ---
 
