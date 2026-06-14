@@ -175,24 +175,41 @@ fn pg_value(row: &PgRow, index: usize) -> Value {
     let tn = raw.type_info().name().to_string();
     let marker = || Value::Text(format!("<?{tn}>"));
     match tn.as_str() {
-        "BOOL"        => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or_else(|_| marker()),
+        "BOOL"           => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or_else(|_| marker()),
         // Each integer width requires its own Rust type in sqlx
-        "INT2"        => row.try_get::<i16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
-        "INT4"        => row.try_get::<i32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
-        "INT8"        => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or_else(|_| marker()),
-        "FLOAT4"      => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or_else(|_| marker()),
-        "FLOAT8"      => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or_else(|_| marker()),
-        // NUMERIC: PostgreSQL sends as text in simple-query mode; parse to f64 or keep as Text
-        "NUMERIC"     => row.try_get::<String, _>(index).ok()
-            .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
-            .unwrap_or_else(marker),
-        "BYTEA"       => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or_else(|_| marker()),
-        // Dates and times — require the chrono feature of sqlx
-        "DATE"        => row.try_get::<NaiveDate, _>(index).map(|d| Value::Text(d.to_string())).unwrap_or_else(|_| marker()),
-        "TIME"        => row.try_get::<NaiveTime, _>(index).map(|t| Value::Text(t.to_string())).unwrap_or_else(|_| marker()),
-        "TIMESTAMP"   => row.try_get::<NaiveDateTime, _>(index).map(|dt| Value::Text(dt.to_string())).unwrap_or_else(|_| marker()),
-        "TIMESTAMPTZ" => row.try_get::<DateTime<Utc>, _>(index).map(|dt| Value::Text(dt.to_rfc3339())).unwrap_or_else(|_| marker()),
-        // Text-like types: decoded directly as String
+        "INT2"           => row.try_get::<i16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "INT4"           => row.try_get::<i32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "INT8"           => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or_else(|_| marker()),
+        "FLOAT4"         => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or_else(|_| marker()),
+        "FLOAT8"         => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or_else(|_| marker()),
+        "NUMERIC"        => row.try_get::<String, _>(index).ok()
+                               .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
+                               .unwrap_or_else(marker),
+        "BYTEA"          => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or_else(|_| marker()),
+        // Dates and times
+        "DATE"           => row.try_get::<NaiveDate, _>(index).map(|d| Value::Text(d.to_string())).unwrap_or_else(|_| marker()),
+        "TIME"           => row.try_get::<NaiveTime, _>(index).map(|t| Value::Text(t.to_string())).unwrap_or_else(|_| marker()),
+        "TIMESTAMP"      => row.try_get::<NaiveDateTime, _>(index).map(|dt| Value::Text(dt.to_string())).unwrap_or_else(|_| marker()),
+        "TIMESTAMPTZ"    => row.try_get::<DateTime<Utc>, _>(index).map(|dt| Value::Text(dt.to_rfc3339())).unwrap_or_else(|_| marker()),
+        // UUID
+        "UUID"           => row.try_get::<uuid::Uuid, _>(index).map(|u| Value::Text(u.to_string())).unwrap_or_else(|_| marker()),
+        // JSON / JSONB — decoded via serde_json then serialised back to a compact string
+        "JSON" | "JSONB" => row.try_get::<serde_json::Value, _>(index).map(|v| Value::Text(v.to_string())).unwrap_or_else(|_| marker()),
+        // Arrays: OID names start with '_', e.g. _TEXT, _INT4, _UUID
+        // Try Vec<String> first (text arrays), then Vec<i64> (int arrays), else marker
+        s if s.starts_with('_') => {
+            if let Ok(v) = row.try_get::<Vec<String>, _>(index) {
+                return Value::Text(format!("[{}]", v.join(", ")));
+            }
+            if let Ok(v) = row.try_get::<Vec<i64>, _>(index) {
+                return Value::Text(format!("[{}]", v.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", ")));
+            }
+            if let Ok(v) = row.try_get::<Vec<bool>, _>(index) {
+                return Value::Text(format!("[{}]", v.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(", ")));
+            }
+            marker()
+        }
+        // Text-like types (TEXT, VARCHAR, CHAR, BPCHAR, NAME, XML, INTERVAL, INET, CIDR, MACADDR…)
         _ => row.try_get::<String, _>(index).map(Value::Text).unwrap_or_else(|_| marker()),
     }
 }

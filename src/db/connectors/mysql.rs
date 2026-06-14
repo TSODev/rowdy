@@ -167,16 +167,20 @@ fn mysql_value(row: &MySqlRow, index: usize) -> Value {
         "BIGINT UNSIGNED"                     => row.try_get::<u64, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
         "FLOAT"                               => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or_else(|_| marker()),
         "DOUBLE"                              => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or_else(|_| marker()),
-        // DECIMAL: MySQL wire sends it as text — parse to f64, keep as Text if not parseable
         "DECIMAL"                             => row.try_get::<String, _>(index).ok()
-            .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
-            .unwrap_or_else(marker),
+                                                    .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
+                                                    .unwrap_or_else(marker),
         "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "BINARY" | "VARBINARY"
                                               => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or_else(|_| marker()),
-        // Dates and times — require the chrono feature of sqlx
+        // Dates and times
         "DATE"                                => row.try_get::<NaiveDate, _>(index).map(|d| Value::Text(d.to_string())).unwrap_or_else(|_| marker()),
         "TIME"                                => row.try_get::<NaiveTime, _>(index).map(|t| Value::Text(t.to_string())).unwrap_or_else(|_| marker()),
         "DATETIME" | "TIMESTAMP"              => row.try_get::<NaiveDateTime, _>(index).map(|dt| Value::Text(dt.to_string())).unwrap_or_else(|_| marker()),
+        // YEAR is a 1–4 digit year; MySQL sends it as u16
+        "YEAR"                                => row.try_get::<u16, _>(index).map(|y| Value::Int(y as i64)).unwrap_or_else(|_| marker()),
+        // JSON
+        "JSON"                                => row.try_get::<serde_json::Value, _>(index).map(|v| Value::Text(v.to_string())).unwrap_or_else(|_| marker()),
+        // ENUM and SET are text-compatible; fall through to the String arm below
         _ => row.try_get::<String, _>(index).map(Value::Text).unwrap_or_else(|_| marker()),
     }
 }

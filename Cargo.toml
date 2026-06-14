@@ -21,8 +21,10 @@ tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 
 # Couche base de données
-sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "postgres", "mysql", "chrono"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "postgres", "mysql", "chrono", "uuid", "json"] }
 chrono = "0.4"
+uuid = "1"
+serde_json = "1"
 redis = { version = "0.24", features = ["tokio-comp"] }
 
 # Sérialisation et configuration
