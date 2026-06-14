@@ -7,7 +7,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-### Fixed / Added (post-0.5.0, pending next release)
+## [0.5.1] — 2026-06-14
+
+### Fixed / Added
 
 #### Type decoding — PostgreSQL
 - **DATE / TIME / TIMESTAMP / TIMESTAMPTZ** : now decoded via `chrono` (previously returned `NULL`)
@@ -182,7 +184,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/TSODev/rowdy/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/TSODev/rowdy/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/TSODev/rowdy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/TSODev/rowdy/compare/v0.2.0...v0.3.0
