@@ -167,23 +167,32 @@ impl SqlClient for PostgresConnector {
 }
 
 fn pg_value(row: &PgRow, index: usize) -> Value {
+    use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
     let raw = row.try_get_raw(index).unwrap();
     if raw.is_null() {
         return Value::Null;
     }
-    match raw.type_info().name() {
-        "BOOL"    => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or(Value::Null),
+    let tn = raw.type_info().name().to_string();
+    let marker = || Value::Text(format!("<?{tn}>"));
+    match tn.as_str() {
+        "BOOL"        => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or_else(|_| marker()),
         // Each integer width requires its own Rust type in sqlx
-        "INT2"    => row.try_get::<i16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
-        "INT4"    => row.try_get::<i32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
-        "INT8"    => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or(Value::Null),
-        "FLOAT4"  => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or(Value::Null),
-        "FLOAT8"  => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or(Value::Null),
-        // NUMERIC: try String (text protocol) then parse to f64; keep as Text if not parseable
-        "NUMERIC" => row.try_get::<String, _>(index).ok()
+        "INT2"        => row.try_get::<i16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "INT4"        => row.try_get::<i32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "INT8"        => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or_else(|_| marker()),
+        "FLOAT4"      => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or_else(|_| marker()),
+        "FLOAT8"      => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or_else(|_| marker()),
+        // NUMERIC: PostgreSQL sends as text in simple-query mode; parse to f64 or keep as Text
+        "NUMERIC"     => row.try_get::<String, _>(index).ok()
             .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
-            .unwrap_or(Value::Null),
-        "BYTEA"   => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or(Value::Null),
-        _ => row.try_get::<String, _>(index).map(Value::Text).unwrap_or(Value::Null),
+            .unwrap_or_else(marker),
+        "BYTEA"       => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or_else(|_| marker()),
+        // Dates and times — require the chrono feature of sqlx
+        "DATE"        => row.try_get::<NaiveDate, _>(index).map(|d| Value::Text(d.to_string())).unwrap_or_else(|_| marker()),
+        "TIME"        => row.try_get::<NaiveTime, _>(index).map(|t| Value::Text(t.to_string())).unwrap_or_else(|_| marker()),
+        "TIMESTAMP"   => row.try_get::<NaiveDateTime, _>(index).map(|dt| Value::Text(dt.to_string())).unwrap_or_else(|_| marker()),
+        "TIMESTAMPTZ" => row.try_get::<DateTime<Utc>, _>(index).map(|dt| Value::Text(dt.to_rfc3339())).unwrap_or_else(|_| marker()),
+        // Text-like types: decoded directly as String
+        _ => row.try_get::<String, _>(index).map(Value::Text).unwrap_or_else(|_| marker()),
     }
 }

@@ -144,5 +144,6 @@ fn sqlite_value(row: &SqliteRow, index: usize) -> Value {
     if let Ok(v) = row.try_get::<f64, _>(index)     { return Value::Float(v); }
     if let Ok(v) = row.try_get::<String, _>(index)  { return Value::Text(v);  }
     if let Ok(v) = row.try_get::<Vec<u8>, _>(index) { return Value::Bytes(v); }
-    Value::Null
+    let tn = raw.type_info().name().to_string();
+    Value::Text(format!("<?{tn}>"))
 }

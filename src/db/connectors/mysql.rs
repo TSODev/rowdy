@@ -146,30 +146,37 @@ impl SqlClient for MySqlConnector {
 }
 
 fn mysql_value(row: &MySqlRow, index: usize) -> Value {
+    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
     let raw = row.try_get_raw(index).unwrap();
     if raw.is_null() {
         return Value::Null;
     }
-    match raw.type_info().name() {
-        "BOOLEAN" | "TINYINT(1)"             => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or(Value::Null),
+    let tn = raw.type_info().name().to_string();
+    let marker = || Value::Text(format!("<?{tn}>"));
+    match tn.as_str() {
+        "BOOLEAN" | "TINYINT(1)"              => row.try_get::<bool, _>(index).map(Value::Bool).unwrap_or_else(|_| marker()),
         // Signed integers — each width needs its own Rust type
-        "TINYINT"                            => row.try_get::<i8, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
-        "SMALLINT"                           => row.try_get::<i16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
-        "INT" | "MEDIUMINT"                  => row.try_get::<i32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
-        "BIGINT"                             => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or(Value::Null),
+        "TINYINT"                             => row.try_get::<i8, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "SMALLINT"                            => row.try_get::<i16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "INT" | "MEDIUMINT"                   => row.try_get::<i32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "BIGINT"                              => row.try_get::<i64, _>(index).map(Value::Int).unwrap_or_else(|_| marker()),
         // Unsigned variants
-        "TINYINT UNSIGNED"                   => row.try_get::<u8, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
-        "SMALLINT UNSIGNED"                  => row.try_get::<u16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
-        "INT UNSIGNED" | "MEDIUMINT UNSIGNED"=> row.try_get::<u32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
-        "BIGINT UNSIGNED"                    => row.try_get::<u64, _>(index).map(|v| Value::Int(v as i64)).unwrap_or(Value::Null),
-        "FLOAT"                              => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or(Value::Null),
-        "DOUBLE"                             => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or(Value::Null),
+        "TINYINT UNSIGNED"                    => row.try_get::<u8, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "SMALLINT UNSIGNED"                   => row.try_get::<u16, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "INT UNSIGNED" | "MEDIUMINT UNSIGNED" => row.try_get::<u32, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "BIGINT UNSIGNED"                     => row.try_get::<u64, _>(index).map(|v| Value::Int(v as i64)).unwrap_or_else(|_| marker()),
+        "FLOAT"                               => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or_else(|_| marker()),
+        "DOUBLE"                              => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or_else(|_| marker()),
         // DECIMAL: MySQL wire sends it as text — parse to f64, keep as Text if not parseable
-        "DECIMAL"                            => row.try_get::<String, _>(index).ok()
+        "DECIMAL"                             => row.try_get::<String, _>(index).ok()
             .map(|s| s.parse::<f64>().map(Value::Float).unwrap_or_else(|_| Value::Text(s)))
-            .unwrap_or(Value::Null),
+            .unwrap_or_else(marker),
         "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "BINARY" | "VARBINARY"
-                                             => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or(Value::Null),
-        _ => row.try_get::<String, _>(index).map(Value::Text).unwrap_or(Value::Null),
+                                              => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or_else(|_| marker()),
+        // Dates and times — require the chrono feature of sqlx
+        "DATE"                                => row.try_get::<NaiveDate, _>(index).map(|d| Value::Text(d.to_string())).unwrap_or_else(|_| marker()),
+        "TIME"                                => row.try_get::<NaiveTime, _>(index).map(|t| Value::Text(t.to_string())).unwrap_or_else(|_| marker()),
+        "DATETIME" | "TIMESTAMP"              => row.try_get::<NaiveDateTime, _>(index).map(|dt| Value::Text(dt.to_string())).unwrap_or_else(|_| marker()),
+        _ => row.try_get::<String, _>(index).map(Value::Text).unwrap_or_else(|_| marker()),
     }
 }
