@@ -1,0 +1,23 @@
+[package]
+name = "rowdy"
+version = "0.1.0"
+edition = "2024"
+authors = ["Votre Nom <votre.email@exemple.com>"]
+description = "A fast, modern, and rowdy TUI database management tool written in Rust."
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["database", "tui", "terminal", "postgres"]
+categories = ["development-tools", "database"]
+
+[dependencies]
+# L'interface graphique de terminal
+ratatui = "0.26"
+crossterm = "0.27"
+
+# Le moteur asynchrone et la gestion des canaux
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+
+# La couche base de données (ici configurée pour SQLite et Postgres en mode async)
+sqlx = { version = "0.7", features = [ "runtime-tokio-native-tls", "sqlite", "postgres" ] }
+
