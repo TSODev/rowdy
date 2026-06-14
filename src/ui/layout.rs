@@ -10,6 +10,8 @@ pub fn draw(f: &mut Frame<'_>, app: &mut App) {
             screens::table_list::TableListScreen::draw(f, &mut app.table_list_screen),
         crate::app::AppState::DataGrid =>
             screens::data_grid::DataGridScreen::draw(f, &mut app.data_grid_screen),
+        crate::app::AppState::FkGrid =>
+            screens::data_grid::DataGridScreen::draw(f, &mut app.fk_grid_screen),
         crate::app::AppState::EditRecord =>
             screens::edit_record::EditRecordScreen::draw(f, &mut app.edit_record_screen),
         crate::app::AppState::SqlEditor =>

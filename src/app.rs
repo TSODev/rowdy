@@ -36,6 +36,9 @@ pub enum DbEvent {
     DataLoadFailed(String),
     SchemaLoaded(Vec<ColumnSchema>),
     SchemaLoadFailed(String),
+    FkPageLoaded(DbQueryResult),
+    FkCountLoaded(u64),
+    FkSchemaLoaded(Vec<ColumnSchema>),
     QueryRows(DbQueryResult),
     QueryExecuted(u64),
     QueryFailed(String),
@@ -50,6 +53,7 @@ pub enum AppState {
     Connection,
     TableList,
     DataGrid,
+    FkGrid,
     EditRecord,
     SqlEditor,
     Quit,
@@ -63,9 +67,12 @@ pub struct App {
     pub connection_screen: ConnectionScreen,
     pub table_list_screen: TableListScreen,
     pub data_grid_screen: DataGridScreen,
+    pub fk_grid_screen: DataGridScreen,
     pub edit_record_screen: EditRecordScreen,
     pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
+    // State to return to after EditRecord (DataGrid or FkGrid)
+    edit_origin: AppState,
     db_tx: mpsc::Sender<DbEvent>,
     db_rx: mpsc::Receiver<DbEvent>,
 }
@@ -80,9 +87,11 @@ impl App {
             connection_screen: ConnectionScreen::new(profiles),
             table_list_screen: TableListScreen::new(),
             data_grid_screen: DataGridScreen::new(String::new()),
+            fk_grid_screen: DataGridScreen::new(String::new()),
             edit_record_screen: EditRecordScreen::new(String::new(), vec![], vec![]),
             sql_editor_screen: SqlEditorScreen::new(String::new()),
             active_client: None,
+            edit_origin: AppState::DataGrid,
             db_tx,
             db_rx,
         }
@@ -194,13 +203,27 @@ impl App {
                     DataGridAction::Back => self.state = AppState::TableList,
                     DataGridAction::ApplyFilter => self.spawn_reload_filters(),
                     DataGridAction::LoadMore => self.spawn_load_more(),
-                    DataGridAction::EnterCell => self.open_edit_record(),
+                    DataGridAction::EnterCell => {
+                        if let Some((ref_table, ref_col, fk_val)) = self.selected_fk_info(false) {
+                            self.open_fk_subgrid(ref_table, ref_col, fk_val);
+                        } else {
+                            self.open_edit_record();
+                        }
+                    }
+                    DataGridAction::None => {}
+                }
+            }
+            AppState::FkGrid => {
+                match self.fk_grid_screen.handle_key(key) {
+                    DataGridAction::Back => self.state = AppState::DataGrid,
+                    DataGridAction::EnterCell => self.open_fk_edit_record(),
+                    DataGridAction::LoadMore | DataGridAction::ApplyFilter => {}
                     DataGridAction::None => {}
                 }
             }
             AppState::EditRecord => {
                 match self.edit_record_screen.handle_key(key) {
-                    EditRecordAction::Back => self.state = AppState::DataGrid,
+                    EditRecordAction::Back => self.state = self.edit_origin.clone(),
                     EditRecordAction::Save(sql) => self.spawn_save_record(sql),
                     EditRecordAction::None => {}
                 }
@@ -221,6 +244,88 @@ impl App {
     }
 
     // ── Edit record ───────────────────────────────────────────────────────────
+
+    // Returns (ref_table, ref_col, fk_val) if selected cell is a FK, None otherwise.
+    // `from_fk` = true → look in fk_grid_screen, false → data_grid_screen.
+    fn selected_fk_info(&self, from_fk: bool) -> Option<(String, String, String)> {
+        let screen = if from_fk { &self.fk_grid_screen } else { &self.data_grid_screen };
+        let result = screen.result.as_ref()?;
+        let schema = screen.schema.as_ref()?;
+        let col_idx = screen.selected_col;
+        let col_name = result.columns.get(col_idx)?.name.as_str();
+        let fk = schema.iter().find(|cs| cs.name == col_name)?.fk.as_ref()?;
+        let sel_row = screen.table_state.selected()?;
+        let val = result.rows.get(sel_row)?.values.get(col_idx)?;
+        if matches!(val, Value::Null) { return None; }
+        let fk_val = value_to_string(val);
+        if fk_val == "NULL" { return None; }
+        Some((fk.table.clone(), fk.column.clone(), fk_val))
+    }
+
+    fn open_fk_subgrid(&mut self, ref_table: String, ref_col: String, fk_val: String) {
+        let display = format!("{} [{}={}]", ref_table, ref_col, fk_val);
+        self.fk_grid_screen = DataGridScreen::new(display);
+        self.state = AppState::FkGrid;
+
+        if let Some(ActiveClient::Sql(c)) = &self.active_client {
+            let tx = self.db_tx.clone();
+            let client = Arc::clone(c);
+            let query = build_fk_query(&ref_table, &ref_col, &fk_val);
+            tokio::spawn(async move {
+                let ev = match client.fetch_all(&query).await {
+                    Ok(r)  => DbEvent::FkPageLoaded(r),
+                    Err(e) => DbEvent::DataLoadFailed(e.to_string()),
+                };
+                let _ = tx.send(ev).await;
+            });
+
+            let tx = self.db_tx.clone();
+            let client = Arc::clone(c);
+            let cquery = build_fk_count_query(&ref_table, &ref_col, &fk_val);
+            tokio::spawn(async move {
+                if let Ok(r) = client.fetch_all(&cquery).await {
+                    let _ = tx.send(DbEvent::FkCountLoaded(parse_count(&r))).await;
+                }
+            });
+
+            let tx = self.db_tx.clone();
+            let client = Arc::clone(c);
+            tokio::spawn(async move {
+                if let Ok(s) = client.get_schema(&ref_table).await {
+                    let _ = tx.send(DbEvent::FkSchemaLoaded(s)).await;
+                }
+            });
+        }
+    }
+
+    fn open_fk_edit_record(&mut self) {
+        let result = match self.fk_grid_screen.result.as_ref() {
+            Some(r) => r,
+            None => return,
+        };
+        let schema = match self.fk_grid_screen.schema.as_ref() {
+            Some(s) => s.clone(),
+            None => {
+                self.fk_grid_screen.status = Some("Schema loading, please wait…".into());
+                return;
+            }
+        };
+        let sel_row = self.fk_grid_screen.table_state.selected().unwrap_or(0);
+        let row = match result.rows.get(sel_row) {
+            Some(r) => r,
+            None => return,
+        };
+        let table_name = self.fk_grid_screen.table_name.clone();
+        let values: Vec<String> = schema.iter().map(|col| {
+            result.columns.iter().position(|c| c.name == col.name)
+                .and_then(|i| row.values.get(i))
+                .map(value_to_string)
+                .unwrap_or_else(|| "NULL".into())
+        }).collect();
+        self.edit_record_screen = EditRecordScreen::new(table_name, schema, values);
+        self.edit_origin = AppState::FkGrid;
+        self.state = AppState::EditRecord;
+    }
 
     fn open_edit_record(&mut self) {
         let result = match self.data_grid_screen.result.as_ref() {
@@ -247,6 +352,7 @@ impl App {
                 .unwrap_or_else(|| "NULL".into())
         }).collect();
         self.edit_record_screen = EditRecordScreen::new(table_name, schema, values);
+        self.edit_origin = AppState::DataGrid;
         self.state = AppState::EditRecord;
     }
 
@@ -468,6 +574,15 @@ impl App {
             DbEvent::SchemaLoadFailed(_) => {
                 // Non-fatal: schema is optional for viewing; edit will show a warning
             }
+            DbEvent::FkPageLoaded(result) => {
+                self.fk_grid_screen.set_result(result);
+            }
+            DbEvent::FkCountLoaded(n) => {
+                self.fk_grid_screen.set_total(n);
+            }
+            DbEvent::FkSchemaLoaded(schema) => {
+                self.fk_grid_screen.schema = Some(schema);
+            }
             DbEvent::QueryRows(result) => {
                 self.sql_editor_screen.set_rows(result);
             }
@@ -541,6 +656,20 @@ fn build_data_query(table: &str, filters: &BTreeMap<String, String>, offset: usi
 fn build_count_query(table: &str, filters: &BTreeMap<String, String>) -> String {
     let wh = build_where(filters);
     format!("SELECT COUNT(*) AS _count FROM \"{table}\"{wh}")
+}
+
+fn build_fk_query(ref_table: &str, ref_col: &str, fk_val: &str) -> String {
+    let safe_t = ref_table.replace('"', "");
+    let safe_c = ref_col.replace('"', "");
+    let safe_v = fk_val.replace('\'', "''");
+    format!("SELECT * FROM \"{safe_t}\" WHERE \"{safe_c}\" = '{safe_v}' LIMIT {PAGE_SIZE}")
+}
+
+fn build_fk_count_query(ref_table: &str, ref_col: &str, fk_val: &str) -> String {
+    let safe_t = ref_table.replace('"', "");
+    let safe_c = ref_col.replace('"', "");
+    let safe_v = fk_val.replace('\'', "''");
+    format!("SELECT COUNT(*) AS _count FROM \"{safe_t}\" WHERE \"{safe_c}\" = '{safe_v}'")
 }
 
 fn parse_count(result: &DbQueryResult) -> u64 {
