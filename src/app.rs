@@ -67,7 +67,8 @@ pub struct App {
     pub connection_screen: ConnectionScreen,
     pub table_list_screen: TableListScreen,
     pub data_grid_screen: DataGridScreen,
-    pub fk_grid_screen: DataGridScreen,
+    pub fk_grid_screen: DataGridScreen,  // current FK level
+    fk_history: Vec<DataGridScreen>,      // previous FK levels (navigation stack)
     pub edit_record_screen: EditRecordScreen,
     pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
@@ -88,6 +89,7 @@ impl App {
             table_list_screen: TableListScreen::new(),
             data_grid_screen: DataGridScreen::new(String::new()),
             fk_grid_screen: DataGridScreen::new(String::new()),
+            fk_history: Vec::new(),
             edit_record_screen: EditRecordScreen::new(String::new(), vec![], vec![]),
             sql_editor_screen: SqlEditorScreen::new(String::new()),
             active_client: None,
@@ -215,8 +217,20 @@ impl App {
             }
             AppState::FkGrid => {
                 match self.fk_grid_screen.handle_key(key) {
-                    DataGridAction::Back => self.state = AppState::DataGrid,
-                    DataGridAction::EnterCell => self.open_fk_edit_record(),
+                    DataGridAction::Back => {
+                        if let Some(prev) = self.fk_history.pop() {
+                            self.fk_grid_screen = prev; // go up one FK level
+                        } else {
+                            self.state = AppState::DataGrid;
+                        }
+                    }
+                    DataGridAction::EnterCell => {
+                        if let Some((ref_table, ref_col, fk_val)) = self.selected_fk_info(true) {
+                            self.open_fk_subgrid(ref_table, ref_col, fk_val);
+                        } else {
+                            self.open_fk_edit_record();
+                        }
+                    }
                     DataGridAction::LoadMore | DataGridAction::ApplyFilter => {}
                     DataGridAction::None => {}
                 }
@@ -263,6 +277,14 @@ impl App {
     }
 
     fn open_fk_subgrid(&mut self, ref_table: String, ref_col: String, fk_val: String) {
+        // If already navigating FK levels, push the current level onto the history stack.
+        if self.state == AppState::FkGrid {
+            let prev = std::mem::replace(
+                &mut self.fk_grid_screen,
+                DataGridScreen::new(String::new()),
+            );
+            self.fk_history.push(prev);
+        }
         let display = format!("{} [{}={}]", ref_table, ref_col, fk_val);
         self.fk_grid_screen = DataGridScreen::new(display);
         self.state = AppState::FkGrid;
@@ -439,6 +461,7 @@ impl App {
 
     fn spawn_load_data(&mut self, table_name: String) {
         self.data_grid_screen = DataGridScreen::new(table_name.clone());
+        self.fk_history.clear();
         self.state = AppState::DataGrid;
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
