@@ -26,6 +26,7 @@ pub enum DataGridAction {
     Back,
     ApplyFilter,
     LoadMore,
+    EnterCell,
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -223,6 +224,8 @@ impl DataGridScreen {
                     DataGridAction::None
                 }
             }
+
+            KeyCode::Enter => DataGridAction::EnterCell,
 
             _ => DataGridAction::None,
         }
@@ -450,23 +453,45 @@ impl DataGridScreen {
                     .style(Style::default().bg(Color::DarkGray))
                     .height(1);
 
+                let sel_row = screen.table_state.selected().unwrap_or(usize::MAX);
+                let sel_col = screen.selected_col;
+
                 let data_rows: Vec<RatRow> = result
                     .rows
                     .iter()
-                    .map(|row| {
+                    .enumerate()
+                    .map(|(row_idx, row)| {
+                        let is_sel_row = row_idx == sel_row;
                         let cells: Vec<Cell> = visible
                             .iter()
-                            .map(|&i| {
-                                let val = row.values.get(i).unwrap_or(&Value::Null);
+                            .map(|&col_idx| {
+                                let val = row.values.get(col_idx).unwrap_or(&Value::Null);
                                 let s = value_display(val);
-                                let display = if screen.collapsed_cols.contains(&i) {
+                                let display = if screen.collapsed_cols.contains(&col_idx) {
                                     s.chars().next()
                                         .map(|c| format!("{c}…"))
                                         .unwrap_or_else(|| "…".into())
                                 } else {
-                                    truncate(&s, screen.effective_col_width(i) as usize)
+                                    truncate(&s, screen.effective_col_width(col_idx) as usize)
                                 };
-                                Cell::from(display)
+                                let style = if is_sel_row && col_idx == sel_col {
+                                    // Cell cursor: blue bg + white text
+                                    Style::default()
+                                        .fg(Color::White)
+                                        .bg(Color::Blue)
+                                        .add_modifier(Modifier::BOLD)
+                                } else if is_sel_row {
+                                    // Rest of selected row: yellow bg
+                                    Style::default()
+                                        .fg(Color::Black)
+                                        .bg(Color::Yellow)
+                                        .add_modifier(Modifier::BOLD)
+                                } else if matches!(val, Value::Null) {
+                                    Style::default().fg(Color::DarkGray)
+                                } else {
+                                    Style::default()
+                                };
+                                Cell::from(display).style(style)
                             })
                             .collect();
                         RatRow::new(cells).height(1)
@@ -476,12 +501,8 @@ impl DataGridScreen {
                 let table = Table::new(data_rows, widths)
                     .header(header)
                     .block(Block::default().borders(Borders::ALL))
-                    .highlight_style(
-                        Style::default()
-                            .fg(Color::Black)
-                            .bg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    )
+                    // highlight_style is transparent: per-cell styles above handle it
+                    .highlight_style(Style::default())
                     .highlight_symbol("> ");
 
                 f.render_stateful_widget(table, chunks[1], &mut screen.table_state);
@@ -514,7 +535,7 @@ impl DataGridScreen {
             };
             f.render_widget(
                 Paragraph::new(format!(
-                    " j/k: rows   h/l: cols   g/G: first/last   {}   {}   q: back",
+                    " j/k: rows   h/l: cols   g/G: first/last   Enter: cell   {}   {}   q: back",
                     collapse_label, filter_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))

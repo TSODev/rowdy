@@ -186,6 +186,9 @@ impl App {
                     DataGridAction::Back => self.state = AppState::TableList,
                     DataGridAction::ApplyFilter => self.spawn_reload_filters(),
                     DataGridAction::LoadMore => self.spawn_load_more(),
+                    DataGridAction::EnterCell => {
+                        // placeholder — FK sub-grid will be wired here
+                    }
                     DataGridAction::None => {}
                 }
             }
