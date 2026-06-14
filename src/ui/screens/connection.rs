@@ -45,6 +45,12 @@ impl ConnectionScreen {
         }
     }
 
+    pub fn reset_input(&mut self) {
+        self.input_mode = InputMode::Normal;
+        self.url_input.clear();
+        self.status = None;
+    }
+
     pub fn current_db_type(&self) -> &str {
         DB_TYPES[self.db_type_idx]
     }

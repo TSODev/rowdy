@@ -123,6 +123,7 @@ impl App {
                     TableListAction::Disconnect => {
                         self.active_client = None;
                         self.table_list_screen = TableListScreen::new();
+                        self.connection_screen.reset_input();
                         self.state = AppState::Connection;
                     }
                     TableListAction::None => {}
