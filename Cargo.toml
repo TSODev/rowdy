@@ -2,7 +2,7 @@
 name = "rowdy-db"
 version = "0.1.0"
 edition = "2024"
-authors = ["Votre Nom <votre.email@exemple.com>"]
+authors = ["Thierry Soulie <thierry.soulie@tsodev.fr>"]
 description = "A fast, modern, and rowdy TUI database management tool written in Rust."
 readme = "README.md"
 license = "MIT OR Apache-2.0"
