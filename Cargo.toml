@@ -13,7 +13,8 @@ repository = "https://github.com/TSODev/rowdy"
 [dependencies]
 # Interface graphique de terminal
 ratatui = "0.26"
-crossterm = "0.27"
+crossterm = { version = "0.27", features = ["event-stream"] }
+futures = "0.3"
 
 # Moteur asynchrone
 tokio = { version = "1", features = ["full"] }

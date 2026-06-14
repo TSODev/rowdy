@@ -4,7 +4,7 @@ pub mod redis;
 pub mod sqlite;
 
 use crate::db::error::DbError;
-use crate::db::traits::SqlClient;
+use crate::db::traits::{KvClient, SqlClient};
 
 pub enum ConnectorType {
     Postgres,
@@ -25,13 +25,36 @@ impl ConnectorType {
     }
 }
 
-pub fn create_sql_connector(t: &ConnectorType) -> Result<Box<dyn SqlClient>, DbError> {
-    match t {
-        ConnectorType::Postgres => Ok(Box::new(postgres::PostgresConnector::new())),
-        ConnectorType::Sqlite   => Ok(Box::new(sqlite::SqliteConnector::new())),
-        ConnectorType::Mysql    => Ok(Box::new(mysql::MySqlConnector::new())),
-        ConnectorType::Redis    => Err(DbError::Unsupported(
-            "Redis uses KvClient, not SqlClient".into(),
-        )),
+/// Create and connect a SQL connector for the given driver name and URL.
+pub async fn connect_sql(db_type: &str, url: &str) -> Result<Box<dyn SqlClient>, DbError> {
+    match db_type.to_lowercase().as_str() {
+        "postgres" | "postgresql" => {
+            let mut c = postgres::PostgresConnector::new();
+            c.connect(url).await?;
+            Ok(Box::new(c))
+        }
+        "sqlite" => {
+            let mut c = sqlite::SqliteConnector::new();
+            c.connect(url).await?;
+            Ok(Box::new(c))
+        }
+        "mysql" | "mariadb" => {
+            let mut c = mysql::MySqlConnector::new();
+            c.connect(url).await?;
+            Ok(Box::new(c))
+        }
+        other => Err(DbError::Unsupported(format!("Unknown SQL driver: {other}"))),
+    }
+}
+
+/// Create and connect a key-value connector for the given driver name and URL.
+pub async fn connect_kv(db_type: &str, url: &str) -> Result<Box<dyn KvClient>, DbError> {
+    match db_type.to_lowercase().as_str() {
+        "redis" => {
+            let mut c = redis::RedisConnector::new();
+            c.connect(url).await?;
+            Ok(Box::new(c))
+        }
+        other => Err(DbError::Unsupported(format!("Unknown KV driver: {other}"))),
     }
 }
