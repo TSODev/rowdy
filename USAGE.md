@@ -129,7 +129,8 @@ Après une connexion réussie, Rowdy charge automatiquement la liste des tables 
 |--------|--------|
 | `j` / `↓` | Table suivante |
 | `k` / `↑` | Table précédente |
-| `Enter` | Ouvrir la table dans le Data Grid _(à venir)_ |
+| `Enter` | Ouvrir la table dans le Data Grid |
+| `e` | Ouvrir l'éditeur SQL |
 | `/` | Activer le filtre |
 | `q` / `Esc` | Se déconnecter et revenir à l'écran de connexion |
 
@@ -197,9 +198,58 @@ d'un expandable row. Cette fonctionnalité nécessite l'introspection du schéma
 
 ---
 
-## Éditeur SQL _(à venir)_
+## Éditeur SQL
 
-Éditeur multi-lignes avec coloration syntaxique pour exécuter des requêtes libres.
+Depuis la vue liste des tables, appuyez sur `e` pour ouvrir l'éditeur SQL.
+
+```
+┌─ SQL Editor │ [sqlite] sqlite:///dev.db ────────────────────────┐
+│SELECT id, name                                                   │
+│FROM users                                                        │
+│WHERE id > 1                                                      │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+┌─ Results: 2 rows ────────────────────────────────────────────────┐
+│  id   name                                                       │
+│> 2    Bob                                                        │
+│  3    Charlie                                                    │
+└──────────────────────────────────────────────────────────────────┘
+  F5 / Ctrl+Enter: execute   Tab: results pane   Ctrl+Q: back
+```
+
+### Mode Éditeur (focus jaune sur la zone SQL)
+
+| Touche | Action |
+|--------|--------|
+| _(frappe)_ | Saisir du SQL multi-lignes |
+| `F5` | Exécuter la requête |
+| `Ctrl+Enter` | Exécuter la requête |
+| `Tab` | Basculer vers le panneau Résultats (si résultat disponible) |
+| `Ctrl+Q` | Retour à la liste des tables |
+
+Toutes les touches d'édition standard sont supportées : flèches, `Backspace`, `Delete`, `Home`, `End`, `Ctrl+A` (tout sélectionner), `Ctrl+Z` (annuler), copier/coller selon le terminal.
+
+### Mode Résultats (focus jaune sur le tableau)
+
+| Touche | Action |
+|--------|--------|
+| `j` / `↓` | Ligne suivante |
+| `k` / `↑` | Ligne précédente |
+| `h` / `←` | Décaler les colonnes vers la gauche |
+| `l` / `→` | Décaler les colonnes vers la droite |
+| `g` | Première ligne |
+| `G` | Dernière ligne |
+| `PgDown` | +10 lignes |
+| `PgUp` | -10 lignes |
+| `Tab` / `Esc` | Retour dans l'éditeur |
+
+### Détection automatique SELECT / DML
+
+- Requêtes commençant par `SELECT`, `WITH`, `EXPLAIN`, `SHOW`, `DESCRIBE`, `PRAGMA` → `fetch_all` (résultats tabulaires)
+- Autres requêtes (`INSERT`, `UPDATE`, `DELETE`, `CREATE`, …) → `execute` (affiche le nombre de lignes affectées)
+
+> **Note :** l'éditeur SQL est uniquement disponible avec les connecteurs SQL (PostgreSQL, SQLite, MySQL).  
+> Redis n'est pas supporté (pas de modèle relationnel).
 
 ---
 

@@ -10,10 +10,36 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### In progress
 - FK expandable rows (display related records below a row when a column is a foreign key)
 - Inline cell editing
-- Multi-line SQL editor (`tui-textarea` + syntax highlighting)
 - Status bar component
 - Confirmation / error modal
 - Redis key-detail view in Data Grid
+
+---
+
+## [0.2.0] — 2026-06-14
+
+### Added
+
+#### SQL Editor (`AppState::SqlEditor`)
+- `tui-textarea` 0.5 integration (ratatui 0.27 compatible)
+- Multi-line SQL editor with placeholder text, cursor, undo/redo, full text editing
+- Split-pane layout: editor (45%) + results (flexible) + help bar (3 lines)
+- `EditorFocus` toggle: `Tab` switches between editor and results pane; `Esc` or `Tab` returns to editor
+- **F5** or **Ctrl+Enter** executes the query asynchronously
+- **Ctrl+Q** returns to the table list
+- Auto-detect SELECT vs. DML: `SELECT/WITH/EXPLAIN/SHOW/DESCRIBE/PRAGMA` → `fetch_all`; everything else → `execute`
+- Results: row-scrollable table with `j/k/g/G/PgUp/PgDn`, column scrolling with `h/l`
+- DML result shows "N row(s) affected" in green
+- Error shown in red inline (no modal needed)
+- Running indicator `⏳` in the editor title while query executes
+- `e` key in table list opens the SQL editor
+
+#### Dependency
+- `tui-textarea = "0.5"` added
+- `ratatui` upgraded from `0.26` to `0.27`
+
+#### Bug fixes
+- Restored `f.size()` and `f.set_cursor()` compatibility with ratatui 0.27.0 (which still uses the 0.26 API)
 
 ---
 

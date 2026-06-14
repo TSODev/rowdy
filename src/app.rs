@@ -10,6 +10,7 @@ use crate::config::Config;
 use crate::db::{connectors, traits::{KvClient, SqlClient}, types::DbQueryResult};
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
 use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen};
+use crate::ui::screens::sql_editor::{SqlEditorAction, SqlEditorScreen};
 use crate::ui::screens::table_list::{TableListAction, TableListScreen};
 
 // ── Active connection ─────────────────────────────────────────────────────────
@@ -29,6 +30,9 @@ pub enum DbEvent {
     TablesLoadFailed(String),
     DataLoaded(DbQueryResult),
     DataLoadFailed(String),
+    QueryRows(DbQueryResult),
+    QueryExecuted(u64),
+    QueryFailed(String),
 }
 
 // ── App state machine ─────────────────────────────────────────────────────────
@@ -50,6 +54,7 @@ pub struct App {
     pub connection_screen: ConnectionScreen,
     pub table_list_screen: TableListScreen,
     pub data_grid_screen: DataGridScreen,
+    pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
     db_tx: mpsc::Sender<DbEvent>,
     db_rx: mpsc::Receiver<DbEvent>,
@@ -65,6 +70,7 @@ impl App {
             connection_screen: ConnectionScreen::new(profiles),
             table_list_screen: TableListScreen::new(),
             data_grid_screen: DataGridScreen::new(String::new()),
+            sql_editor_screen: SqlEditorScreen::new(String::new()),
             active_client: None,
             db_tx,
             db_rx,
@@ -120,6 +126,7 @@ impl App {
             AppState::TableList => {
                 match self.table_list_screen.handle_key(key) {
                     TableListAction::OpenTable(name) => self.spawn_load_data(name),
+                    TableListAction::OpenEditor => self.open_sql_editor(),
                     TableListAction::Disconnect => {
                         self.active_client = None;
                         self.table_list_screen = TableListScreen::new();
@@ -135,12 +142,27 @@ impl App {
                     DataGridAction::None => {}
                 }
             }
+            AppState::SqlEditor => {
+                match self.sql_editor_screen.handle_key(key) {
+                    SqlEditorAction::Execute(sql) => self.spawn_execute_query(sql),
+                    SqlEditorAction::Back => self.state = AppState::TableList,
+                    SqlEditorAction::None => {}
+                }
+            }
             _ => {
                 if key.code == KeyCode::Char('q') {
                     self.should_quit = true;
                 }
             }
         }
+    }
+
+    // ── Open SQL editor ───────────────────────────────────────────────────────
+
+    fn open_sql_editor(&mut self) {
+        let db_info = self.table_list_screen.db_info.clone();
+        self.sql_editor_screen = SqlEditorScreen::new(db_info);
+        self.state = AppState::SqlEditor;
     }
 
     // ── Async connection ──────────────────────────────────────────────────────
@@ -205,7 +227,6 @@ impl App {
                 let c = Arc::clone(c);
                 let tx = self.db_tx.clone();
                 tokio::spawn(async move {
-                    // Use quoted identifier to handle mixed-case names
                     let query = format!("SELECT * FROM \"{table_name}\" LIMIT 1000");
                     let ev = match c.fetch_all(&query).await {
                         Ok(r)  => DbEvent::DataLoaded(r),
@@ -215,7 +236,6 @@ impl App {
                 });
             }
             Some(ActiveClient::Kv(_)) => {
-                // TODO: implement key-detail view for Redis
                 self.data_grid_screen.set_error(
                     "Data Grid not available for key-value stores (Redis). \
                      Use the SQL Editor for queries."
@@ -224,6 +244,40 @@ impl App {
             }
             None => {
                 self.data_grid_screen.set_error("Not connected".into());
+            }
+        }
+    }
+
+    // ── Async SQL execution ───────────────────────────────────────────────────
+
+    fn spawn_execute_query(&mut self, sql: String) {
+        self.sql_editor_screen.set_running();
+        let tx = self.db_tx.clone();
+        match &self.active_client {
+            Some(ActiveClient::Sql(c)) => {
+                let c = Arc::clone(c);
+                tokio::spawn(async move {
+                    let ev = if is_select_query(&sql) {
+                        match c.fetch_all(&sql).await {
+                            Ok(r)  => DbEvent::QueryRows(r),
+                            Err(e) => DbEvent::QueryFailed(e.to_string()),
+                        }
+                    } else {
+                        match c.execute(&sql).await {
+                            Ok(n)  => DbEvent::QueryExecuted(n),
+                            Err(e) => DbEvent::QueryFailed(e.to_string()),
+                        }
+                    };
+                    let _ = tx.send(ev).await;
+                });
+            }
+            Some(ActiveClient::Kv(_)) => {
+                self.sql_editor_screen.set_error(
+                    "SQL editor requires a SQL connection (not Redis)".into(),
+                );
+            }
+            None => {
+                self.sql_editor_screen.set_error("Not connected".into());
             }
         }
     }
@@ -263,6 +317,25 @@ impl App {
             DbEvent::DataLoadFailed(msg) => {
                 self.data_grid_screen.set_error(msg);
             }
+            DbEvent::QueryRows(result) => {
+                self.sql_editor_screen.set_rows(result);
+            }
+            DbEvent::QueryExecuted(n) => {
+                self.sql_editor_screen.set_affected(n);
+            }
+            DbEvent::QueryFailed(msg) => {
+                self.sql_editor_screen.set_error(msg);
+            }
         }
     }
+}
+
+fn is_select_query(sql: &str) -> bool {
+    let upper = sql.trim_start().to_uppercase();
+    upper.starts_with("SELECT")
+        || upper.starts_with("WITH")
+        || upper.starts_with("EXPLAIN")
+        || upper.starts_with("SHOW")
+        || upper.starts_with("DESCRIBE")
+        || upper.starts_with("PRAGMA")
 }

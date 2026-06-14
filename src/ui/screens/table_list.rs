@@ -9,6 +9,7 @@ use ratatui::{
 pub enum TableListAction {
     None,
     OpenTable(String),
+    OpenEditor,
     Disconnect,
 }
 
@@ -69,6 +70,7 @@ impl TableListScreen {
             KeyCode::Char('j') | KeyCode::Down  => { self.select_next(); TableListAction::None }
             KeyCode::Char('k') | KeyCode::Up    => { self.select_prev(); TableListAction::None }
             KeyCode::Char('/')                   => { self.filter_mode = true; TableListAction::None }
+            KeyCode::Char('e')                   => TableListAction::OpenEditor,
             KeyCode::Enter => {
                 if let Some(name) = self.selected_name() {
                     TableListAction::OpenTable(name)
@@ -183,7 +185,7 @@ impl TableListScreen {
             f.set_cursor(chunks[2].x + 1 + filter_display.len() as u16, chunks[2].y + 1);
         } else {
             f.render_widget(
-                Paragraph::new(" j/k: move   Enter: open   /: filter   q: disconnect ")
+                Paragraph::new(" j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect ")
                     .block(Block::default().borders(Borders::ALL))
                     .style(Style::default().fg(Color::DarkGray)),
                 chunks[2],
