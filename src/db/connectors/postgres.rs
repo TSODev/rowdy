@@ -102,45 +102,36 @@ impl SqlClient for PostgresConnector {
 
     async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {
         let pool = self.pool()?;
-        let safe = table.replace('\'', "");
+        let safe = table.replace('\'', "").replace('"', "");
+        // pg_catalog is more reliable than information_schema for FK detection:
+        // constraint_column_usage returns *referenced* cols (not source cols) and
+        // its schema join silently drops cross-schema FKs.
         let query = format!(
-            r#"
-            SELECT
-                c.column_name,
-                c.data_type,
-                c.is_nullable,
-                COALESCE(pk.is_pk, false) AS is_pk,
-                fk.foreign_table_name,
-                fk.foreign_column_name
-            FROM information_schema.columns c
-            LEFT JOIN (
-                SELECT kcu.column_name, true AS is_pk
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu
-                    ON tc.constraint_name = kcu.constraint_name
-                    AND tc.table_schema = kcu.table_schema
-                    AND tc.table_name = kcu.table_name
-                WHERE tc.table_schema = 'public' AND tc.table_name = '{safe}'
-                  AND tc.constraint_type = 'PRIMARY KEY'
-            ) pk ON pk.column_name = c.column_name
-            LEFT JOIN (
-                SELECT kcu.column_name,
-                       ccu.table_name AS foreign_table_name,
-                       ccu.column_name AS foreign_column_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu
-                    ON tc.constraint_name = kcu.constraint_name
-                    AND tc.table_schema = kcu.table_schema
-                    AND tc.table_name = kcu.table_name
-                JOIN information_schema.constraint_column_usage ccu
-                    ON tc.constraint_name = ccu.constraint_name
-                    AND tc.table_schema = ccu.table_schema
-                WHERE tc.table_schema = 'public' AND tc.table_name = '{safe}'
-                  AND tc.constraint_type = 'FOREIGN KEY'
-            ) fk ON fk.column_name = c.column_name
-            WHERE c.table_schema = 'public' AND c.table_name = '{safe}'
-            ORDER BY c.ordinal_position
-            "#
+            r#"SELECT DISTINCT ON (a.attnum)
+                a.attname::text                                            AS column_name,
+                pg_catalog.format_type(a.atttypid, a.atttypmod)           AS data_type,
+                (NOT a.attnotnull)                                         AS is_nullable,
+                (pk.contype IS NOT NULL)                                   AS is_pk,
+                fk_tbl.relname::text                                       AS foreign_table_name,
+                fk_att.attname::text                                       AS foreign_column_name
+            FROM pg_attribute           a
+            JOIN pg_class               cl      ON cl.oid      = a.attrelid
+            JOIN pg_namespace           n       ON n.oid       = cl.relnamespace
+            LEFT JOIN pg_constraint     pk      ON pk.conrelid = a.attrelid
+                                                AND pk.contype  = 'p'
+                                                AND a.attnum    = ANY(pk.conkey)
+            LEFT JOIN pg_constraint     fk      ON fk.conrelid = a.attrelid
+                                                AND fk.contype  = 'f'
+                                                AND a.attnum    = ANY(fk.conkey)
+            LEFT JOIN pg_class          fk_tbl  ON fk_tbl.oid  = fk.confrelid
+            LEFT JOIN pg_attribute      fk_att  ON fk_att.attrelid = fk.confrelid
+                                                AND fk_att.attnum   =
+                                                    fk.confkey[array_position(fk.conkey, a.attnum)]
+            WHERE n.nspname   = 'public'
+              AND cl.relname  = '{safe}'
+              AND a.attnum    > 0
+              AND NOT a.attisdropped
+            ORDER BY a.attnum"#
         );
 
         let rows: Vec<PgRow> = sqlx::query(&query)
@@ -152,15 +143,15 @@ impl SqlClient for PostgresConnector {
         for row in &rows {
             let name: String = row.try_get("column_name").unwrap_or_default();
             let type_name: String = row.try_get("data_type").unwrap_or_default();
-            let is_nullable: String = row.try_get("is_nullable").unwrap_or_else(|_| "YES".into());
+            let is_nullable: bool = row.try_get("is_nullable").unwrap_or(true);
             let is_pk: bool = row.try_get("is_pk").unwrap_or(false);
-            let fk_table: Option<String> = row.try_get::<Option<String>, _>("foreign_table_name").unwrap_or(None);
-            let fk_col: Option<String> = row.try_get::<Option<String>, _>("foreign_column_name").unwrap_or(None);
+            let fk_table: Option<String> = row.try_get("foreign_table_name").unwrap_or(None);
+            let fk_col: Option<String> = row.try_get("foreign_column_name").unwrap_or(None);
             let fk = match (fk_table, fk_col) {
                 (Some(t), Some(c)) if !t.is_empty() => Some(ForeignKey { table: t, column: c }),
                 _ => None,
             };
-            schema.push(ColumnSchema { name, type_name, is_pk, is_nullable: is_nullable == "YES", fk });
+            schema.push(ColumnSchema { name, type_name, is_pk, is_nullable, fk });
         }
         Ok(schema)
     }
