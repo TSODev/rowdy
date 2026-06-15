@@ -12,8 +12,6 @@ A fast, modern, and rowdy **Terminal User Interface (TUI)** database management 
 
 Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to inspect, query, and manage their databases without ever leaving their terminal or touching a mouse. Built on `ratatui` and `sqlx`, it compiles into a single standalone binary with no runtime dependencies.
 
-![Rowdy demo](assets/demo.gif)
-
 ---
 
 ## ✨ Features
