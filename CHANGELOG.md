@@ -7,6 +7,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.7] — 2026-06-15
+
+### Fixed
+
+#### Compiler warnings — dead_code (15 → 0)
+- `AppState::Quit` supprimé : le quit passe par `should_quit` ; le bras `_` devenu inatteignable dans le dispatch clavier retiré ; bras `AppState::Quit => {}` retiré de `layout.rs`
+- `DbEvent::SchemaLoadFailed(String)` : payload `String` retiré (jamais lu ; site de construction mis à jour)
+- `ConnectorType` enum et `from_str` supprimés de `db/connectors/mod.rs` (reliquat — la factory utilise déjà un `match` direct sur la chaîne)
+- `#[allow(dead_code)]` sur les champs d'API future : `Column::type_name`, `DbQueryResult::rows_affected`, `ColumnSchema::is_nullable`
+- `#[allow(dead_code)]` sur les méthodes de trait non encore appelées : `KvClient::{disconnect, get, set, del}`, `SqlClient::disconnect`
+- `#![allow(dead_code)]` sur les stubs de roadmap : `events/app_event.rs`, `events/handler.rs`, `ui/components/modal.rs`, `ui/components/status_bar.rs`
+
 ## [0.5.6] — 2026-06-15
 
 ### Added
@@ -250,7 +262,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.6...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.7...HEAD
+[0.5.7]: https://github.com/TSODev/rowdy/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/TSODev/rowdy/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/TSODev/rowdy/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/TSODev/rowdy/compare/v0.5.3...v0.5.4

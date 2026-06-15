@@ -22,17 +22,19 @@ Priorités : 🔴 bloquant · 🟠 important · 🟡 mineur · ⚪ cosmétique
 
 ## Compiler warnings (dead code)
 
-- 🟡 `src/events/app_event.rs` — `enum AppEvent` et `fn handle_event` inutilisés : stub prévu pour un système d'événements applicatifs, à supprimer ou implémenter
-- 🟡 `src/app.rs` — `AppState::Quit` jamais construit : le quit passe par `should_quit`, variant à supprimer
-- 🟡 `src/app.rs` — `DbEvent::SchemaLoadFailed(String)` : le payload `String` n'est jamais lu (affiché comme `()`)
-- 🟡 `src/db/connectors/mod.rs` — `enum ConnectorType` et `fn from_str` inutilisés : reliquat, à supprimer
-- 🟡 `src/db/traits/sql_client.rs` — méthode `disconnect` déclarée dans le trait mais jamais appelée
-- 🟡 `src/db/traits/kv_client.rs` — méthodes `disconnect`, `get`, `set`, `del` déclarées mais jamais appelées
-- 🟡 `src/db/types.rs` — champ `Column::type_name` jamais lu (utilisé en interne mais pas dans le rendu)
-- 🟡 `src/db/types.rs` — champ `DbQueryResult::rows_affected` jamais lu
-- 🟡 `src/db/types.rs` — champ `ColumnSchema::is_nullable` jamais lu (prévu pour la validation)
-- 🟡 `src/ui/components/modal.rs` — `struct Modal` jamais construite : stub roadmap, OK en l'état
-- 🟡 `src/ui/components/status_bar.rs` — `struct StatusBar` jamais construite : stub roadmap, OK en l'état
+✅ **Tous résolus en v0.5.7** — zéro warning `dead_code` à la compilation.
+
+| Élément | Résolution |
+|---------|-----------|
+| `AppState::Quit` | Supprimé (quit via `should_quit`) |
+| `DbEvent::SchemaLoadFailed(String)` | Payload `String` retiré |
+| `ConnectorType` / `from_str` | Supprimés (reliquat) |
+| `SqlClient::disconnect` | `#[allow(dead_code)]` (API trait future) |
+| `KvClient::{disconnect,get,set,del}` | `#[allow(dead_code)]` (API trait future) |
+| `Column::type_name`, `rows_affected`, `is_nullable` | `#[allow(dead_code)]` (champs API future) |
+| `Modal`, `StatusBar`, `AppEvent`, `handle_event` | `#![allow(dead_code)]` (stubs roadmap) |
+
+Il reste uniquement le warning externe `sqlx-postgres v0.7.4 future-incompat` (dépendance, hors contrôle).
 
 ---
 

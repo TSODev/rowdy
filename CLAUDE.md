@@ -189,6 +189,7 @@ src/
 - [x] Fix EditRecord depuis FkGrid : séparation `table_name` (SQL pur) / `display_name` (label `table [col=val]`) dans `DataGridScreen`
 - [x] EditRecord : colonne type SQL (16 chars, bleu), toggle BOOLEAN avec `Space`, `sql_literal` génère `TRUE`/`FALSE` sans guillemets
 - [x] SQL Editor → `F4` ouvre le résultat SELECT dans une grille lecture seule (`AppState::SqlResultGrid`, `read_only: bool` dans `DataGridScreen`) ; `q` retourne à l'éditeur
+- [x] Suppression de tous les warnings `dead_code` du compilateur (15 → 0) : `AppState::Quit` retiré, `ConnectorType` retiré, `#[allow(dead_code)]` sur champs/méthodes d'API future, `#![allow(dead_code)]` sur stubs roadmap
 
 ### Roadmap
 - [ ] Barre de statut (mode, connexion, nombre de lignes)
