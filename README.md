@@ -39,15 +39,16 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | SQL Editor — query history with `Alt+↑/↓`, persisted to `~/.config/rowdy/history.toml` | ✅ |
 | Schema introspection — PK, FK, types (all 4 SQL engines) | ✅ |
 | Inline record editing — field type display, bool toggle, live SQL preview | ✅ |
+| Confirmation modal — `Ctrl+S` in Edit Record prompts before executing UPDATE | ✅ |
+| Error modal — save failures displayed as a prominent overlay dialog | ✅ |
 | Status bar — mode, connection indicator, DB info, row count, flash messages | ✅ |
 | URL redaction — passwords and tokens masked in UI (`user:***@host`, `authToken=***`) | ✅ |
 | Export CSV / JSON — `E` key in any data grid, file saved to `~/rowdy_<table>_<ts>.csv/json` | ✅ |
+| Read-only safe mode — `?readonly=true` in URL, blocks all writes, `READ-ONLY` badge in status bar | ✅ |
 | Async I/O — UI never blocks during queries | ✅ |
 | Redis key-detail view | 🔲 planned |
-| Modal dialogs | 🔲 planned |
 | Schema / ERD view of FK relationships | 🔲 planned |
 | MongoDB connector | 🔲 planned |
-| Read-only safe mode — `?readonly=true` in URL, blocks all writes, `READ-ONLY` badge in status bar | ✅ |
 
 ---
 
@@ -167,7 +168,7 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | `←` / `→` | Move cursor within field |
 | `Home` / `End` | Jump to start / end of field |
 | `Backspace` / `Del` | Delete character |
-| `Ctrl+S` | Save changes (executes UPDATE) |
+| `Ctrl+S` | Save changes — opens confirmation modal before executing UPDATE |
 | `Esc` / `q` | Back to Data Grid without saving |
 
 ### SQL Editor
