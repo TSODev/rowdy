@@ -7,6 +7,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-06-15
+
+### Fixed
+
+- **Data Grid — filtre BOOLEAN** : `build_where` détecte les colonnes `BOOL`/`BOOLEAN`/`TINYINT(1)` via le schéma et génère `= TRUE`/`= FALSE` au lieu de `LIKE '%val%'` (qui échouait sur PostgreSQL avec `operator does not exist: boolean ~~ unknown`)
+- **Data Grid — filtre colonnes numériques** : génère `= val` (sans guillemets ni `LIKE`) pour les colonnes `INT`/`FLOAT`/`NUMERIC`/`DECIMAL` lorsque la valeur saisie est un nombre valide
+- Le schéma (`Vec<ColumnSchema>`) est désormais propagé à `spawn_sql_page` et `spawn_sql_count` pour permettre la génération de clauses `WHERE` type-aware
+
 ## [0.5.4] — 2026-06-15
 
 ### Added
@@ -230,7 +238,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/TSODev/rowdy/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/TSODev/rowdy/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/TSODev/rowdy/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/TSODev/rowdy/compare/v0.5.1...v0.5.2

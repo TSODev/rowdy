@@ -494,8 +494,8 @@ impl App {
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
             let empty = BTreeMap::new();
-            spawn_sql_page(Arc::clone(c), &table_name, &empty, 0, true, self.db_tx.clone());
-            spawn_sql_count(Arc::clone(c), &table_name, &empty, self.db_tx.clone());
+            spawn_sql_page(Arc::clone(c), &table_name, &empty, 0, true, vec![], self.db_tx.clone());
+            spawn_sql_count(Arc::clone(c), &table_name, &empty, vec![], self.db_tx.clone());
             let tx = self.db_tx.clone();
             let client = Arc::clone(c);
             tokio::spawn(async move {
@@ -522,9 +522,10 @@ impl App {
         let table   = self.data_grid_screen.table_name.clone();
         let filters = self.data_grid_screen.filters.clone();
         let offset  = self.data_grid_screen.loaded_count;
+        let schema  = self.data_grid_screen.schema.clone().unwrap_or_default();
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
-            spawn_sql_page(Arc::clone(c), &table, &filters, offset, false, self.db_tx.clone());
+            spawn_sql_page(Arc::clone(c), &table, &filters, offset, false, schema, self.db_tx.clone());
         }
     }
 
@@ -532,13 +533,14 @@ impl App {
     fn spawn_reload_filters(&mut self) {
         let table   = self.data_grid_screen.table_name.clone();
         let filters = self.data_grid_screen.filters.clone();
+        let schema  = self.data_grid_screen.schema.clone().unwrap_or_default();
         self.data_grid_screen.reset_data(); // keeps table_name + filters
         // reset_data sets loading=true but doesn't spawn — we do it here
         self.data_grid_screen.total_count = None;
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
-            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, self.db_tx.clone());
-            spawn_sql_count(Arc::clone(c), &table, &filters, self.db_tx.clone());
+            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), self.db_tx.clone());
+            spawn_sql_count(Arc::clone(c), &table, &filters, schema, self.db_tx.clone());
         } else {
             self.data_grid_screen.set_error("Not connected to a SQL database".into());
         }
@@ -647,11 +649,12 @@ impl App {
                 self.state = AppState::DataGrid;
                 let table   = self.data_grid_screen.table_name.clone();
                 let filters = self.data_grid_screen.filters.clone();
+                let schema  = self.data_grid_screen.schema.clone().unwrap_or_default();
                 self.data_grid_screen.reset_data();
                 self.data_grid_screen.total_count = None;
                 if let Some(ActiveClient::Sql(c)) = &self.active_client {
-                    spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, self.db_tx.clone());
-                    spawn_sql_count(Arc::clone(c), &table, &filters, self.db_tx.clone());
+                    spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), self.db_tx.clone());
+                    spawn_sql_count(Arc::clone(c), &table, &filters, schema, self.db_tx.clone());
                 }
             }
             DbEvent::EditFailed(msg) => {
@@ -688,24 +691,44 @@ fn is_select_query(sql: &str) -> bool {
 
 // ── Data grid query builders ──────────────────────────────────────────────────
 
-fn build_where(filters: &BTreeMap<String, String>) -> String {
+fn build_where(filters: &BTreeMap<String, String>, schema: &[ColumnSchema]) -> String {
     if filters.is_empty() { return String::new(); }
     let clauses: Vec<String> = filters.iter()
         .map(|(col, val)| {
-            let escaped = val.replace('\'', "''");
-            format!("\"{}\" LIKE '%{}%'", col, escaped)
+            let type_name = schema.iter()
+                .find(|cs| cs.name == *col)
+                .map(|cs| cs.type_name.as_str())
+                .unwrap_or("");
+            let tn = type_name.to_uppercase();
+
+            if tn.contains("BOOL") || tn == "TINYINT(1)" {
+                let b = matches!(
+                    val.to_lowercase().as_str(),
+                    "true" | "t" | "1" | "yes" | "on"
+                );
+                format!("\"{}\" = {}", col, if b { "TRUE" } else { "FALSE" })
+            } else if (tn.contains("INT") || tn.contains("FLOAT") || tn.contains("REAL")
+                || tn.contains("NUMERIC") || tn.contains("DECIMAL") || tn.contains("DOUBLE")
+                || tn.contains("NUMBER"))
+                && val.parse::<f64>().is_ok()
+            {
+                format!("\"{}\" = {}", col, val)
+            } else {
+                let escaped = val.replace('\'', "''");
+                format!("\"{}\" LIKE '%{}%'", col, escaped)
+            }
         })
         .collect();
     format!(" WHERE {}", clauses.join(" AND "))
 }
 
-fn build_data_query(table: &str, filters: &BTreeMap<String, String>, offset: usize) -> String {
-    let wh = build_where(filters);
+fn build_data_query(table: &str, filters: &BTreeMap<String, String>, offset: usize, schema: &[ColumnSchema]) -> String {
+    let wh = build_where(filters, schema);
     format!("SELECT * FROM \"{table}\"{wh} LIMIT {PAGE_SIZE} OFFSET {offset}")
 }
 
-fn build_count_query(table: &str, filters: &BTreeMap<String, String>) -> String {
-    let wh = build_where(filters);
+fn build_count_query(table: &str, filters: &BTreeMap<String, String>, schema: &[ColumnSchema]) -> String {
+    let wh = build_where(filters, schema);
     format!("SELECT COUNT(*) AS _count FROM \"{table}\"{wh}")
 }
 
@@ -742,9 +765,10 @@ fn spawn_sql_page(
     filters: &BTreeMap<String, String>,
     offset: usize,
     initial: bool,
+    schema: Vec<ColumnSchema>,
     tx: mpsc::Sender<DbEvent>,
 ) {
-    let query = build_data_query(table, filters, offset);
+    let query = build_data_query(table, filters, offset, &schema);
     tokio::spawn(async move {
         let ev = match client.fetch_all(&query).await {
             Ok(r)  => if initial { DbEvent::DataLoaded(r) } else { DbEvent::DataPageLoaded(r) },
@@ -758,9 +782,10 @@ fn spawn_sql_count(
     client: Arc<dyn SqlClient>,
     table: &str,
     filters: &BTreeMap<String, String>,
+    schema: Vec<ColumnSchema>,
     tx: mpsc::Sender<DbEvent>,
 ) {
-    let query = build_count_query(table, filters);
+    let query = build_count_query(table, filters, &schema);
     tokio::spawn(async move {
         if let Ok(r) = client.fetch_all(&query).await {
             let _ = tx.send(DbEvent::DataCountLoaded(parse_count(&r))).await;

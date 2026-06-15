@@ -7,7 +7,7 @@ Priorités : 🔴 bloquant · 🟠 important · 🟡 mineur · ⚪ cosmétique
 
 ## Fonctionnels
 
-- 🟠 **Data Grid — filtre sur colonne BOOLEAN** — saisir une valeur dans le filtre d'une colonne booléenne génère une requête `LIKE '%val%'` qui échoue sur PostgreSQL (`operator does not exist: boolean ~~ unknown`) et peut produire des résultats inattendus sur MySQL/SQLite. À corriger : détecter le type de la colonne via le schéma et générer une condition `= TRUE` / `= FALSE` plutôt qu'un `LIKE`.
+- ✅ **Data Grid — filtre sur colonne BOOLEAN** — corrigé en v0.5.5 : `build_where` utilise le schéma pour générer `= TRUE`/`= FALSE` sur les colonnes booléennes, et `= val` (sans guillemets) sur les colonnes numériques.
 
 ---
 
@@ -35,7 +35,8 @@ Priorités : 🔴 bloquant · 🟠 important · 🟡 mineur · ⚪ cosmétique
 
 ## Data Grid
 
-- 🟠 **Filtre sur colonnes non-texte (PostgreSQL)** — `LIKE '%val%'` échoue sur des colonnes `integer`, `date`, `uuid`, etc. PostgreSQL retourne une erreur de type. Contournement : caster en texte dans la requête (`col::text LIKE ...`). À implémenter dans `spawn_reload_filters`.
+- ✅ **Filtre sur colonnes numériques (PostgreSQL)** — corrigé en v0.5.5 : `build_where` génère `= val` (sans guillemets ni LIKE) pour les colonnes INT/FLOAT/NUMERIC/DECIMAL lorsque la valeur saisie est parseable en nombre.
+- 🟡 **Filtre sur colonnes DATE / UUID / JSON (PostgreSQL)** — `LIKE '%val%'` échoue toujours sur ces types. Contournement futur : caster en texte (`col::text LIKE ...`) ou générer `= 'val'` pour les types à égalité exacte.
 - 🟡 **`col_widths` non réinitialisé sur `reset_data`** — un resize manuel survive à un rechargement par filtre (la méthode `reset_data` ne vide pas `col_widths`, seul `set_result` le fait). Comportement discutable : peut être voulu ou non.
 - 🟡 **Scroll horizontal de `col_offset` non réinitialisé sur filtre** — `reset_data` remet `col_offset` à 0, mais pas `selected_col`. Si la colonne sélectionnée est hors de la vue après rechargement, le viewport se recale correctement via `adjust col_offset` dans `draw`, donc impact faible.
 - ⚪ **Indicateur de chargement `⏳` reste visible** si une tâche async ne répond jamais (pas de timeout).
