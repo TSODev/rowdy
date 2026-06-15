@@ -197,9 +197,16 @@ src/
 - [x] Barre de statut — badge mode (cyan), indicateur connexion (●/○), info DB (URL masquée), nb lignes, messages flash (permanente, 1 ligne en bas)
 - [x] `redact_url()` — masque `user:password@` et paramètres sensibles (`authToken`, `token`, `password`, `pwd`, `secret`, `key`, `auth`) dans toute URL affichée dans l'UI
 - [x] Historique des requêtes SQL — `QueryHistory` persisté dans `~/.config/rowdy/history.toml` (max 200 entrées, dédoublonné), `Alt+↑/↓` dans l'éditeur SQL pour naviguer
-- [x] Export CSV / JSON — `E` depuis DataGrid/FkGrid/SqlResultGrid, prompt `c`=CSV / `j`=JSON / `Esc`=annuler, fichier écrit dans `~/rowdy_<table>_<timestamp>.<ext>`
+- [x] Export CSV / JSON — `E` depuis DataGrid/FkGrid/SqlResultGrid, prompt `c`=CSV / `j`=JSON / `Esc`=cancel, fichier écrit dans `~/rowdy_<table>_<timestamp>.<ext>`
 
 ### Roadmap
+
+#### Différenciation (priorité haute)
+- [ ] **Vue schema/ERD FK** — visualisation graphique des relations entre tables (l'introspection `get_schema` est déjà en place sur les 4 connecteurs SQL)
+- [ ] **Connecteur MongoDB** — aucun concurrent TUI sérieux sur ce terrain ; trait `NoSqlClient` à définir, driver `mongodb` crate
+- [ ] **Mode read-only prod** — flag ou paramètre URL `?readonly=true` bloquant toute écriture (INSERT/UPDATE/DELETE/DROP) depuis l'UI, indicateur visuel distinct (badge rouge `[READ-ONLY]`)
+
+#### Fonctionnel
 - [ ] Modal de confirmation / erreur
 - [ ] Vue clé-détail Redis dans le Data Grid
 - [ ] Tests d'intégration sur les connecteurs
