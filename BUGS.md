@@ -5,6 +5,15 @@ Priorités : 🔴 bloquant · 🟠 important · 🟡 mineur · ⚪ cosmétique
 
 ---
 
+## Sécurité
+
+- 🟠 **libsql / Turso — jeton d'authentification stocké en clair dans `config.toml`** — le `?authToken=...` fait actuellement partie de l'URL sauvegardée dans `~/.config/rowdy/config.toml`. Comportement cible :
+  - Si l'URL contient déjà `?authToken=` (profil sauvegardé avec token) → connexion directe, pas de saisie supplémentaire
+  - Si l'URL ne contient pas de token ET que le type est `libsql` → afficher un second champ de saisie masqué (`*`) pour le jeton avant de lancer la connexion ; le token saisi n'est pas sauvegardé dans le fichier de config
+  - Cela laisse le choix à l'utilisateur : stocker le token dans la config (pratique) ou le saisir à chaque connexion (sécurisé)
+
+---
+
 ## Fonctionnels
 
 - ✅ **Data Grid — filtre sur colonne BOOLEAN** — corrigé en v0.5.5 : `build_where` utilise le schéma pour générer `= TRUE`/`= FALSE` sur les colonnes booléennes, et `= val` (sans guillemets) sur les colonnes numériques.

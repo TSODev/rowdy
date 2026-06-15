@@ -7,7 +7,7 @@ use ratatui::{
 };
 use crate::config::ConnectionProfile;
 
-const DB_TYPES: &[&str] = &["postgres", "sqlite", "mysql", "redis"];
+const DB_TYPES: &[&str] = &["postgres", "sqlite", "libsql", "mysql", "redis"];
 
 pub enum InputMode {
     Normal,

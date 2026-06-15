@@ -2,6 +2,7 @@ pub mod mysql;
 pub mod postgres;
 pub mod redis;
 pub mod sqlite;
+pub mod turso;
 
 use crate::db::error::DbError;
 use crate::db::traits::{KvClient, SqlClient};
@@ -40,6 +41,11 @@ pub async fn connect_sql(db_type: &str, url: &str) -> Result<Box<dyn SqlClient>,
         }
         "mysql" | "mariadb" => {
             let mut c = mysql::MySqlConnector::new();
+            c.connect(url).await?;
+            Ok(Box::new(c))
+        }
+        "turso" | "libsql" => {
+            let mut c = turso::TursoClient::new();
             c.connect(url).await?;
             Ok(Box::new(c))
         }

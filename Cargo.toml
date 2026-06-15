@@ -36,4 +36,5 @@ toml = "0.8"
 thiserror = "1"
 tui-textarea = "0.5"
 clap = { version = "4", features = ["derive"] }
+libsql = { version = "0.9.30", features = ["remote"] }
 
