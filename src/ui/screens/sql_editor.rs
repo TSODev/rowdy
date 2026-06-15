@@ -2,7 +2,7 @@ use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Paragraph, Row as RatRow, Table, TableState},
+    widgets::{Block, Borders, Cell, Paragraph, Row as RatRow, Table, TableState, Wrap},
     Frame,
 };
 use tui_textarea::{Input, Key, TextArea};
@@ -297,7 +297,8 @@ fn draw_results(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
                             .borders(Borders::ALL)
                             .border_style(border_style),
                     )
-                    .style(Style::default().fg(Color::Red)),
+                    .style(Style::default().fg(Color::Red))
+                    .wrap(Wrap { trim: false }),
                 area,
             );
         }

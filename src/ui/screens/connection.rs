@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 use crate::config::ConnectionProfile;
@@ -406,7 +406,9 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
         Style::default().fg(Color::DarkGray)
     };
     f.render_widget(
-        Paragraph::new(hint_text).style(hint_style),
+        Paragraph::new(hint_text)
+            .style(hint_style)
+            .wrap(Wrap { trim: false }),
         inner[3],
     );
 }
