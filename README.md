@@ -19,23 +19,27 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Feature | Status |
 |---------|--------|
 | SQLite, PostgreSQL, MySQL/MariaDB connectors | ✅ |
+| libsql / Turso connector (remote SQLite via libsql protocol) | ✅ |
 | Redis connector (key listing) | ✅ |
 | Saved connection profiles (`~/.config/rowdy/config.toml`) | ✅ |
 | Save new connection with `Ctrl+S` — persists to config file | ✅ |
 | Delete profile with confirmation (`D` → `y` / `n`) | ✅ |
 | Vim-style keyboard navigation (`h j k l`, `/` to filter) | ✅ |
 | Table list with live filter | ✅ |
-| Data Grid — column scroll, collapse/expand | ✅ |
+| Data Grid — column scroll, collapse/expand, manual resize (`[`/`]`) | ✅ |
+| Data Grid — cell preview panel (full value, no truncation) | ✅ |
 | Data Grid — infinite scroll pagination (200 rows/page + COUNT) | ✅ |
 | Data Grid — cumulative column filters (`f` / `d` / `F`) | ✅ |
+| Data Grid — type-aware filters (bool → `= TRUE/FALSE`, numeric → `= n`) | ✅ |
 | Data Grid — cell cursor (row × column highlight) | ✅ |
-| SQL Editor — multi-line, F5 to execute, results table | ✅ |
-| Schema introspection — PK, FK, types (all 3 SQL engines) | ✅ |
-| Inline record editing — `Enter` on cell, live SQL preview, `Ctrl+S` saves | ✅ |
+| Data Grid — FK badges + expandable sub-grid (recursive navigation) | ✅ |
+| SQL Editor — multi-line, F5 to execute, F4 opens result in full grid | ✅ |
+| Schema introspection — PK, FK, types (all 4 SQL engines) | ✅ |
+| Inline record editing — field type display, bool toggle, live SQL preview | ✅ |
 | Async I/O — UI never blocks during queries | ✅ |
-| FK expandable sub-grid | 🔲 planned |
 | Export CSV / JSON | 🔲 planned |
 | Status bar & modal dialogs | 🔲 planned |
+| Redis key-detail view | 🔲 planned |
 
 ---
 
@@ -50,7 +54,7 @@ cargo build --release
 ./target/release/rowdy-db
 ```
 
-### Install from crates.io _(coming soon)_
+### Install from crates.io
 
 ```bash
 cargo install rowdy-db
@@ -72,6 +76,11 @@ url = "postgres://user:password@localhost:5432/my_db"
 name = "Dev SQLite"
 type = "sqlite"
 url = "sqlite:///home/user/dev.db"
+
+[[connections]]
+name = "Turso Cloud"
+type = "libsql"
+url = "libsql://your-db-org.turso.io?authToken=eyJ..."
 
 [[connections]]
 name = "Cache Redis"
@@ -97,7 +106,7 @@ Profiles appear in the left panel of the connection screen at startup.
 | `j` / `k` | Navigate profiles |
 | `Enter` | Connect to selected profile |
 | `n` | Enter a new connection URL |
-| `Tab` | Cycle database type (postgres → sqlite → mysql → redis) |
+| `Tab` | Cycle database type (postgres → sqlite → libsql → mysql → redis) |
 | `Ctrl+S` | Save current URL as a named profile |
 | `D` | Delete selected profile (with confirmation) |
 | `q` | Quit |
@@ -121,10 +130,11 @@ Profiles appear in the left panel of the connection screen at startup.
 | `g` / `G` | First / last row |
 | `PgDn` / `PgUp` | ±10 rows |
 | `Space` | Collapse / expand selected column |
+| `[` / `]` | Shrink / grow selected column width (step 5) |
 | `f` | Open filter input for selected column |
 | `d` | Remove filter on selected column |
 | `F` | Clear all filters |
-| `Enter` | Open Edit Record for the selected row |
+| `Enter` | FK cell → open linked sub-grid ; other cell → Edit Record |
 | `q` | Back to table list |
 
 ### Edit Record
@@ -133,6 +143,7 @@ Profiles appear in the left panel of the connection screen at startup.
 |-----|--------|
 | `j` / `k` | Next / previous field |
 | `Enter` / `i` | Edit the selected field |
+| `Space` | Toggle boolean field (`true` ↔ `false`) |
 | `←` / `→` | Move cursor within field |
 | `Home` / `End` | Jump to start / end of field |
 | `Backspace` / `Del` | Delete character |
@@ -144,6 +155,7 @@ Profiles appear in the left panel of the connection screen at startup.
 | Key | Action |
 |-----|--------|
 | `F5` / `Ctrl+Enter` | Execute query |
+| `F4` | Open SELECT result in full Data Grid (read-only) |
 | `Tab` | Switch focus to results pane |
 | `Tab` / `Esc` | Switch focus back to editor |
 | `Ctrl+Q` | Back to table list |
@@ -157,12 +169,13 @@ Profiles appear in the left panel of the connection screen at startup.
 
 ## 🗄️ Supported databases
 
-| Engine | Type | Driver |
-|--------|------|--------|
-| PostgreSQL | SQL | `sqlx` (native TLS) |
-| SQLite | SQL | `sqlx` |
-| MySQL / MariaDB | SQL | `sqlx` |
-| Redis | Key-value | `redis-rs` (async multiplexed) |
+| Engine | Type | Driver | URL format |
+|--------|------|--------|------------|
+| PostgreSQL | SQL | `sqlx` (native TLS) | `postgres://user:pass@host:5432/db` |
+| SQLite | SQL | `sqlx` | `sqlite:///path/to/file.db` |
+| libsql / Turso | SQL | `libsql` (remote HTTP) | `libsql://host?authToken=TOKEN` |
+| MySQL / MariaDB | SQL | `sqlx` | `mysql://user:pass@host:3306/db` |
+| Redis | Key-value | `redis-rs` (async multiplexed) | `redis://host:6379` |
 
 ---
 

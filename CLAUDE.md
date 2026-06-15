@@ -12,6 +12,7 @@
 | Éditeur multi-lignes | `tui-textarea` 0.5 |
 | Async runtime | `tokio` (full) |
 | Base de données | `sqlx` 0.7 — SQLite + PostgreSQL + MySQL |
+| libsql / Turso | `libsql` 0.9 (remote) |
 | Key-value | `redis` 0.24 (tokio-comp) |
 | Traits async | `async-trait` |
 | Configuration | `serde` + `toml` |
@@ -136,7 +137,8 @@ src/
 │       ├── postgres.rs            # ✅ implémenté
 │       ├── sqlite.rs              # ✅ implémenté
 │       ├── mysql.rs               # ✅ implémenté
-│       └── redis.rs               # ✅ implémenté (KvClient)
+│       ├── redis.rs               # ✅ implémenté (KvClient)
+│       └── turso.rs               # ✅ implémenté (libsql remote)
 └── ui/
     ├── layout.rs                  # dispatch draw() selon AppState
     ├── screens/
@@ -162,6 +164,7 @@ src/
 - [x] Connecteur PostgreSQL (sqlx)
 - [x] Connecteur MySQL / MariaDB (sqlx)
 - [x] Connecteur Redis (redis-rs, tokio-comp)
+- [x] Connecteur libsql / Turso (libsql 0.9, remote HTTP, URL `libsql://host?authToken=TOKEN`)
 - [x] Factory `connect_sql()` / `connect_kv()`
 - [x] Écran de connexion : liste de profils + saisie DSN + sélecteur de type
 - [x] Event loop async (EventStream + mpsc channel, tick 50 ms)

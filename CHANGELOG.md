@@ -7,6 +7,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.6] — 2026-06-15
+
+### Added
+
+#### Connecteur libsql / Turso
+- Nouveau connecteur `TursoClient` basé sur `libsql` 0.9.30 (feature `remote`)
+- Implémente le trait `SqlClient` : `connect` / `execute` / `fetch_all` / `get_tables` / `get_schema`
+- `get_schema` via `PRAGMA table_info` + `PRAGMA foreign_key_list` (compatible SQLite)
+- URL format : `libsql://host?authToken=TOKEN` — le token est parsé et passé séparément au Builder (non inclus dans l'URL réseau)
+- Type `libsql` ajouté au sélecteur de connexion (`Tab` pour cycler : postgres → sqlite → libsql → mysql → redis)
+- Rétrocompatibilité : le type `turso` est également accepté comme alias dans la factory
+
 ## [0.5.5] — 2026-06-15
 
 ### Fixed
@@ -238,7 +250,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/TSODev/rowdy/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/TSODev/rowdy/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/TSODev/rowdy/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/TSODev/rowdy/compare/v0.5.2...v0.5.3

@@ -11,7 +11,7 @@ cargo build --release
 ./target/release/rowdy-db
 ```
 
-### Depuis crates.io _(à venir)_
+### Depuis crates.io
 
 ```bash
 cargo install rowdy-db
@@ -43,6 +43,11 @@ url = "postgres://user:password@localhost:5432/my_db"
 name = "Dev SQLite"
 type = "sqlite"
 url = "sqlite:///home/user/dev.db"
+
+[[connections]]
+name = "Turso Cloud"
+type = "libsql"
+url = "libsql://your-db-org.turso.io?authToken=eyJ..."
 
 [[connections]]
 name = "Cache Redis"
@@ -89,7 +94,7 @@ Les profils apparaissent dans le panneau gauche de l'écran de connexion au dém
 
 | Touche | Action |
 |--------|--------|
-| `Tab` | Changer le type de BDD (`postgres` → `sqlite` → `mysql` → `redis`) |
+| `Tab` | Changer le type de BDD (`postgres` → `sqlite` → `libsql` → `mysql` → `redis`) |
 | _(frappe)_ | Saisir l'URL de connexion |
 | `Backspace` | Effacer un caractère |
 | `Enter` | Se connecter à l'URL saisie |
@@ -123,6 +128,7 @@ La barre d'aide affiche en rouge : `Delete "nom"? y: delete from file   n: remov
 |------|--------|
 | PostgreSQL | `postgres://user:password@host:5432/dbname` |
 | SQLite | `sqlite:///chemin/vers/fichier.db` ou `sqlite::memory:` |
+| libsql / Turso | `libsql://your-db-org.turso.io?authToken=TOKEN` |
 | MySQL | `mysql://user:password@host:3306/dbname` |
 | Redis | `redis://host:6379` ou `redis://:password@host:6379` |
 
@@ -416,10 +422,11 @@ Toutes les touches d'édition standard sont supportées : flèches, `Backspace`,
 
 ## Bases de données supportées
 
-| Moteur | Type | Statut |
-|--------|------|--------|
-| PostgreSQL | SQL | ✅ Supporté |
-| SQLite | SQL | ✅ Supporté |
-| MySQL / MariaDB | SQL | ✅ Supporté |
-| Redis | Clé-valeur | ✅ Supporté (`KEYS *` pour lister) |
-| MongoDB | Document | 🔲 Prévu |
+| Moteur | Type | Driver | Statut |
+|--------|------|--------|--------|
+| PostgreSQL | SQL | `sqlx` | ✅ Supporté |
+| SQLite | SQL | `sqlx` | ✅ Supporté |
+| libsql / Turso | SQL | `libsql` (HTTP) | ✅ Supporté |
+| MySQL / MariaDB | SQL | `sqlx` | ✅ Supporté |
+| Redis | Clé-valeur | `redis-rs` | ✅ Supporté (`KEYS *` pour lister) |
+| MongoDB | Document | — | 🔲 Prévu |
