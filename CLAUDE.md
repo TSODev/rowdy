@@ -185,7 +185,7 @@ src/
 - [x] Marqueur `<?TYPE?>` universel sur les 3 connecteurs pour tout type non décodable (aide au debug)
 - [x] Data Grid : badge magenta `[table_liée]` sur les cellules FK (introspection via `pg_catalog` pour PostgreSQL, `information_schema` pour MySQL, `PRAGMA foreign_key_list` pour SQLite)
 - [x] FK expandable rows : Enter sur badge FK → sous-grille `FkGrid` avec navigation récursive (pile `fk_history`, Esc remonte d'un niveau, Enter sur non-FK → EditRecord)
-- [x] Data Grid : `MAX_COL_WIDTH` 25 → 40, redimensionnement manuel `[`/`]` (pas de 5, min 4, max 80, `col_widths: HashMap<usize, u16>`), panel preview (2 lignes DarkGray) affichant la valeur complète de la cellule courante
+- [x] Data Grid : `MAX_COL_WIDTH` 25 → 40, redimensionnement manuel `-`/`=` (pas de 5, min 4, max 80, `col_widths: HashMap<usize, u16>`), panel preview (2 lignes DarkGray) affichant la valeur complète de la cellule courante
 - [x] Fix EditRecord depuis FkGrid : séparation `table_name` (SQL pur) / `display_name` (label `table [col=val]`) dans `DataGridScreen`
 - [x] EditRecord : colonne type SQL (16 chars, bleu), toggle BOOLEAN avec `Space`, `sql_literal` génère `TRUE`/`FALSE` sans guillemets
 - [x] SQL Editor → `F4` ouvre le résultat SELECT dans une grille lecture seule (`AppState::SqlResultGrid`, `read_only: bool` dans `DataGridScreen`) ; `q` retourne à l'éditeur

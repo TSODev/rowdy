@@ -9,7 +9,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- **Écran de connexion — message "Connecting…"** : l'URL affichée pendant la connexion passait maintenant par `redact_url()` — le mot de passe et les tokens (`authToken`, `password`, etc.) sont masqués `***` comme dans la barre de statut
+- **Écran de connexion — message "Connecting…"** : l'URL affichée pendant la connexion passe maintenant par `redact_url()` — le mot de passe et les tokens (`authToken`, `password`, etc.) sont masqués `***` comme dans la barre de statut
+- **Data Grid — redimensionnement de colonne** : les touches `[` / `]` remplacées par `-` / `=`, directement accessibles sur les claviers AZERTY et QWERTY sans modificateur
 
 ## [0.6.0] — 2026-06-15
 

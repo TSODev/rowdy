@@ -261,7 +261,7 @@ impl DataGridScreen {
                 DataGridAction::None
             }
 
-            KeyCode::Char('[') => {
+            KeyCode::Char('-') => {
                 let current = self.effective_col_width(self.selected_col);
                 self.col_widths.insert(
                     self.selected_col,
@@ -269,7 +269,7 @@ impl DataGridScreen {
                 );
                 DataGridAction::None
             }
-            KeyCode::Char(']') => {
+            KeyCode::Char('=') => {
                 let current = self.effective_col_width(self.selected_col);
                 self.col_widths.insert(
                     self.selected_col,
@@ -624,7 +624,7 @@ impl DataGridScreen {
         } else if screen.read_only {
             f.render_widget(
                 Paragraph::new(
-                    " j/k: rows   h/l: cols   [/]: resize   g/G: first/last   Space: collapse   E: export   q: back"
+                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Space: collapse   E: export   q: back"
                 )
                 .block(Block::default().borders(Borders::ALL))
                 .style(Style::default().fg(Color::DarkGray)),
@@ -643,7 +643,7 @@ impl DataGridScreen {
             };
             f.render_widget(
                 Paragraph::new(format!(
-                    " j/k: rows   h/l: cols   [/]: resize   g/G: first/last   Enter: cell   {}   {}   E: export   q: back",
+                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Enter: cell   {}   {}   E: export   q: back",
                     collapse_label, filter_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))
