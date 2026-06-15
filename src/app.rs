@@ -842,7 +842,8 @@ fn strip_readonly_param(url: &str) -> (String, bool) {
         return (url.to_string(), false);
     };
     let base = &url[..q_pos];
-    let query = &url[q_pos + 1..];
+    // Normalize: replace any extra '?' after the first with '&'
+    let query = url[q_pos + 1..].replace('?', "&");
     let mut readonly = false;
     let remaining: Vec<&str> = query.split('&').filter(|pair| {
         if let Some(eq) = pair.find('=') {
