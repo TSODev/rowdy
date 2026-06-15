@@ -190,6 +190,10 @@ src/
 - [x] EditRecord : colonne type SQL (16 chars, bleu), toggle BOOLEAN avec `Space`, `sql_literal` génère `TRUE`/`FALSE` sans guillemets
 - [x] SQL Editor → `F4` ouvre le résultat SELECT dans une grille lecture seule (`AppState::SqlResultGrid`, `read_only: bool` dans `DataGridScreen`) ; `q` retourne à l'éditeur
 - [x] Suppression de tous les warnings `dead_code` du compilateur (15 → 0) : `AppState::Quit` retiré, `ConnectorType` retiré, `#[allow(dead_code)]` sur champs/méthodes d'API future, `#![allow(dead_code)]` sur stubs roadmap
+- [x] Connecteur MySQL : normalisation `ssl-mode` case-insensitive (`REQUIRED`/`Required`/`required` tous acceptés) via `normalize_ssl_mode()` avant `MySqlPool::connect()`
+- [x] SQL Editor : exécution multi-instructions — `split_sql_statements()` découpe sur `;`, supprime les lignes `--` et les commentaires inline, exécute chaque instruction séquentiellement avec rapport d'erreur `Statement X/N failed: … → preview…`
+- [x] SQL Editor : messages d'erreur sur plusieurs lignes via `word_wrap()` calé sur la largeur réelle du panneau
+- [x] Écran de connexion : messages d'erreur wrappés (`Wrap { trim: false }` sur le paragraphe de statut)
 
 ### Roadmap
 - [ ] Barre de statut (mode, connexion, nombre de lignes)

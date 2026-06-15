@@ -555,9 +555,34 @@ impl App {
                             Err(e) => DbEvent::QueryFailed(e.to_string()),
                         }
                     } else {
-                        match c.execute(&sql).await {
-                            Ok(n)  => DbEvent::QueryExecuted(n),
-                            Err(e) => DbEvent::QueryFailed(e.to_string()),
+                        let stmts = split_sql_statements(&sql);
+                        if stmts.len() <= 1 {
+                            match c.execute(&sql).await {
+                                Ok(n)  => DbEvent::QueryExecuted(n),
+                                Err(e) => DbEvent::QueryFailed(e.to_string()),
+                            }
+                        } else {
+                            let total_stmts = stmts.len();
+                            let mut total = 0u64;
+                            let mut failed = None;
+                            for (i, stmt) in stmts.into_iter().enumerate() {
+                                match c.execute(&stmt).await {
+                                    Ok(n)  => total += n,
+                                    Err(e) => {
+                                        let preview: String = stmt.lines().take(5).collect::<Vec<_>>().join(" | ");
+                                        let preview: String = preview.chars().take(120).collect();
+                                        failed = Some(format!(
+                                            "Statement {}/{} failed: {}\n  → {}…",
+                                            i + 1, total_stmts, e, preview
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+                            match failed {
+                                Some(e) => DbEvent::QueryFailed(e),
+                                None    => DbEvent::QueryExecuted(total),
+                            }
                         }
                     };
                     let _ = tx.send(ev).await;
@@ -672,6 +697,35 @@ fn value_to_string(v: &Value) -> String {
 }
 
 // ── SQL query helpers ─────────────────────────────────────────────────────────
+
+fn split_sql_statements(sql: &str) -> Vec<String> {
+    // Strip -- comment lines before splitting: avoids charset issues with
+    // Unicode characters in comments (e.g. box-drawing chars after --).
+    // Also strip the comment portion of any inline "sql -- comment" line.
+    let cleaned: String = sql
+        .lines()
+        .map(|line| {
+            let t = line.trim_start();
+            if t.starts_with("--") {
+                return "";
+            }
+            // Strip inline trailing comment (only when -- is outside a string)
+            if let Some(pos) = line.find("--") {
+                let before = &line[..pos];
+                let in_string = before.chars().filter(|&c| c == '\'').count() % 2 != 0;
+                if !in_string { return &line[..pos]; }
+            }
+            line
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    cleaned
+        .split(';')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
 
 fn is_select_query(sql: &str) -> bool {
     let upper = sql.trim_start().to_uppercase();

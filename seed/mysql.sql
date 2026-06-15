@@ -111,6 +111,8 @@ INSERT INTO authors (first_name, last_name, country, birth_year) VALUES
 
 -- ── Books (300) ───────────────────────────────────────────────────────────────
 
+
+INSERT INTO books (title, author_id, category_id, published_year, price, stock, available)
 WITH RECURSIVE
 seq(n) AS (
     SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 300
@@ -129,9 +131,8 @@ noun(n, word) AS (
     SELECT 6, 'Quest'       UNION ALL SELECT 7, 'Secret'     UNION ALL
     SELECT 8, 'Voyage'      UNION ALL SELECT 9, 'Dream'
 )
-INSERT INTO books (title, author_id, category_id, published_year, price, stock, available)
 SELECT
-    CONCAT(a.word, ' ', b.word, ' — vol. ', seq.n),
+    CONCAT(adj.word, ' ', noun.word, ' — vol. ', seq.n),
     (seq.n % 20) + 1,
     (seq.n % 6)  + 1,
     1950 + (seq.n % 74),
@@ -144,6 +145,7 @@ JOIN noun ON noun.n = seq.n % 10;
 
 -- ── Customers (50) ───────────────────────────────────────────────────────────
 
+INSERT INTO customers (first_name, last_name, email, city, registered_at)
 WITH RECURSIVE
 seq(n) AS (
     SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 50
@@ -166,7 +168,6 @@ ct(n, word) AS (
     SELECT 6,'Toronto'  UNION ALL SELECT 7,'Lagos'    UNION ALL SELECT 8,'Buenos Aires' UNION ALL
     SELECT 9,'Seoul'
 )
-INSERT INTO customers (first_name, last_name, email, city, registered_at)
 SELECT
     fn.word,
     ln.word,
@@ -180,6 +181,7 @@ JOIN ct ON ct.n = seq.n % 10;
 
 -- ── Orders (300 — 6 per customer) ────────────────────────────────────────────
 
+INSERT INTO orders (customer_id, ordered_at, status)
 WITH RECURSIVE
 seq(n) AS (
     SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 300
@@ -189,7 +191,7 @@ st(n, word) AS (
     SELECT 2,'delivered' UNION ALL SELECT 3,'cancelled' UNION ALL
     SELECT 4,'pending'   UNION ALL SELECT 5,'shipped'
 )
-INSERT INTO orders (customer_id, ordered_at, status)
+
 SELECT
     ((seq.n - 1) % 50) + 1,
     DATE_SUB(NOW(), INTERVAL seq.n * 2 DAY),
@@ -229,9 +231,9 @@ SET o.total = s.t;
 
 -- ── Summary ───────────────────────────────────────────────────────────────────
 
-SELECT 'categories'  AS `table`, COUNT(*) AS rows FROM categories
-UNION ALL SELECT 'authors',     COUNT(*) FROM authors
-UNION ALL SELECT 'books',       COUNT(*) FROM books
-UNION ALL SELECT 'customers',   COUNT(*) FROM customers
-UNION ALL SELECT 'orders',      COUNT(*) FROM orders
-UNION ALL SELECT 'order_items', COUNT(*) FROM order_items;
+SELECT 'categories'  AS `table`, COUNT(*) AS cw FROM categories
+UNION ALL SELECT 'authors',     COUNT(*) AS cw FROM authors
+UNION ALL SELECT 'books',       COUNT(*) AS cw FROM books
+UNION ALL SELECT 'customers',   COUNT(*) AS cw FROM customers
+UNION ALL SELECT 'orders',      COUNT(*) AS cw FROM orders
+UNION ALL SELECT 'order_items', COUNT(*) AS cw FROM order_items;

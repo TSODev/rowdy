@@ -7,6 +7,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.8] — 2026-06-15
+
+### Fixed
+
+#### Connecteur MySQL — normalisation `ssl-mode`
+- La valeur du paramètre `ssl-mode` dans l'URL est normalisée en minuscules avant connexion : `REQUIRED`, `Required` et `required` sont tous acceptés (sqlx 0.7 est case-sensitive sur cette valeur)
+
+#### SQL Editor — exécution multi-instructions
+- Les scripts collés contenant plusieurs instructions séparées par `;` sont découpés et exécutés séquentiellement au lieu d'être envoyés en bloc (MySQL refuse les multi-statements par défaut)
+- Les lignes de commentaires `--` sont supprimées avant découpage pour éviter les erreurs de charset sur les caractères Unicode (ex. caractères box-drawing `──` dans les commentaires)
+- Les commentaires inline `sql -- note` sont également strippés (en vérifiant que `--` n'est pas à l'intérieur d'une chaîne `'...'`)
+- En cas d'échec, le message d'erreur indique le numéro d'instruction (`Statement X/N failed`) et les 5 premières lignes du statement fautif
+
+#### SQL Editor — affichage des erreurs
+- Les messages d'erreur longs sont découpés en plusieurs lignes (word-wrap calculé sur la largeur réelle du panneau) — fini les messages tronqués
+
+#### Écran de connexion — affichage des erreurs
+- Même correction : `Wrap { trim: false }` appliqué sur le paragraphe de statut/erreur
+
 ## [0.5.7] — 2026-06-15
 
 ### Fixed

@@ -2,7 +2,7 @@ use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Paragraph, Row as RatRow, Table, TableState, Wrap},
+    widgets::{Block, Borders, Cell, Paragraph, Row as RatRow, Table, TableState},
     Frame,
 };
 use tui_textarea::{Input, Key, TextArea};
@@ -289,16 +289,17 @@ fn draw_results(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
 
         Some(QueryResult::Error(msg)) => {
             let msg = msg.clone();
+            let inner_width = area.width.saturating_sub(4) as usize;
+            let wrapped = word_wrap(&format!("Error: {}", msg), inner_width.max(20));
             f.render_widget(
-                Paragraph::new(format!("  Error: {}", msg))
+                Paragraph::new(wrapped)
                     .block(
                         Block::default()
                             .title(" Results ")
                             .borders(Borders::ALL)
                             .border_style(border_style),
                     )
-                    .style(Style::default().fg(Color::Red))
-                    .wrap(Wrap { trim: false }),
+                    .style(Style::default().fg(Color::Red)),
                 area,
             );
         }
@@ -408,6 +409,26 @@ fn draw_help(f: &mut Frame<'_>, screen: &SqlEditorScreen, area: Rect) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+fn word_wrap(text: &str, width: usize) -> String {
+    let mut out = String::new();
+    let mut line_len = 0usize;
+    for word in text.split_whitespace() {
+        if line_len == 0 {
+            out.push_str(word);
+            line_len = word.len();
+        } else if line_len + 1 + word.len() <= width {
+            out.push(' ');
+            out.push_str(word);
+            line_len += 1 + word.len();
+        } else {
+            out.push('\n');
+            out.push_str(word);
+            line_len = word.len();
+        }
+    }
+    out
+}
 
 fn col_display_width(result: &DbQueryResult, col_idx: usize) -> u16 {
     let header_w = result.columns[col_idx].name.len() as u16;
