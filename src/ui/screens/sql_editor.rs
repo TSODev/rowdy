@@ -202,8 +202,7 @@ impl SqlEditorScreen {
         }
     }
 
-    pub fn draw(f: &mut Frame<'_>, screen: &mut SqlEditorScreen) {
-        let area = f.size();
+    pub fn draw(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
 
         let vertical = Layout::default()
             .direction(Direction::Vertical)

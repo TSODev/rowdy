@@ -241,8 +241,7 @@ impl ConnectionScreen {
         self.list_state.select(Some(prev));
     }
 
-    pub fn draw(f: &mut Frame<'_>, screen: &mut ConnectionScreen) {
-        let area = f.size();
+    pub fn draw(f: &mut Frame<'_>, screen: &mut ConnectionScreen, area: Rect) {
 
         let outer = Layout::default()
             .direction(Direction::Vertical)

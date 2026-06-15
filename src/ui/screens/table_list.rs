@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
@@ -124,8 +124,7 @@ impl TableListScreen {
         self.list_state.select(Some(prev));
     }
 
-    pub fn draw(f: &mut Frame<'_>, screen: &mut TableListScreen) {
-        let area = f.size();
+    pub fn draw(f: &mut Frame<'_>, screen: &mut TableListScreen, area: Rect) {
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)

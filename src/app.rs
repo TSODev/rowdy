@@ -73,6 +73,9 @@ pub struct App {
     pub edit_record_screen: EditRecordScreen,
     pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
+    pub connected_db_info: Option<String>,
+    pub status_message: Option<(String, bool)>,
+    pub status_message_ttl: u8,
     // State to return to after EditRecord (DataGrid or FkGrid)
     edit_origin: AppState,
     db_tx: mpsc::Sender<DbEvent>,
@@ -95,6 +98,9 @@ impl App {
             edit_record_screen: EditRecordScreen::new(String::new(), vec![], vec![]),
             sql_editor_screen: SqlEditorScreen::new(String::new()),
             active_client: None,
+            connected_db_info: None,
+            status_message: None,
+            status_message_ttl: 0,
             edit_origin: AppState::DataGrid,
             db_tx,
             db_rx,
@@ -605,17 +611,21 @@ impl App {
         match event {
             DbEvent::SqlConnected { client, url, db_type } => {
                 self.active_client = Some(ActiveClient::Sql(client));
+                let safe_url = redact_url(&url);
+                self.connected_db_info = Some(format!("[{db_type}] {safe_url}"));
                 self.connection_screen.status = None;
                 self.table_list_screen = TableListScreen::new();
-                self.table_list_screen.db_info = format!("[{db_type}] {url}");
+                self.table_list_screen.db_info = format!("[{db_type}] {safe_url}");
                 self.state = AppState::TableList;
                 self.spawn_load_tables();
             }
             DbEvent::KvConnected { client, url, db_type } => {
                 self.active_client = Some(ActiveClient::Kv(client));
+                let safe_url = redact_url(&url);
+                self.connected_db_info = Some(format!("[{db_type}] {safe_url}"));
                 self.connection_screen.status = None;
                 self.table_list_screen = TableListScreen::new();
-                self.table_list_screen.db_info = format!("[{db_type}] {url}");
+                self.table_list_screen.db_info = format!("[{db_type}] {safe_url}");
                 self.state = AppState::TableList;
                 self.spawn_load_tables();
             }
@@ -694,6 +704,45 @@ fn value_to_string(v: &Value) -> String {
         Value::Text(s)  => s.clone(),
         Value::Bytes(b) => format!("<{} bytes>", b.len()),
     }
+}
+
+// ── URL redaction ─────────────────────────────────────────────────────────────
+
+fn redact_url(url: &str) -> String {
+    let mut result = url.to_string();
+
+    // Mask user:password@ in scheme://user:password@host
+    if let Some(at_pos) = result.find('@') {
+        if let Some(scheme_end) = result.find("://") {
+            let authority_start = scheme_end + 3;
+            if authority_start < at_pos {
+                let authority = &result[authority_start..at_pos];
+                if let Some(colon_pos) = authority.find(':') {
+                    let abs_colon = authority_start + colon_pos;
+                    result.replace_range(abs_colon + 1..at_pos, "***");
+                }
+            }
+        }
+    }
+
+    // Mask sensitive query parameters (authToken, token, password, pwd, secret, key, auth)
+    let sensitive = ["authtoken", "token", "password", "pwd", "secret", "key", "auth"];
+    if let Some(q_pos) = result.find('?') {
+        let base = result[..q_pos + 1].to_string();
+        let query = result[q_pos + 1..].to_string();
+        let masked: Vec<String> = query.split('&').map(|pair| {
+            if let Some(eq) = pair.find('=') {
+                let k = pair[..eq].to_ascii_lowercase();
+                if sensitive.iter().any(|s| k == *s) {
+                    return format!("{}=***", &pair[..eq]);
+                }
+            }
+            pair.to_string()
+        }).collect();
+        result = format!("{}{}", base, masked.join("&"));
+    }
+
+    result
 }
 
 // ── SQL query helpers ─────────────────────────────────────────────────────────

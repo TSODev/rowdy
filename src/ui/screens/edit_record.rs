@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
@@ -212,8 +212,7 @@ impl EditRecordScreen {
 
     // ── Draw ──────────────────────────────────────────────────────────────────
 
-    pub fn draw(f: &mut Frame<'_>, screen: &mut EditRecordScreen) {
-        let area = f.size();
+    pub fn draw(f: &mut Frame<'_>, screen: &mut EditRecordScreen, area: Rect) {
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)

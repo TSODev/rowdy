@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Paragraph, Row as RatRow, Table, TableState},
@@ -364,8 +364,7 @@ impl DataGridScreen {
 
     // ── Draw ──────────────────────────────────────────────────────────────────
 
-    pub fn draw(f: &mut Frame<'_>, screen: &mut DataGridScreen) {
-        let area = f.size();
+    pub fn draw(f: &mut Frame<'_>, screen: &mut DataGridScreen, area: Rect) {
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
