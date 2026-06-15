@@ -5,7 +5,7 @@ use sqlx::{
 };
 use crate::db::error::DbError;
 use crate::db::traits::SqlClient;
-use crate::db::types::{Column, ColumnSchema, DbQueryResult, ForeignKey, Row, Value};
+use crate::db::types::{Column, ColumnSchema, DbQueryResult, ForeignKey, Row, TableKind, TableObject, Value};
 
 pub struct SqliteConnector {
     pool: Option<SqlitePool>,
@@ -95,6 +95,22 @@ impl SqlClient for SqliteConnector {
             .iter()
             .map(|r| r.try_get::<String, _>(0).unwrap_or_default())
             .collect())
+    }
+
+    async fn get_table_objects(&self) -> Result<Vec<TableObject>, DbError> {
+        let rows: Vec<SqliteRow> = sqlx::query(
+            "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') ORDER BY name",
+        )
+        .fetch_all(self.pool()?)
+        .await
+        .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+
+        Ok(rows.iter().map(|r| {
+            let name = r.try_get::<String, _>(0).unwrap_or_default();
+            let type_str = r.try_get::<String, _>(1).unwrap_or_default();
+            let kind = if type_str == "view" { TableKind::View } else { TableKind::Table };
+            TableObject { name, kind }
+        }).collect())
     }
 
     async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {

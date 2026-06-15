@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use crate::db::error::DbError;
 use crate::db::traits::SqlClient;
-use crate::db::types::{Column, ColumnSchema, DbQueryResult, ForeignKey, Row, Value};
+use crate::db::types::{Column, ColumnSchema, DbQueryResult, ForeignKey, Row, TableKind, TableObject, Value};
 
 pub struct TursoClient {
     db:   Option<libsql::Database>,
@@ -83,6 +83,19 @@ impl SqlClient for TursoClient {
                 if let Some(Value::Text(s)) = r.values.first() { Some(s.clone()) } else { None }
             })
             .collect())
+    }
+
+    async fn get_table_objects(&self) -> Result<Vec<TableObject>, DbError> {
+        let result = self.fetch_all(
+            "SELECT name, type FROM sqlite_master \
+             WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ).await?;
+        Ok(result.rows.iter().filter_map(|r| {
+            let name = if let Some(Value::Text(s)) = r.values.first() { s.clone() } else { return None; };
+            let type_str = r.values.get(1).and_then(|v| if let Value::Text(s) = v { Some(s.as_str()) } else { None }).unwrap_or("table");
+            let kind = if type_str == "view" { TableKind::View } else { TableKind::Table };
+            Some(TableObject { name, kind })
+        }).collect())
     }
 
     async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {

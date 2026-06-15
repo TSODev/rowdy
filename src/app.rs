@@ -10,7 +10,7 @@ use tokio::{
 use crate::config::{Config, ConnectionProfile};
 use crate::export;
 use crate::history::QueryHistory;
-use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{ColumnSchema, DbQueryResult, Value}};
+use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{ColumnSchema, DbQueryResult, TableObject, Value}};
 use crate::ui::components::modal::Modal;
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
 use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen, PAGE_SIZE};
@@ -31,7 +31,8 @@ pub enum DbEvent {
     SqlConnected { client: Arc<dyn SqlClient>, url: String, db_type: String },
     KvConnected  { client: Arc<dyn KvClient>,  url: String, db_type: String },
     ConnectionFailed(String),
-    TablesLoaded(Vec<String>),
+    TablesLoaded(Vec<String>),       // KV stores (Redis key names)
+    TableObjectsLoaded(Vec<TableObject>), // SQL: TABLE + VIEW with kind
     TablesLoadFailed(String),
     DataLoaded(DbQueryResult),
     DataPageLoaded(DbQueryResult),
@@ -47,6 +48,8 @@ pub enum DbEvent {
     QueryFailed(String),
     EditSaved,
     EditFailed(String),
+    ExportDone(std::path::PathBuf),
+    ExportFailed(String),
 }
 
 // ── Pending modal action ──────────────────────────────────────────────────────
@@ -216,7 +219,14 @@ impl App {
             }
             AppState::TableList => {
                 match self.table_list_screen.handle_key(key) {
-                    TableListAction::OpenTable(name) => self.spawn_load_data(name),
+                    TableListAction::OpenTable { name, is_view } => {
+                        self.spawn_load_data(name);
+                        // spawn_load_data resets data_grid_screen; set view flags after
+                        if is_view {
+                            self.data_grid_screen.is_view = true;
+                            self.data_grid_screen.prod_readonly = true;
+                        }
+                    }
                     TableListAction::OpenEditor => self.open_sql_editor(),
                     TableListAction::Disconnect => {
                         self.active_client = None;
@@ -246,13 +256,14 @@ impl App {
                     DataGridAction::ExportCsv => {
                         let table = self.data_grid_screen.table_name.clone();
                         if let Some(ref r) = self.data_grid_screen.result.clone() {
-                            self.run_export(r, &table, false);
+                            self.run_export(r, &table, None, false);
                         }
                     }
                     DataGridAction::ExportJson => {
                         let table = self.data_grid_screen.table_name.clone();
+                        let schema = self.data_grid_screen.schema.clone();
                         if let Some(ref r) = self.data_grid_screen.result.clone() {
-                            self.run_export(r, &table, true);
+                            self.run_export(r, &table, schema, true);
                         }
                     }
                     DataGridAction::None => {}
@@ -280,13 +291,14 @@ impl App {
                     DataGridAction::ExportCsv => {
                         let table = self.fk_grid_screen.table_name.clone();
                         if let Some(ref r) = self.fk_grid_screen.result.clone() {
-                            self.run_export(r, &table, false);
+                            self.run_export(r, &table, None, false);
                         }
                     }
                     DataGridAction::ExportJson => {
                         let table = self.fk_grid_screen.table_name.clone();
+                        let schema = self.fk_grid_screen.schema.clone();
                         if let Some(ref r) = self.fk_grid_screen.result.clone() {
-                            self.run_export(r, &table, true);
+                            self.run_export(r, &table, schema, true);
                         }
                     }
                     DataGridAction::LoadMore | DataGridAction::ApplyFilter => {}
@@ -333,13 +345,13 @@ impl App {
                     DataGridAction::ExportCsv => {
                         let table = self.sql_result_grid_screen.table_name.clone();
                         if let Some(ref r) = self.sql_result_grid_screen.result.clone() {
-                            self.run_export(r, &table, false);
+                            self.run_export(r, &table, None, false);
                         }
                     }
                     DataGridAction::ExportJson => {
                         let table = self.sql_result_grid_screen.table_name.clone();
                         if let Some(ref r) = self.sql_result_grid_screen.result.clone() {
-                            self.run_export(r, &table, true);
+                            self.run_export(r, &table, None, true);
                         }
                     }
                     _ => {}
@@ -574,9 +586,9 @@ impl App {
             Some(ActiveClient::Sql(c)) => {
                 let c = Arc::clone(c);
                 tokio::spawn(async move {
-                    let ev = match c.get_tables().await {
-                        Ok(t)  => DbEvent::TablesLoaded(t),
-                        Err(e) => DbEvent::TablesLoadFailed(e.to_string()),
+                    let ev = match c.get_table_objects().await {
+                        Ok(objs) => DbEvent::TableObjectsLoaded(objs),
+                        Err(e)   => DbEvent::TablesLoadFailed(e.to_string()),
                     };
                     let _ = tx.send(ev).await;
                 });
@@ -722,21 +734,54 @@ impl App {
 
     // ── Export ────────────────────────────────────────────────────────────────
 
-    fn run_export(&mut self, result: &crate::db::types::DbQueryResult, table_name: &str, as_json: bool) {
-        let res = if as_json {
-            export::export_json(result, table_name)
-        } else {
-            export::export_csv(result, table_name)
-        };
-        match res {
-            Ok(path) => {
-                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-                self.status_message = Some((format!("Saved: ~/{name}"), false));
-                self.status_message_ttl = 80;
+    fn run_export(
+        &mut self,
+        result: &DbQueryResult,
+        table_name: &str,
+        schema: Option<Vec<ColumnSchema>>,
+        as_json: bool,
+    ) {
+        if as_json {
+            if let (Some(s), Some(ActiveClient::Sql(c))) = (schema, &self.active_client) {
+                // Async path: FK resolution
+                let client = Arc::clone(c);
+                let tx = self.db_tx.clone();
+                let result = result.clone();
+                let table = table_name.to_string();
+                tokio::spawn(async move {
+                    let ev = match export::export_json_with_fk(client, &result, &table, &s, 3).await {
+                        Ok(p)  => DbEvent::ExportDone(p),
+                        Err(e) => DbEvent::ExportFailed(e.to_string()),
+                    };
+                    let _ = tx.send(ev).await;
+                });
+                self.status_message = Some(("JSON export with FK resolution in progress…".into(), false));
+                self.status_message_ttl = 40;
+            } else {
+                // Fallback: no SQL client or no schema (e.g. SQL result grid)
+                match export::export_json(result, table_name) {
+                    Ok(path) => {
+                        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        self.status_message = Some((format!("Saved: ~/{name}"), false));
+                        self.status_message_ttl = 80;
+                    }
+                    Err(e) => {
+                        self.status_message = Some((format!("Export failed: {e}"), true));
+                        self.status_message_ttl = 80;
+                    }
+                }
             }
-            Err(e) => {
-                self.status_message = Some((format!("Export failed: {e}"), true));
-                self.status_message_ttl = 80;
+        } else {
+            match export::export_csv(result, table_name) {
+                Ok(path) => {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                    self.status_message = Some((format!("Saved: ~/{name}"), false));
+                    self.status_message_ttl = 80;
+                }
+                Err(e) => {
+                    self.status_message = Some((format!("Export failed: {e}"), true));
+                    self.status_message_ttl = 80;
+                }
             }
         }
     }
@@ -768,8 +813,11 @@ impl App {
             DbEvent::ConnectionFailed(msg) => {
                 self.connection_screen.status = Some(format!("Error: {msg}"));
             }
-            DbEvent::TablesLoaded(tables) => {
-                self.table_list_screen.set_tables(tables);
+            DbEvent::TablesLoaded(names) => {
+                self.table_list_screen.set_tables_kv(names);
+            }
+            DbEvent::TableObjectsLoaded(objects) => {
+                self.table_list_screen.set_tables(objects);
             }
             DbEvent::TablesLoadFailed(msg) => {
                 self.table_list_screen.set_error(format!("Error: {msg}"));
@@ -824,6 +872,15 @@ impl App {
             }
             DbEvent::EditFailed(msg) => {
                 self.modal = Some(Modal::error("Save Failed", &msg));
+            }
+            DbEvent::ExportDone(path) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                self.status_message = Some((format!("Saved: ~/{name}"), false));
+                self.status_message_ttl = 80;
+            }
+            DbEvent::ExportFailed(msg) => {
+                self.status_message = Some((format!("Export failed: {msg}"), true));
+                self.status_message_ttl = 80;
             }
         }
     }

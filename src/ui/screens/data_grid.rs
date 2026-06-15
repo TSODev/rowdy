@@ -47,6 +47,7 @@ pub struct DataGridScreen {
     pub col_widths: HashMap<usize, u16>,
     pub read_only: bool,
     pub prod_readonly: bool,
+    pub is_view: bool,
     pub status: Option<String>,
     pub export_prompt: bool,
     // Filtering
@@ -75,6 +76,7 @@ impl DataGridScreen {
             col_widths: HashMap::new(),
             read_only: false,
             prod_readonly: false,
+            is_view: false,
             status: Some("Loading…".into()),
             export_prompt: false,
             filters: BTreeMap::new(),

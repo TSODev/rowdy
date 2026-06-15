@@ -136,21 +136,30 @@ La barre d'aide affiche en rouge : `Delete "nom"? y: delete from file   n: remov
 
 ## Vue liste des tables
 
-Après une connexion réussie, Rowdy charge automatiquement la liste des tables (ou des clés pour Redis).
+Après une connexion réussie, Rowdy charge automatiquement la liste des tables et vues (ou des clés pour Redis).
 
 ```
  Connected: [postgres] postgres://user@localhost/my_db
 ┌─ Tables (12) ───────────────────────────────────────┐
 │                                                      │
-│ > orders                                             │
-│   products                                           │
-│   users                                             │
-│   sessions                                           │
+│ > [T] orders                                         │
+│   [T] products                                       │
+│   [T] users                                          │
+│   [V] v_books_with_author                            │
 │   ...                                                │
 │                                                      │
 └──────────────────────────────────────────────────────┘
   j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect
 ```
+
+### Badges TABLE / VIEW
+
+| Badge | Couleur | Signification |
+|-------|---------|---------------|
+| `[T]` | Gris | Table normale — navigation et édition disponibles |
+| `[V]` | Cyan | Vue SQL (`VIEW`) — lecture seule, édition bloquée |
+
+L'ouverture d'une vue active automatiquement le mode lecture seule : la barre de statut affiche le badge **`VIEW`** cyan. `Enter` sur une ligne n'ouvre pas l'écran d'édition.
 
 ### Navigation
 
@@ -431,12 +440,43 @@ Depuis n'importe quelle grille de données (Data Grid, sous-grille FK, SQL Resul
 | Touche | Action |
 |--------|--------|
 | `c` | Exporter en CSV (RFC 4180 : guillemets si la valeur contient une virgule, un guillemet ou un saut de ligne) |
-| `j` | Exporter en JSON (tableau d'objets, valeurs typées : `null`, nombres, chaînes) |
+| `j` | Exporter en JSON avec résolution FK récursive (voir ci-dessous) |
 | `Esc` | Cancel |
 
 Le fichier est écrit dans votre répertoire personnel : `~/rowdy_<table>_<timestamp>.csv` ou `.json`.
 
-La status bar confirme le nom du fichier créé : `Saved: ~/rowdy_books_1718453421.csv`
+La status bar confirme le nom du fichier créé : `Saved: ~/rowdy_books_1718453421.json`
+
+### Export JSON avec résolution FK
+
+Lorsqu'un schéma de table est disponible (Data Grid ou sous-grille FK), l'export JSON résout automatiquement les clés étrangères. Pour chaque colonne FK, la ligne référencée est récupérée dans la base et embarquée sous la clé `<colonne>__ref` :
+
+```json
+[
+  {
+    "id": 1,
+    "title": "Dune",
+    "author_id": 3,
+    "author_id__ref": {
+      "id": 3,
+      "first_name": "Frank",
+      "last_name": "Herbert",
+      "country": "US"
+    },
+    "category_id": 2,
+    "category_id__ref": {
+      "id": 2,
+      "label": "Science Fiction"
+    }
+  }
+]
+```
+
+La résolution est **récursive jusqu'à 3 niveaux** : si la table liée contient elle-même des FK, elles sont également résolues (`order → customer__ref → address__ref`). Les cycles (`A → B → A`) sont détectés et stoppés automatiquement.
+
+L'export s'effectue de manière **asynchrone** : l'interface reste réactive pendant les requêtes de résolution. La status bar affiche "JSON export with FK resolution in progress…" puis "Saved: ~/rowdy_…json" à la fin.
+
+> **Note :** la résolution FK n'est disponible que depuis les Data Grid et FK Grid (le schéma de table est connu). Depuis la vue SQL Result (`F4`), l'export JSON produit un tableau simple sans résolution FK.
 
 > **Note :** l'export porte sur les données actuellement chargées en mémoire (jusqu'à la page en cours pour le scroll infini). Pour exporter une table complète, chargez toutes les pages avant d'exporter.
 
@@ -507,6 +547,7 @@ Une ligne permanente est affichée en bas de l'écran depuis tous les écrans. E
 | `●` vert / `○` rouge | Connecté / déconnecté |
 | Info DB | Type de BDD + URL (mot de passe et tokens masqués, ex. `user:***@host`, `authToken=***`) |
 | `[N rows]` | Nombre total de lignes (DataGrid / FK View / SQL Result seulement) |
+| Badge `VIEW` (fond cyan) | Vue SQL ouverte — édition bloquée (les vues sont en lecture seule) |
 | Badge `READ-ONLY` (fond rouge) | Connexion en mode lecture seule — toute écriture est bloquée |
 | Message flash | Confirmation (vert) ou erreur (rouge) pendant ~4 secondes après une action |
 

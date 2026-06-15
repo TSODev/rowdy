@@ -5,7 +5,7 @@ use sqlx::{
 };
 use crate::db::error::DbError;
 use crate::db::traits::SqlClient;
-use crate::db::types::{Column, ColumnSchema, DbQueryResult, ForeignKey, Row, Value};
+use crate::db::types::{Column, ColumnSchema, DbQueryResult, ForeignKey, Row, TableKind, TableObject, Value};
 
 pub struct PostgresConnector {
     pool: Option<PgPool>,
@@ -98,6 +98,24 @@ impl SqlClient for PostgresConnector {
             .iter()
             .map(|r| r.try_get::<String, _>(0).unwrap_or_default())
             .collect())
+    }
+
+    async fn get_table_objects(&self) -> Result<Vec<TableObject>, DbError> {
+        let rows: Vec<PgRow> = sqlx::query(
+            "SELECT table_name, table_type FROM information_schema.tables \
+             WHERE table_schema = 'public' AND table_type IN ('BASE TABLE', 'VIEW') \
+             ORDER BY table_name",
+        )
+        .fetch_all(self.pool()?)
+        .await
+        .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+
+        Ok(rows.iter().map(|r| {
+            let name = r.try_get::<String, _>(0).unwrap_or_default();
+            let type_str = r.try_get::<String, _>(1).unwrap_or_default();
+            let kind = if type_str == "VIEW" { TableKind::View } else { TableKind::Table };
+            TableObject { name, kind }
+        }).collect())
     }
 
     async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {

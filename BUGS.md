@@ -67,7 +67,7 @@ Il reste uniquement le warning externe `sqlx-postgres v0.7.4 future-incompat` (d
 ## FK / Sous-grille
 
 - 🟡 **Pas d'indication visuelle** quand `Enter` sur une cellule FK avec valeur NULL ne fait rien (le badge magenta est visible mais aucune feedback).
-- 🟡 **FK récursive profonde** — la pile `fk_history` est illimitée en mémoire ; pas de garde contre les cycles FK (ex. A→B→A).
+- 🟡 **FK récursive profonde (navigation)** — la pile `fk_history` est illimitée en mémoire ; pas de garde contre les cycles FK (ex. A→B→A) dans la navigation interactive. *(Note : l'export JSON FK résout ce problème avec une détection de cycles et une profondeur max de 3.)*
 - ⚪ **Badge FK tronqué** si le nom de la table liée est très long (> largeur de colonne - longueur de valeur).
 
 ---

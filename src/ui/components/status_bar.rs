@@ -56,7 +56,12 @@ pub fn draw(f: &mut Frame<'_>, area: Rect, app: &App) {
         spans.push(Span::styled(format!("  [{count} rows]"), dim_style));
     }
 
-    if app.prod_readonly {
+    let is_view = matches!(app.state, AppState::DataGrid) && app.data_grid_screen.is_view;
+    if is_view {
+        let view_style = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
+        spans.push(Span::styled("  ", bg));
+        spans.push(Span::styled(" VIEW ", view_style));
+    } else if app.prod_readonly {
         let ro_style = Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD);
         spans.push(Span::styled("  ", bg));
         spans.push(Span::styled(" READ-ONLY ", ro_style));

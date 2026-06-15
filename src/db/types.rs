@@ -28,6 +28,18 @@ pub struct DbQueryResult {
     pub rows_affected: u64,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum TableKind {
+    Table,
+    View,
+}
+
+#[derive(Debug, Clone)]
+pub struct TableObject {
+    pub name: String,
+    pub kind: TableKind,
+}
+
 #[derive(Debug, Clone)]
 pub struct ForeignKey {
     pub table: String,

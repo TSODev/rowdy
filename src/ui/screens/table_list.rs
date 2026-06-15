@@ -2,19 +2,21 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
+    text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
+use crate::db::types::{TableKind, TableObject};
 
 pub enum TableListAction {
     None,
-    OpenTable(String),
+    OpenTable { name: String, is_view: bool },
     OpenEditor,
     Disconnect,
 }
 
 pub struct TableListScreen {
-    pub tables: Vec<String>,
+    pub tables: Vec<TableObject>,
     pub list_state: ListState,
     pub filter: String,
     pub filter_mode: bool,
@@ -34,8 +36,20 @@ impl TableListScreen {
         }
     }
 
-    pub fn set_tables(&mut self, tables: Vec<String>) {
+    /// Called when a SQL client returns table/view objects.
+    pub fn set_tables(&mut self, tables: Vec<TableObject>) {
         self.tables = tables;
+        self.status = None;
+        if !self.tables.is_empty() {
+            self.list_state.select(Some(0));
+        }
+    }
+
+    /// Called when a KV client returns key names (no VIEW distinction).
+    pub fn set_tables_kv(&mut self, names: Vec<String>) {
+        self.tables = names.into_iter()
+            .map(|name| TableObject { name, kind: TableKind::Table })
+            .collect();
         self.status = None;
         if !self.tables.is_empty() {
             self.list_state.select(Some(0));
@@ -46,19 +60,21 @@ impl TableListScreen {
         self.status = Some(msg);
     }
 
-    fn filtered(&self) -> Vec<&String> {
+    fn filtered(&self) -> Vec<&TableObject> {
         if self.filter.is_empty() {
             self.tables.iter().collect()
         } else {
             let f = self.filter.to_lowercase();
-            self.tables.iter().filter(|t| t.to_lowercase().contains(&f)).collect()
+            self.tables.iter().filter(|t| t.name.to_lowercase().contains(&f)).collect()
         }
     }
 
-    fn selected_name(&self) -> Option<String> {
+    fn selected_object(&self) -> Option<(String, bool)> {
         self.list_state
             .selected()
-            .and_then(|i| self.filtered().get(i).map(|s| s.to_string()))
+            .and_then(|i| self.filtered().get(i).map(|obj| {
+                (obj.name.clone(), obj.kind == TableKind::View)
+            }))
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> TableListAction {
@@ -72,8 +88,8 @@ impl TableListScreen {
             KeyCode::Char('/')                   => { self.filter_mode = true; TableListAction::None }
             KeyCode::Char('e')                   => TableListAction::OpenEditor,
             KeyCode::Enter => {
-                if let Some(name) = self.selected_name() {
-                    TableListAction::OpenTable(name)
+                if let Some((name, is_view)) = self.selected_object() {
+                    TableListAction::OpenTable { name, is_view }
                 } else {
                     TableListAction::None
                 }
@@ -134,26 +150,37 @@ impl TableListScreen {
             ])
             .split(area);
 
-        // Table list — collect owned Strings to release the immutable borrow
-        // before we need &mut screen.list_state for render_stateful_widget.
-        let (filtered_names, total): (Vec<String>, usize) = {
+        // Collect owned data to release the immutable borrow before render_stateful_widget.
+        let (filtered_items, total): (Vec<(String, bool)>, usize) = {
             let v = screen.filtered();
-            let names = v.iter().map(|s| s.to_string()).collect();
-            (names, screen.tables.len())
+            let items = v.iter().map(|o| (o.name.clone(), o.kind == TableKind::View)).collect();
+            (items, screen.tables.len())
         };
 
         let title = if screen.filter.is_empty() {
-            format!(" Tables ({}) ", filtered_names.len())
+            format!(" Tables ({}) ", filtered_items.len())
         } else {
-            format!(" Tables ({} / {}) ", filtered_names.len(), total)
+            format!(" Tables ({} / {}) ", filtered_items.len(), total)
         };
 
         let items: Vec<ListItem> = if let Some(ref msg) = screen.status {
             vec![ListItem::new(msg.as_str()).style(Style::default().fg(Color::DarkGray))]
-        } else if filtered_names.is_empty() {
+        } else if filtered_items.is_empty() {
             vec![ListItem::new("No match").style(Style::default().fg(Color::DarkGray))]
         } else {
-            filtered_names.iter().map(|t| ListItem::new(t.as_str())).collect()
+            filtered_items.iter().map(|(name, is_view)| {
+                if *is_view {
+                    ListItem::new(Line::from(vec![
+                        Span::styled("[V] ", Style::default().fg(Color::Cyan)),
+                        Span::raw(name.clone()),
+                    ]))
+                } else {
+                    ListItem::new(Line::from(vec![
+                        Span::styled("[T] ", Style::default().fg(Color::DarkGray)),
+                        Span::raw(name.clone()),
+                    ]))
+                }
+            }).collect()
         };
 
         let list = List::new(items)

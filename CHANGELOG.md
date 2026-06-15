@@ -7,6 +7,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+#### Distinction TABLE / VIEW dans la liste des tables
+- La liste des tables affiche un badge `[T]` (gris) pour les tables et `[V]` (cyan) pour les vues
+- Introspection via `information_schema.tables` (PostgreSQL, MySQL) ou `sqlite_master` (SQLite, Turso)
+- Nouveau type `TableObject { name, kind: TableKind }` et méthode `get_table_objects()` sur le trait `SqlClient`
+- L'ouverture d'une VIEW positionne automatiquement `prod_readonly = true` — l'édition est bloquée comme en mode read-only URL
+- Badge `VIEW` cyan dans la barre de statut (distinct du badge `READ-ONLY` rouge lié à `?readonly=true`)
+
+#### Export JSON avec résolution FK récursive
+- La touche `j` dans le prompt d'export lance désormais une résolution asynchrone des clés étrangères
+- Pour chaque colonne FK, la ligne référencée est récupérée et embarquée sous la clé `<col>__ref` dans le JSON
+- Résolution récursive jusqu'à 3 niveaux (paramètre `max_depth`) : `order → customer__ref → address__ref`
+- Détection des cycles via un ensemble de visites `(table.col=val)` — évite les boucles infinies
+- Cache des schémas par table partagé sur toute la récursion — une seule requête `get_schema` par table référencée
+- Les colonnes de type JSON/JSONB sont parsées et inlinées directement dans l'objet JSON
+- Fallback sync (JSON simple sans résolution FK) pour les résultats SQL Editor (pas de schéma de table associé)
+- Le résultat revient via `DbEvent::ExportDone` / `DbEvent::ExportFailed` — message flash dans la status bar à la fin
+
 ## [0.7.0] — 2026-06-15
 
 ### Added
