@@ -28,7 +28,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Delete profile with confirmation (`D` → `y` / `n`) | ✅ |
 | Vim-style keyboard navigation (`h j k l`, `/` to filter) | ✅ |
 | Table list with live filter | ✅ |
-| Data Grid — column scroll, collapse/expand, manual resize (`[`/`]`) | ✅ |
+| Data Grid — column scroll, collapse/expand, manual resize (`-`/`=`) | ✅ |
 | Data Grid — cell preview panel (full value, no truncation) | ✅ |
 | Data Grid — infinite scroll pagination (200 rows/page + COUNT) | ✅ |
 | Data Grid — cumulative column filters (`f` / `d` / `F`) | ✅ |
@@ -47,7 +47,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Modal dialogs | 🔲 planned |
 | Schema / ERD view of FK relationships | 🔲 planned |
 | MongoDB connector | 🔲 planned |
-| Read-only safe mode for production connections | 🔲 planned |
+| Read-only safe mode — `?readonly=true` in URL, blocks all writes, `READ-ONLY` badge in status bar | ✅ |
 
 ---
 
@@ -103,6 +103,17 @@ url = "mysql://root:password@localhost:3306/my_db"
 
 Profiles appear in the left panel of the connection screen at startup.
 
+To connect in **read-only mode** (blocks all writes — safe for production), append `?readonly=true` to any URL:
+
+```toml
+[[connections]]
+name = "Production (read-only)"
+type = "postgres"
+url = "postgres://user:pass@prod-host/mydb?sslmode=require&readonly=true"
+```
+
+A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all DML statements in the SQL editor are disabled. Filters, pagination, and export still work normally.
+
 ---
 
 ## ⌨️ Keyboard shortcuts
@@ -138,7 +149,7 @@ Profiles appear in the left panel of the connection screen at startup.
 | `g` / `G` | First / last row |
 | `PgDn` / `PgUp` | ±10 rows |
 | `Space` | Collapse / expand selected column |
-| `[` / `]` | Shrink / grow selected column width (step 5) |
+| `-` / `=` | Shrink / grow selected column width (step 5) |
 | `f` | Open filter input for selected column |
 | `d` | Remove filter on selected column |
 | `F` | Clear all filters |
