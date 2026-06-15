@@ -76,6 +76,7 @@ Il reste uniquement le warning externe `sqlx-postgres v0.7.4 future-incompat` (d
 
 - 🟡 **Largeur de colonne fixe à 30** dans le panneau résultats (`col_display_width` → `.min(30)`) — pas de resize `[/]` contrairement au Data Grid.
 - 🟡 **Résultat SQL perdu** si on quitte l'éditeur et qu'on le rouvre (`SqlEditorScreen::new` recrée un écran vide).
+- 🟡 **`Alt+↑/↓` (historique)** peut être intercepté par certains émulateurs de terminal avant d'atteindre l'app — en cas de problème, vérifier les raccourcis du terminal.
 - ⚪ **Pas de numérotation de ligne** dans l'éditeur textarea.
 
 ---

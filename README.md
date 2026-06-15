@@ -34,12 +34,15 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Data Grid — cell cursor (row × column highlight) | ✅ |
 | Data Grid — FK badges + expandable sub-grid (recursive navigation) | ✅ |
 | SQL Editor — multi-line, F5 to execute, F4 opens result in full grid | ✅ |
+| SQL Editor — query history with `Alt+↑/↓`, persisted to `~/.config/rowdy/history.toml` | ✅ |
 | Schema introspection — PK, FK, types (all 4 SQL engines) | ✅ |
 | Inline record editing — field type display, bool toggle, live SQL preview | ✅ |
+| Status bar — mode, connection indicator, DB info, row count, flash messages | ✅ |
+| URL redaction — passwords and tokens masked in UI (`user:***@host`, `authToken=***`) | ✅ |
+| Export CSV / JSON — `E` key in any data grid, file saved to `~/rowdy_<table>_<ts>.csv/json` | ✅ |
 | Async I/O — UI never blocks during queries | ✅ |
-| Export CSV / JSON | 🔲 planned |
-| Status bar & modal dialogs | 🔲 planned |
 | Redis key-detail view | 🔲 planned |
+| Modal dialogs | 🔲 planned |
 
 ---
 
@@ -135,6 +138,7 @@ Profiles appear in the left panel of the connection screen at startup.
 | `d` | Remove filter on selected column |
 | `F` | Clear all filters |
 | `Enter` | FK cell → open linked sub-grid ; other cell → Edit Record |
+| `E` | Export prompt (then `c`=CSV, `j`=JSON, `Esc`=cancel) |
 | `q` | Back to table list |
 
 ### Edit Record
@@ -156,6 +160,8 @@ Profiles appear in the left panel of the connection screen at startup.
 |-----|--------|
 | `F5` / `Ctrl+Enter` | Execute query |
 | `F4` | Open SELECT result in full Data Grid (read-only) |
+| `Alt+↑` | Recall previous query from history |
+| `Alt+↓` | Recall next query from history (empty = clear) |
 | `Tab` | Switch focus to results pane |
 | `Tab` / `Esc` | Switch focus back to editor |
 | `Ctrl+Q` | Back to table list |

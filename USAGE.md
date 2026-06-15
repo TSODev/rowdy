@@ -206,6 +206,7 @@ Depuis la vue liste des tables, appuyez sur `Enter` pour ouvrir une table.
 | `[` | Réduire la largeur de la colonne sélectionnée (−5, min 4) |
 | `]` | Agrandir la largeur de la colonne sélectionnée (+5, max 80) |
 | `Enter` | Cellule FK → ouvre la sous-grille liée ; cellule normale → édition de la ligne |
+| `E` | Ouvrir le prompt d'export (puis `c`=CSV, `j`=JSON, `Esc`=annuler) |
 | `q` / `Esc` | Retour à la liste des tables |
 
 ### Colonnes
@@ -376,11 +377,19 @@ Depuis la vue liste des tables, appuyez sur `e` pour ouvrir l'éditeur SQL.
 | _(frappe)_ | Saisir du SQL multi-lignes |
 | `F5` | Exécuter la requête |
 | `Ctrl+Enter` | Exécuter la requête |
+| `Alt+↑` | Rappeler la requête précédente depuis l'historique |
+| `Alt+↓` | Rappeler la requête suivante (vide = effacer) |
 | `F4` | Ouvrir le résultat SELECT dans le Data Grid complet |
 | `Tab` | Basculer vers le panneau Résultats (si résultat disponible) |
 | `Ctrl+Q` | Retour à la liste des tables |
 
 Toutes les touches d'édition standard sont supportées : flèches, `Backspace`, `Delete`, `Home`, `End`, `Ctrl+A` (tout sélectionner), `Ctrl+Z` (annuler), copier/coller selon le terminal.
+
+### Historique des requêtes
+
+Chaque requête exécutée est sauvegardée automatiquement dans `~/.config/rowdy/history.toml` (jusqu'à 200 entrées, dédoublonnées). Utilisez `Alt+↑` pour remonter dans l'historique et `Alt+↓` pour revenir vers les requêtes plus récentes. Revenir à zéro avec `Alt+↓` efface l'éditeur.
+
+Le curseur d'historique se réinitialise dès qu'une nouvelle requête est exécutée.
 
 ### Mode Résultats (focus jaune sur le tableau)
 
@@ -399,7 +408,7 @@ Toutes les touches d'édition standard sont supportées : flèches, `Backspace`,
 
 ### Data Grid en lecture seule (`F4`)
 
-`F4` transfère le résultat du SELECT dans un Data Grid complet (`SQL Result`) avec toutes les fonctionnalités de navigation : `j/k/h/l`, resize `[/]`, panel preview, collapse. Les filtres et l'édition sont désactivés. `q`/`Esc` retourne à l'éditeur SQL avec la requête et le résultat intacts.
+`F4` transfère le résultat du SELECT dans un Data Grid complet (`SQL Result`) avec toutes les fonctionnalités de navigation : `j/k/h/l`, resize `[/]`, panel preview, collapse. Les filtres et l'édition sont désactivés. `q`/`Esc` retourne à l'éditeur SQL avec la requête et le résultat intacts. L'export (`E`) est disponible depuis ce mode.
 
 ### Détection automatique SELECT / DML
 
@@ -408,6 +417,46 @@ Toutes les touches d'édition standard sont supportées : flèches, `Backspace`,
 
 > **Note :** l'éditeur SQL est uniquement disponible avec les connecteurs SQL (PostgreSQL, SQLite, MySQL).  
 > Redis n'est pas supporté (pas de modèle relationnel).
+
+---
+
+## Export CSV / JSON
+
+Depuis n'importe quelle grille de données (Data Grid, sous-grille FK, SQL Result), appuyez sur `E` pour exporter les données chargées.
+
+```
+ Export:  c = CSV   j = JSON   Esc = cancel
+```
+
+| Touche | Action |
+|--------|--------|
+| `c` | Exporter en CSV (RFC 4180 : guillemets si la valeur contient une virgule, un guillemet ou un saut de ligne) |
+| `j` | Exporter en JSON (tableau d'objets, valeurs typées : `null`, nombres, chaînes) |
+| `Esc` | Annuler |
+
+Le fichier est écrit dans votre répertoire personnel : `~/rowdy_<table>_<timestamp>.csv` ou `.json`.
+
+La status bar confirme le nom du fichier créé : `Saved: ~/rowdy_books_1718453421.csv`
+
+> **Note :** l'export porte sur les données actuellement chargées en mémoire (jusqu'à la page en cours pour le scroll infini). Pour exporter une table complète, chargez toutes les pages avant d'exporter.
+
+---
+
+## Barre de statut
+
+Une ligne permanente est affichée en bas de l'écran depuis tous les écrans. Elle indique :
+
+```
+ DATA GRID   ● [postgres] postgres://user@localhost/my_db  [1 247 rows]
+```
+
+| Élément | Description |
+|---------|-------------|
+| Badge mode | Écran actif (`CONNECTION`, `TABLES`, `DATA GRID`, `FK VIEW`, `EDIT`, `SQL EDITOR`, `QUERY RESULT`) |
+| `●` vert / `○` rouge | Connecté / déconnecté |
+| Info DB | Type de BDD + URL (mot de passe et tokens masqués, ex. `user:***@host`, `authToken=***`) |
+| `[N rows]` | Nombre total de lignes (DataGrid / FK View / SQL Result seulement) |
+| Message flash | Confirmation (vert) ou erreur (rouge) pendant ~4 secondes après une action |
 
 ---
 

@@ -7,6 +7,39 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-06-15
+
+### Added
+
+#### Barre de statut (status bar)
+- Ligne permanente en bas de l'écran, visible depuis tous les écrans
+- **Badge mode** (cyan/gras) : `CONNECTION`, `TABLES`, `DATA GRID`, `FK VIEW`, `EDIT`, `SQL EDITOR`, `QUERY RESULT`
+- **Indicateur de connexion** : `●` vert (connecté) ou `○` rouge (déconnecté)
+- **Info DB** : type + URL (tronquée à 45 caractères)
+- **Nombre de lignes** : affiché en Data Grid, FK View et SQL Result (`[N rows]`)
+- **Messages flash** : messages de confirmation (vert) ou d'erreur (rouge) temporaires
+
+#### Masquage des mots de passe et tokens (URL redaction)
+- `redact_url()` masque les identifiants dans toute URL affichée (status bar et en-tête de la liste des tables)
+- `user:password@host` → `user:***@host`
+- Paramètres sensibles (`authToken`, `token`, `password`, `pwd`, `secret`, `key`, `auth`) → `param=***`
+
+#### Historique des requêtes SQL
+- Les requêtes exécutées sont sauvegardées dans `~/.config/rowdy/history.toml` (max 200 entrées, dédoublonnées)
+- `Alt+↑` : rappeler la requête précédente (plus ancienne)
+- `Alt+↓` : rappeler la requête suivante (plus récente) — revenir à vide
+- Le curseur d'historique se réinitialise à chaque nouvelle exécution
+- Raccourci affiché dans la barre d'aide de l'éditeur SQL
+
+#### Export CSV / JSON
+- `E` depuis DataGrid, FkGrid ou SqlResultGrid ouvre le prompt d'export
+- `c` → CSV (RFC 4180 : guillemets si nécessaire, champs vides pour NULL)
+- `j` → JSON (tableau d'objets, valeurs typées)
+- `Esc` → annuler
+- Fichier écrit dans `~/rowdy_<table>_<timestamp>.csv/json`
+- Confirmation dans la status bar : `Saved: ~/rowdy_books_1718453421.csv`
+- `E: export` ajouté à la barre d'aide de toutes les grilles
+
 ## [0.5.8] — 2026-06-15
 
 ### Fixed
@@ -281,7 +314,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.7...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/TSODev/rowdy/compare/v0.5.8...v0.6.0
+[0.5.8]: https://github.com/TSODev/rowdy/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/TSODev/rowdy/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/TSODev/rowdy/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/TSODev/rowdy/compare/v0.5.4...v0.5.5
