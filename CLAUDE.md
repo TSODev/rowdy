@@ -195,7 +195,7 @@ src/
 - [x] SQL Editor : messages d'erreur sur plusieurs lignes via `word_wrap()` calé sur la largeur réelle du panneau
 - [x] Écran de connexion : messages d'erreur wrappés (`Wrap { trim: false }` sur le paragraphe de statut)
 - [x] Barre de statut — badge mode (cyan), indicateur connexion (●/○), info DB (URL masquée), nb lignes, messages flash (permanente, 1 ligne en bas)
-- [x] `redact_url()` — masque `user:password@` et paramètres sensibles (`authToken`, `token`, `password`, `pwd`, `secret`, `key`, `auth`) dans toute URL affichée dans l'UI
+- [x] `redact_url()` — masque `user:password@` et paramètres sensibles (`authToken`, `token`, `password`, `pwd`, `secret`, `key`, `auth`) dans toute URL affichée dans l'UI (status bar, en-tête liste des tables, message "Connecting…")
 - [x] Historique des requêtes SQL — `QueryHistory` persisté dans `~/.config/rowdy/history.toml` (max 200 entrées, dédoublonné), `Alt+↑/↓` dans l'éditeur SQL pour naviguer
 - [x] Export CSV / JSON — `E` depuis DataGrid/FkGrid/SqlResultGrid, prompt `c`=CSV / `j`=JSON / `Esc`=cancel, fichier écrit dans `~/rowdy_<table>_<timestamp>.<ext>`
 

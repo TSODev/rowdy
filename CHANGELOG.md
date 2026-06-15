@@ -7,6 +7,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Écran de connexion — message "Connecting…"** : l'URL affichée pendant la connexion passait maintenant par `redact_url()` — le mot de passe et les tokens (`authToken`, `password`, etc.) sont masqués `***` comme dans la barre de statut
+
 ## [0.6.0] — 2026-06-15
 
 ### Added
