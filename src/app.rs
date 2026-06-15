@@ -490,7 +490,7 @@ impl App {
 
     fn spawn_connect(&mut self, url: String, db_type: String) {
         self.connection_screen.status =
-            Some(format!("Connecting [{db_type}] {url} …"));
+            Some(format!("Connecting [{db_type}] {} …", redact_url(&url)));
         let tx = self.db_tx.clone();
         tokio::spawn(async move {
             let event = if db_type == "redis" {
