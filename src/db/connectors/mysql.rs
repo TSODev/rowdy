@@ -24,7 +24,8 @@ impl MySqlConnector {
 #[async_trait]
 impl SqlClient for MySqlConnector {
     async fn connect(&mut self, url: &str) -> Result<(), DbError> {
-        let pool = MySqlPool::connect(url)
+        let normalized = normalize_ssl_mode(url);
+        let pool = MySqlPool::connect(&normalized)
             .await
             .map_err(|e| DbError::ConnectionFailed(e.to_string()))?;
         self.pool = Some(pool);
@@ -143,6 +144,22 @@ impl SqlClient for MySqlConnector {
         }
         Ok(schema)
     }
+}
+
+fn normalize_ssl_mode(url: &str) -> std::borrow::Cow<'_, str> {
+    let lower = url.to_ascii_lowercase();
+    if let Some(pos) = lower.find("ssl-mode=") {
+        let value_start = pos + "ssl-mode=".len();
+        let value_end = lower[value_start..]
+            .find(|c: char| !c.is_ascii_alphabetic())
+            .map_or(url.len(), |i| value_start + i);
+        if url[value_start..value_end].bytes().any(|b| b.is_ascii_uppercase()) {
+            let mut result = url.to_string();
+            result.replace_range(value_start..value_end, &url[value_start..value_end].to_ascii_lowercase());
+            return std::borrow::Cow::Owned(result);
+        }
+    }
+    std::borrow::Cow::Borrowed(url)
 }
 
 fn mysql_value(row: &MySqlRow, index: usize) -> Value {
