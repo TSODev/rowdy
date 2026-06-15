@@ -286,7 +286,9 @@ impl App {
             self.fk_history.push(prev);
         }
         let display = format!("{} [{}={}]", ref_table, ref_col, fk_val);
-        self.fk_grid_screen = DataGridScreen::new(display);
+        let mut screen = DataGridScreen::new(ref_table.clone());
+        screen.display_name = Some(display);
+        self.fk_grid_screen = screen;
         self.state = AppState::FkGrid;
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {

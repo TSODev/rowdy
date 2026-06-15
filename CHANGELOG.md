@@ -7,6 +7,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-06-15
+
+### Added
+
+#### Optimisation de l'affichage des colonnes
+- **`MAX_COL_WIDTH` 25 → 40** : colonnes plus larges par défaut pour réduire les troncatures
+- **Redimensionnement manuel** : `[` réduit la colonne de 5 (min 4), `]` l'agrandit de 5 (max 80) — état conservé dans `col_widths: HashMap<usize, u16>` ; réinitialisé à chaque nouveau chargement de table
+- **Panel de prévisualisation** (2 lignes, fond `DarkGray`) entre la table et la barre d'aide : affiche `▸ col_name : valeur complète` de la cellule courante, sans troncature
+- Barre d'aide mise à jour avec `[/]: resize`
+
+### Fixed
+
+- **EditRecord depuis FkGrid** : le nom de table dans la requête SQL générée (`UPDATE`) était le label d'affichage `"books [id=1]"` au lieu du vrai nom SQL `"books"` — résolu en séparant `table_name` (nom SQL pur) et `display_name` (label contextuel affiché dans la barre d'info)
+
 ## [0.5.2] — 2026-06-14
 
 ### Added
@@ -201,7 +215,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/TSODev/rowdy/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/TSODev/rowdy/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/TSODev/rowdy/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/TSODev/rowdy/compare/v0.4.0...v0.5.0

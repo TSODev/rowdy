@@ -196,17 +196,30 @@ Depuis la vue liste des tables, appuyez sur `Enter` pour ouvrir une table.
 | `G` | Dernière ligne chargée |
 | `PgDown` | +10 lignes |
 | `PgUp` | -10 lignes |
-| `Space` | Réduire / agrandir la colonne sélectionnée |
-| `Enter` | Ouvrir l'écran d'édition pour la ligne sélectionnée |
+| `Space` | Réduire / agrandir la colonne sélectionnée (collapse) |
+| `[` | Réduire la largeur de la colonne sélectionnée (−5, min 4) |
+| `]` | Agrandir la largeur de la colonne sélectionnée (+5, max 80) |
+| `Enter` | Cellule FK → ouvre la sous-grille liée ; cellule normale → édition de la ligne |
 | `q` / `Esc` | Retour à la liste des tables |
 
 ### Colonnes
 
 - La **colonne sélectionnée** est indiquée par un en-tête souligné en jaune (`h/l` pour naviguer).
 - Les **colonnes filtrées** sont mises en évidence en cyan dans l'en-tête.
-- `Space` **réduit** une colonne à 3 caractères pour gagner de la place, ou la **restaure**.
+- `Space` **collapse** une colonne à 3 caractères pour gagner de la place, ou la **restaure**.
+- `[` / `]` ajuste finement la largeur par pas de 5 caractères (min 4, max 80) — la valeur est mémorisée pour la session.
 - Les colonnes défilent automatiquement pour garder la colonne sélectionnée toujours visible.
-- La largeur naturelle est calculée d'après le contenu (max 25 caractères). Valeurs longues tronquées avec `…`.
+- La largeur naturelle est calculée d'après le contenu (max 40 caractères). Valeurs longues tronquées avec `…`.
+
+### Prévisualisation de cellule
+
+Une barre de 2 lignes (fond gris) est affichée entre la table et la barre d'aide. Elle indique :
+
+```
+ ▸ col_name : valeur complète sans troncature
+```
+
+Elle se met à jour en temps réel lors du déplacement de curseur.
 
 ### Pagination (infinite scroll)
 
@@ -229,7 +242,38 @@ Les filtres utilisent `LIKE '%valeur%'` et s'accumulent sur plusieurs colonnes (
 
 ### Cellule sélectionnée
 
-La cellule courante (intersection ligne × colonne) est mise en évidence en **bleu**. Le reste de la ligne sélectionnée est jaune. Appuyez sur `Enter` pour ouvrir l'écran d'édition de l'enregistrement.
+La cellule courante (intersection ligne × colonne) est mise en évidence en **bleu**. Le reste de la ligne sélectionnée est jaune.
+
+- Cellule **normale** → `Enter` ouvre l'écran d'édition de l'enregistrement.
+- Cellule **FK** (badge magenta `[table_liée]`) → `Enter` ouvre une sous-grille affichant l'enregistrement lié.
+
+### Clés étrangères (FK badges)
+
+Les colonnes reconnues comme clés étrangères affichent un badge magenta :
+
+```
+│  1  │ 3 [orders] │ 7 [books] │ 2 │ 29.99 │
+```
+
+`Enter` sur une telle cellule ouvre une **sous-grille FK**.
+
+---
+
+## Sous-grille FK
+
+Lorsque vous pressez `Enter` sur une cellule FK, Rowdy exécute `SELECT * FROM table_liée WHERE col = valeur` et affiche le résultat dans une sous-grille. La barre d'info indique le contexte : `books [id=3]`.
+
+La sous-grille FK fonctionne comme le Data Grid normal :
+
+| Touche | Action |
+|--------|--------|
+| `j` / `k` | Ligne suivante / précédente |
+| `h` / `l` | Colonne suivante / précédente |
+| `[` / `]` | Redimensionner la colonne |
+| `Enter` | Cellule FK → niveau FK suivant (récursif) ; cellule normale → édition |
+| `Esc` / `q` | Remonter d'un niveau (ou retour au Data Grid si niveau racine) |
+
+La navigation FK est **récursive** : chaque `Enter` sur un badge FK empile un nouveau niveau. `Esc` dépile et remonte d'un niveau à la fois.
 
 ---
 

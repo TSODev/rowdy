@@ -182,6 +182,8 @@ src/
 - [x] Marqueur `<?TYPE?>` universel sur les 3 connecteurs pour tout type non décodable (aide au debug)
 - [x] Data Grid : badge magenta `[table_liée]` sur les cellules FK (introspection via `pg_catalog` pour PostgreSQL, `information_schema` pour MySQL, `PRAGMA foreign_key_list` pour SQLite)
 - [x] FK expandable rows : Enter sur badge FK → sous-grille `FkGrid` avec navigation récursive (pile `fk_history`, Esc remonte d'un niveau, Enter sur non-FK → EditRecord)
+- [x] Data Grid : `MAX_COL_WIDTH` 25 → 40, redimensionnement manuel `[`/`]` (pas de 5, min 4, max 80, `col_widths: HashMap<usize, u16>`), panel preview (2 lignes DarkGray) affichant la valeur complète de la cellule courante
+- [x] Fix EditRecord depuis FkGrid : séparation `table_name` (SQL pur) / `display_name` (label `table [col=val]`) dans `DataGridScreen`
 
 ### Roadmap
 - [ ] Barre de statut (mode, connexion, nombre de lignes)
@@ -207,3 +209,4 @@ cargo clippy       # linter
 - Binaire standalone, pas de dépendances runtime système
 - `Frame<'_>` sans générique Backend (ratatui 0.27)
 - `Table::new(rows, widths)` — ratatui 0.27 requiert les widths en 2e argument
+- `DataGridScreen.table_name` = nom SQL brut ; `display_name: Option<String>` = label affiché (ex. `books [id=1]` pour FkGrid)

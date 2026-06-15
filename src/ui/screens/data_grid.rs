@@ -11,7 +11,8 @@ use crate::db::types::{ColumnSchema, DbQueryResult, Value};
 
 pub const PAGE_SIZE: usize = 200;
 const COLLAPSED_WIDTH: u16 = 3;
-const MAX_COL_WIDTH: u16 = 25;
+const MAX_COL_WIDTH: u16 = 40;
+const COL_RESIZE_STEP: u16 = 5;
 
 // ── Filter input (in-progress edit) ──────────────────────────────────────────
 
@@ -34,12 +35,14 @@ pub enum DataGridAction {
 
 pub struct DataGridScreen {
     pub table_name: String,
+    pub display_name: Option<String>, // label shown in info bar (e.g. "books [id=1]")
     pub result: Option<DbQueryResult>,
     pub schema: Option<Vec<ColumnSchema>>,
     pub table_state: TableState,
     pub selected_col: usize,
     pub col_offset: usize,
     pub collapsed_cols: HashSet<usize>,
+    pub col_widths: HashMap<usize, u16>,
     pub status: Option<String>,
     // Filtering
     pub filters: BTreeMap<String, String>,
@@ -57,12 +60,14 @@ impl DataGridScreen {
         table_state.select(Some(0));
         Self {
             table_name,
+            display_name: None,
             result: None,
             schema: None,
             table_state,
             selected_col: 0,
             col_offset: 0,
             collapsed_cols: HashSet::new(),
+            col_widths: HashMap::new(),
             status: Some("Loading…".into()),
             filters: BTreeMap::new(),
             filter_input: None,
@@ -83,6 +88,7 @@ impl DataGridScreen {
         self.selected_col = 0;
         self.col_offset = 0;
         self.collapsed_cols.clear();
+        self.col_widths.clear();
         self.table_state = TableState::default();
         self.table_state.select(if count > 0 { Some(0) } else { None });
         self.result = Some(result);
@@ -230,6 +236,24 @@ impl DataGridScreen {
 
             KeyCode::Enter => DataGridAction::EnterCell,
 
+            // Manual column resize
+            KeyCode::Char('[') => {
+                let current = self.effective_col_width(self.selected_col);
+                self.col_widths.insert(
+                    self.selected_col,
+                    current.saturating_sub(COL_RESIZE_STEP).max(4),
+                );
+                DataGridAction::None
+            }
+            KeyCode::Char(']') => {
+                let current = self.effective_col_width(self.selected_col);
+                self.col_widths.insert(
+                    self.selected_col,
+                    (current + COL_RESIZE_STEP).min(80),
+                );
+                DataGridAction::None
+            }
+
             _ => DataGridAction::None,
         }
     }
@@ -267,6 +291,9 @@ impl DataGridScreen {
     fn effective_col_width(&self, col_idx: usize) -> u16 {
         if self.collapsed_cols.contains(&col_idx) {
             return COLLAPSED_WIDTH;
+        }
+        if let Some(&w) = self.col_widths.get(&col_idx) {
+            return w;
         }
         let Some(ref result) = self.result else { return 10; };
         let header_w = result.columns[col_idx].name.len() as u16;
@@ -343,6 +370,7 @@ impl DataGridScreen {
             .constraints([
                 Constraint::Length(1), // info bar
                 Constraint::Min(0),    // data table
+                Constraint::Length(2), // cell preview
                 Constraint::Length(3), // help / filter bar
             ])
             .split(area);
@@ -376,10 +404,11 @@ impl DataGridScreen {
         };
         let loading_label = if screen.loading { "  ⏳" } else { "" };
 
+        let shown_name = screen.display_name.as_deref().unwrap_or(&screen.table_name);
         f.render_widget(
             Paragraph::new(format!(
                 " {} │ {} │ {} │ {}{}{}",
-                screen.table_name, row_info, col_info, count_info, filter_info, loading_label
+                shown_name, row_info, col_info, count_info, filter_info, loading_label
             ))
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             chunks[0],
@@ -535,6 +564,20 @@ impl DataGridScreen {
             }
         }
 
+        // ── Cell preview ──────────────────────────────────────────────────────
+        let preview_text = screen.result.as_ref().and_then(|r| {
+            let row_idx = screen.table_state.selected()?;
+            let row = r.rows.get(row_idx)?;
+            let col_name = r.columns.get(screen.selected_col).map(|c| c.name.as_str()).unwrap_or("");
+            let val = row.values.get(screen.selected_col).unwrap_or(&Value::Null);
+            Some(format!(" ▸ {} : {}", col_name, value_display(val)))
+        }).unwrap_or_default();
+        f.render_widget(
+            Paragraph::new(preview_text)
+                .style(Style::default().fg(Color::White).bg(Color::DarkGray)),
+            chunks[2],
+        );
+
         // ── Help / filter bar ─────────────────────────────────────────────────
         if let Some(ref fi) = screen.filter_input {
             let prompt = format!(" Filter [{}] > {}", fi.col_name, fi.value);
@@ -542,11 +585,11 @@ impl DataGridScreen {
                 Paragraph::new(prompt.clone())
                     .block(Block::default().borders(Borders::ALL))
                     .style(Style::default().fg(Color::Yellow)),
-                chunks[2],
+                chunks[3],
             );
             f.set_cursor(
-                chunks[2].x + 1 + prompt.len() as u16,
-                chunks[2].y + 1,
+                chunks[3].x + 1 + prompt.len() as u16,
+                chunks[3].y + 1,
             );
         } else {
             let collapse_label = if screen.collapsed_cols.contains(&screen.selected_col) {
@@ -561,12 +604,12 @@ impl DataGridScreen {
             };
             f.render_widget(
                 Paragraph::new(format!(
-                    " j/k: rows   h/l: cols   g/G: first/last   Enter: cell   {}   {}   q: back",
+                    " j/k: rows   h/l: cols   [/]: resize   g/G: first/last   Enter: cell   {}   {}   q: back",
                     collapse_label, filter_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))
                 .style(Style::default().fg(Color::DarkGray)),
-                chunks[2],
+                chunks[3],
             );
         }
     }
