@@ -5,6 +5,7 @@ use crate::db::types::{ColumnSchema, DbQueryResult};
 #[async_trait]
 pub trait SqlClient: Send + Sync {
     async fn connect(&mut self, url: &str) -> Result<(), DbError>;
+    #[allow(dead_code)]
     async fn disconnect(&mut self) -> Result<(), DbError>;
     async fn execute(&self, query: &str) -> Result<u64, DbError>;
     async fn fetch_all(&self, query: &str) -> Result<DbQueryResult, DbError>;

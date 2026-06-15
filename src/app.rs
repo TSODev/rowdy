@@ -35,7 +35,7 @@ pub enum DbEvent {
     DataCountLoaded(u64),
     DataLoadFailed(String),
     SchemaLoaded(Vec<ColumnSchema>),
-    SchemaLoadFailed(String),
+    SchemaLoadFailed,
     FkPageLoaded(DbQueryResult),
     FkCountLoaded(u64),
     FkSchemaLoaded(Vec<ColumnSchema>),
@@ -57,7 +57,6 @@ pub enum AppState {
     EditRecord,
     SqlEditor,
     SqlResultGrid,
-    Quit,
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -257,11 +256,6 @@ impl App {
                 match self.sql_result_grid_screen.handle_key(key) {
                     DataGridAction::Back => self.state = AppState::SqlEditor,
                     _ => {}
-                }
-            }
-            _ => {
-                if key.code == KeyCode::Char('q') {
-                    self.should_quit = true;
                 }
             }
         }
@@ -501,7 +495,7 @@ impl App {
             tokio::spawn(async move {
                 let ev = match client.get_schema(&table_name).await {
                     Ok(s)  => DbEvent::SchemaLoaded(s),
-                    Err(e) => DbEvent::SchemaLoadFailed(e.to_string()),
+                    Err(_) => DbEvent::SchemaLoadFailed,
                 };
                 let _ = tx.send(ev).await;
             });
@@ -624,7 +618,7 @@ impl App {
             DbEvent::SchemaLoaded(schema) => {
                 self.data_grid_screen.schema = Some(schema);
             }
-            DbEvent::SchemaLoadFailed(_) => {
+            DbEvent::SchemaLoadFailed => {
                 // Non-fatal: schema is optional for viewing; edit will show a warning
             }
             DbEvent::FkPageLoaded(result) => {

@@ -1,6 +1,7 @@
 #[derive(Debug, Clone)]
 pub struct Column {
     pub name: String,
+    #[allow(dead_code)]
     pub type_name: String,
 }
 
@@ -23,6 +24,7 @@ pub struct Row {
 pub struct DbQueryResult {
     pub columns: Vec<Column>,
     pub rows: Vec<Row>,
+    #[allow(dead_code)]
     pub rows_affected: u64,
 }
 
@@ -37,6 +39,7 @@ pub struct ColumnSchema {
     pub name: String,
     pub type_name: String,
     pub is_pk: bool,
+    #[allow(dead_code)]
     pub is_nullable: bool,
     pub fk: Option<ForeignKey>,
 }

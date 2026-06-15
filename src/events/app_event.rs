@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crossterm::event::KeyEvent;
 use crate::db::error::DbError;
 use crate::db::types::DbQueryResult;

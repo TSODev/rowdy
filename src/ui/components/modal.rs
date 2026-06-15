@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use ratatui::{layout::Rect, Frame};
 
 pub struct Modal {

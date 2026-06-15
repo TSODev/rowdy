@@ -18,6 +18,5 @@ pub fn draw(f: &mut Frame<'_>, app: &mut App) {
             screens::edit_record::EditRecordScreen::draw(f, &mut app.edit_record_screen),
         crate::app::AppState::SqlEditor =>
             screens::sql_editor::SqlEditorScreen::draw(f, &mut app.sql_editor_screen),
-        crate::app::AppState::Quit => {}
     }
 }

@@ -7,25 +7,6 @@ pub mod turso;
 use crate::db::error::DbError;
 use crate::db::traits::{KvClient, SqlClient};
 
-pub enum ConnectorType {
-    Postgres,
-    Sqlite,
-    Mysql,
-    Redis,
-}
-
-impl ConnectorType {
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "postgres" | "postgresql" => Some(Self::Postgres),
-            "sqlite"                  => Some(Self::Sqlite),
-            "mysql" | "mariadb"       => Some(Self::Mysql),
-            "redis"                   => Some(Self::Redis),
-            _                         => None,
-        }
-    }
-}
-
 /// Create and connect a SQL connector for the given driver name and URL.
 pub async fn connect_sql(db_type: &str, url: &str) -> Result<Box<dyn SqlClient>, DbError> {
     match db_type.to_lowercase().as_str() {

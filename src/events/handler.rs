@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crossterm::event::KeyCode;
 use crate::app::App;
 use crate::events::app_event::AppEvent;
