@@ -198,6 +198,7 @@ src/
 - [x] `redact_url()` — masque `user:password@` et paramètres sensibles (`authToken`, `token`, `password`, `pwd`, `secret`, `key`, `auth`) dans toute URL affichée dans l'UI (status bar, en-tête liste des tables, message "Connecting…")
 - [x] Historique des requêtes SQL — `QueryHistory` persisté dans `~/.config/rowdy/history.toml` (max 200 entrées, dédoublonné), `Alt+↑/↓` dans l'éditeur SQL pour naviguer
 - [x] Export CSV / JSON — `E` depuis DataGrid/FkGrid/SqlResultGrid, prompt `c`=CSV / `j`=JSON / `Esc`=cancel, fichier écrit dans `~/rowdy_<table>_<timestamp>.<ext>`
+- [x] Modal de confirmation / erreur — overlay centré, `Ctrl+S` dans EditRecord ouvre confirmation avant UPDATE, erreurs de sauvegarde en modal d'erreur rouge, `Y`=confirme / `N`/`Esc`=annule
 - [x] Mode read-only prod — `?readonly=true` (ou `&readonly=true`) dans l'URL, badge `READ-ONLY` rouge en status bar, bloque EditRecord + DML SQL editor, filtres/export conservés, reset à la déconnexion ; double `?` toléré (`strip_readonly_param` normalise en `&`)
 
 ### Roadmap
@@ -208,7 +209,7 @@ src/
 - [x] **Mode read-only prod** — ✅ implémenté (voir section Fait)
 
 #### Fonctionnel
-- [ ] Modal de confirmation / erreur
+- [x] Modal de confirmation / erreur — ✅ implémenté (voir section Fait)
 - [ ] Vue clé-détail Redis dans le Data Grid
 - [ ] Tests d'intégration sur les connecteurs
 - [ ] _(priorité basse)_ Validation de format et helpers d'édition par type : format de date, JSON valide, UUID, etc.

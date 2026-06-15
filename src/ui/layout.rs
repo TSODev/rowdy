@@ -1,6 +1,7 @@
 use ratatui::{layout::{Constraint, Direction, Layout}, Frame};
 use crate::app::App;
 use crate::ui::screens;
+use crate::ui::components::modal;
 
 pub fn draw(f: &mut Frame<'_>, app: &mut App) {
     let chunks = Layout::default()
@@ -28,6 +29,10 @@ pub fn draw(f: &mut Frame<'_>, app: &mut App) {
     }
 
     crate::ui::components::status_bar::draw(f, status_area, app);
+
+    if let Some(ref m) = app.modal {
+        modal::Modal::draw(m, f, f.size());
+    }
 
     if app.status_message_ttl > 0 {
         app.status_message_ttl -= 1;

@@ -11,6 +11,7 @@ use crate::config::{Config, ConnectionProfile};
 use crate::export;
 use crate::history::QueryHistory;
 use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{ColumnSchema, DbQueryResult, Value}};
+use crate::ui::components::modal::Modal;
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
 use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen, PAGE_SIZE};
 use crate::ui::screens::edit_record::{EditRecordAction, EditRecordScreen};
@@ -48,6 +49,12 @@ pub enum DbEvent {
     EditFailed(String),
 }
 
+// ── Pending modal action ──────────────────────────────────────────────────────
+
+pub enum PendingAction {
+    SaveRecord(String), // SQL to execute on confirm
+}
+
 // ── App state machine ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
@@ -77,6 +84,8 @@ pub struct App {
     pub active_client: Option<ActiveClient>,
     pub connected_db_info: Option<String>,
     pub prod_readonly: bool,
+    pub modal: Option<Modal>,
+    pending_action: Option<PendingAction>,
     pub status_message: Option<(String, bool)>,
     pub status_message_ttl: u8,
     pub history: QueryHistory,
@@ -104,6 +113,8 @@ impl App {
             active_client: None,
             connected_db_info: None,
             prod_readonly: false,
+            modal: None,
+            pending_action: None,
             status_message: None,
             status_message_ttl: 0,
             history: QueryHistory::load(),
@@ -137,6 +148,8 @@ impl App {
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
                     self.should_quit = true;
+                } else if self.modal.is_some() {
+                    self.handle_modal_key(key);
                 } else {
                     self.handle_key(key);
                 }
@@ -283,7 +296,14 @@ impl App {
             AppState::EditRecord => {
                 match self.edit_record_screen.handle_key(key) {
                     EditRecordAction::Back => self.state = self.edit_origin.clone(),
-                    EditRecordAction::Save(sql) => self.spawn_save_record(sql),
+                    EditRecordAction::Save(sql) => {
+                        let preview: String = sql.chars().take(120).collect();
+                        self.pending_action = Some(PendingAction::SaveRecord(sql));
+                        self.modal = Some(Modal::confirm(
+                            "Confirm Save",
+                            &format!("Execute this statement?\n{preview}"),
+                        ));
+                    }
                     EditRecordAction::None => {}
                 }
             }
@@ -494,6 +514,32 @@ impl App {
         screen.result = Some(result);
         self.sql_result_grid_screen = screen;
         self.state = AppState::SqlResultGrid;
+    }
+
+    // ── Modal key handler ─────────────────────────────────────────────────────
+
+    fn handle_modal_key(&mut self, key: crossterm::event::KeyEvent) {
+        use crate::ui::components::modal::ModalKind;
+        let is_confirm = matches!(self.modal.as_ref().map(|m| &m.kind), Some(ModalKind::Confirm));
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') if is_confirm => {
+                self.modal = None;
+                if let Some(action) = self.pending_action.take() {
+                    match action {
+                        PendingAction::SaveRecord(sql) => self.spawn_save_record(sql),
+                    }
+                }
+            }
+            KeyCode::Enter if !is_confirm => {
+                // Error modal: Enter closes
+                self.modal = None;
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                self.modal = None;
+                self.pending_action = None;
+            }
+            _ => {}
+        }
     }
 
     // ── Async connection ──────────────────────────────────────────────────────
@@ -777,7 +823,7 @@ impl App {
                 }
             }
             DbEvent::EditFailed(msg) => {
-                self.edit_record_screen.set_error(msg);
+                self.modal = Some(Modal::error("Save Failed", &msg));
             }
         }
     }

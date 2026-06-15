@@ -9,6 +9,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+#### Modal de confirmation / erreur
+- `Ctrl+S` dans EditRecord ouvre un modal de confirmation avant d'exécuter l'UPDATE — affiche un aperçu de la requête SQL
+- `[Y]` confirme et exécute ; `[N]` / `Esc` annule et retourne à l'écran d'édition
+- Les erreurs de sauvegarde (`EditFailed`) ouvrent désormais un modal d'erreur (fond rouge) plutôt qu'un message inline
+- Le modal s'affiche en overlay centré sur l'écran courant ; toutes les touches sont interceptées pendant son affichage
+
 #### Mode read-only production
 - Ajouter `?readonly=true` à n'importe quelle URL de connexion pour activer le mode lecture seule
 - **Badge `READ-ONLY`** rouge en barre de statut, visible depuis tous les écrans
