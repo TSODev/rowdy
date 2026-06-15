@@ -432,7 +432,7 @@ Depuis n'importe quelle grille de données (Data Grid, sous-grille FK, SQL Resul
 |--------|--------|
 | `c` | Exporter en CSV (RFC 4180 : guillemets si la valeur contient une virgule, un guillemet ou un saut de ligne) |
 | `j` | Exporter en JSON (tableau d'objets, valeurs typées : `null`, nombres, chaînes) |
-| `Esc` | Annuler |
+| `Esc` | Cancel |
 
 Le fichier est écrit dans votre répertoire personnel : `~/rowdy_<table>_<timestamp>.csv` ou `.json`.
 

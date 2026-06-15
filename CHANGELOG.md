@@ -35,7 +35,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `E` depuis DataGrid, FkGrid ou SqlResultGrid ouvre le prompt d'export
 - `c` → CSV (RFC 4180 : guillemets si nécessaire, champs vides pour NULL)
 - `j` → JSON (tableau d'objets, valeurs typées)
-- `Esc` → annuler
+- `Esc` → cancel
 - Fichier écrit dans `~/rowdy_<table>_<timestamp>.csv/json`
 - Confirmation dans la status bar : `Saved: ~/rowdy_books_1718453421.csv`
 - `E: export` ajouté à la barre d'aide de toutes les grilles
