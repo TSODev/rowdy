@@ -31,6 +31,8 @@ pub enum SqlEditorAction {
     Execute(String),
     Back,
     OpenGrid(DbQueryResult),
+    HistoryPrev,
+    HistoryNext,
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -89,6 +91,19 @@ impl SqlEditorScreen {
         self.result = None;
     }
 
+    pub fn set_editor_content(&mut self, text: &str) {
+        let lines: Vec<String> = if text.is_empty() {
+            vec![String::new()]
+        } else {
+            text.lines().map(|l| l.to_string()).collect()
+        };
+        let mut ta = TextArea::from(lines);
+        ta.set_cursor_line_style(Style::default());
+        ta.set_placeholder_text("-- Write your SQL here…");
+        ta.set_placeholder_style(Style::default().fg(Color::DarkGray));
+        self.editor = ta;
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> SqlEditorAction {
         let input = Input::from(key);
         match self.focus {
@@ -118,6 +133,13 @@ impl SqlEditorScreen {
                         if self.result.is_some() {
                             self.focus = EditorFocus::Results;
                         }
+                    }
+                    // History navigation: Alt+Up (older) / Alt+Down (newer)
+                    Input { key: Key::Up, alt: true, .. } => {
+                        return SqlEditorAction::HistoryPrev;
+                    }
+                    Input { key: Key::Down, alt: true, .. } => {
+                        return SqlEditorAction::HistoryNext;
                     }
                     // Pass everything else to the textarea
                     _ => {
@@ -395,7 +417,7 @@ fn draw_results(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
 fn draw_help(f: &mut Frame<'_>, screen: &SqlEditorScreen, area: Rect) {
     let text = match screen.focus {
         EditorFocus::Editor =>
-            " F5 / Ctrl+Enter: execute   Tab: results pane   F4: open in grid   Ctrl+Q: back ",
+            " F5/Ctrl+Enter: run   Alt+↑/↓: history   Tab: results   F4: grid   Ctrl+Q: back ",
         EditorFocus::Results =>
             " j/k: rows   h/l: cols   g/G: first/last   PgUp/Dn: page   F4: open in grid   Tab/Esc: editor ",
     };

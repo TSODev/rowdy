@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod db;
 mod events;
+mod history;
 mod ui;
 
 use clap::Parser;

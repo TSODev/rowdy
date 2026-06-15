@@ -8,6 +8,7 @@ use tokio::{
     time::{timeout, Duration},
 };
 use crate::config::{Config, ConnectionProfile};
+use crate::history::QueryHistory;
 use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{ColumnSchema, DbQueryResult, Value}};
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
 use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen, PAGE_SIZE};
@@ -76,6 +77,7 @@ pub struct App {
     pub connected_db_info: Option<String>,
     pub status_message: Option<(String, bool)>,
     pub status_message_ttl: u8,
+    pub history: QueryHistory,
     // State to return to after EditRecord (DataGrid or FkGrid)
     edit_origin: AppState,
     db_tx: mpsc::Sender<DbEvent>,
@@ -101,6 +103,7 @@ impl App {
             connected_db_info: None,
             status_message: None,
             status_message_ttl: 0,
+            history: QueryHistory::load(),
             edit_origin: AppState::DataGrid,
             db_tx,
             db_rx,
@@ -252,9 +255,21 @@ impl App {
             }
             AppState::SqlEditor => {
                 match self.sql_editor_screen.handle_key(key) {
-                    SqlEditorAction::Execute(sql) => self.spawn_execute_query(sql),
+                    SqlEditorAction::Execute(sql) => {
+                        self.history.push(sql.clone());
+                        self.spawn_execute_query(sql);
+                    }
                     SqlEditorAction::Back => self.state = AppState::TableList,
                     SqlEditorAction::OpenGrid(result) => self.open_sql_result_grid(result),
+                    SqlEditorAction::HistoryPrev => {
+                        if let Some(entry) = self.history.prev() {
+                            self.sql_editor_screen.set_editor_content(entry);
+                        }
+                    }
+                    SqlEditorAction::HistoryNext => {
+                        let content = self.history.next();
+                        self.sql_editor_screen.set_editor_content(content.unwrap_or(""));
+                    }
                     SqlEditorAction::None => {}
                 }
             }
