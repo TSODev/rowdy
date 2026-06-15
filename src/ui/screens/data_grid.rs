@@ -29,6 +29,8 @@ pub enum DataGridAction {
     ApplyFilter,
     LoadMore,
     EnterCell,
+    ExportCsv,
+    ExportJson,
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -45,6 +47,7 @@ pub struct DataGridScreen {
     pub col_widths: HashMap<usize, u16>,
     pub read_only: bool,
     pub status: Option<String>,
+    pub export_prompt: bool,
     // Filtering
     pub filters: BTreeMap<String, String>,
     pub filter_input: Option<FilterInput>,
@@ -71,6 +74,7 @@ impl DataGridScreen {
             col_widths: HashMap::new(),
             read_only: false,
             status: Some("Loading…".into()),
+            export_prompt: false,
             filters: BTreeMap::new(),
             filter_input: None,
             loaded_count: 0,
@@ -136,6 +140,16 @@ impl DataGridScreen {
     // ── Key handling ──────────────────────────────────────────────────────────
 
     pub fn handle_key(&mut self, key: KeyEvent) -> DataGridAction {
+        // Export prompt mode
+        if self.export_prompt {
+            self.export_prompt = false;
+            return match key.code {
+                KeyCode::Char('c') | KeyCode::Char('C') => DataGridAction::ExportCsv,
+                KeyCode::Char('j') | KeyCode::Char('J') => DataGridAction::ExportJson,
+                _ => DataGridAction::None,
+            };
+        }
+
         // Filter input mode takes priority
         if let Some(ref mut fi) = self.filter_input {
             return match key.code {
@@ -239,6 +253,14 @@ impl DataGridScreen {
             KeyCode::Enter if !self.read_only => DataGridAction::EnterCell,
 
             // Manual column resize
+            // Export prompt
+            KeyCode::Char('E') => {
+                if self.result.is_some() {
+                    self.export_prompt = true;
+                }
+                DataGridAction::None
+            }
+
             KeyCode::Char('[') => {
                 let current = self.effective_col_width(self.selected_col);
                 self.col_widths.insert(
@@ -580,7 +602,14 @@ impl DataGridScreen {
         );
 
         // ── Help / filter bar ─────────────────────────────────────────────────
-        if let Some(ref fi) = screen.filter_input {
+        if screen.export_prompt {
+            f.render_widget(
+                Paragraph::new(" Export:  c = CSV   j = JSON   Esc = cancel ")
+                    .block(Block::default().borders(Borders::ALL))
+                    .style(Style::default().fg(Color::Yellow)),
+                chunks[3],
+            );
+        } else if let Some(ref fi) = screen.filter_input {
             let prompt = format!(" Filter [{}] > {}", fi.col_name, fi.value);
             f.render_widget(
                 Paragraph::new(prompt.clone())
@@ -595,7 +624,7 @@ impl DataGridScreen {
         } else if screen.read_only {
             f.render_widget(
                 Paragraph::new(
-                    " j/k: rows   h/l: cols   [/]: resize   g/G: first/last   Space: collapse   q: back to editor"
+                    " j/k: rows   h/l: cols   [/]: resize   g/G: first/last   Space: collapse   E: export   q: back"
                 )
                 .block(Block::default().borders(Borders::ALL))
                 .style(Style::default().fg(Color::DarkGray)),
@@ -614,7 +643,7 @@ impl DataGridScreen {
             };
             f.render_widget(
                 Paragraph::new(format!(
-                    " j/k: rows   h/l: cols   [/]: resize   g/G: first/last   Enter: cell   {}   {}   q: back",
+                    " j/k: rows   h/l: cols   [/]: resize   g/G: first/last   Enter: cell   {}   {}   E: export   q: back",
                     collapse_label, filter_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))

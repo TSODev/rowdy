@@ -8,6 +8,7 @@ use tokio::{
     time::{timeout, Duration},
 };
 use crate::config::{Config, ConnectionProfile};
+use crate::export;
 use crate::history::QueryHistory;
 use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{ColumnSchema, DbQueryResult, Value}};
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
@@ -223,6 +224,18 @@ impl App {
                             self.open_edit_record();
                         }
                     }
+                    DataGridAction::ExportCsv => {
+                        let table = self.data_grid_screen.table_name.clone();
+                        if let Some(ref r) = self.data_grid_screen.result.clone() {
+                            self.run_export(r, &table, false);
+                        }
+                    }
+                    DataGridAction::ExportJson => {
+                        let table = self.data_grid_screen.table_name.clone();
+                        if let Some(ref r) = self.data_grid_screen.result.clone() {
+                            self.run_export(r, &table, true);
+                        }
+                    }
                     DataGridAction::None => {}
                 }
             }
@@ -240,6 +253,18 @@ impl App {
                             self.open_fk_subgrid(ref_table, ref_col, fk_val);
                         } else {
                             self.open_fk_edit_record();
+                        }
+                    }
+                    DataGridAction::ExportCsv => {
+                        let table = self.fk_grid_screen.table_name.clone();
+                        if let Some(ref r) = self.fk_grid_screen.result.clone() {
+                            self.run_export(r, &table, false);
+                        }
+                    }
+                    DataGridAction::ExportJson => {
+                        let table = self.fk_grid_screen.table_name.clone();
+                        if let Some(ref r) = self.fk_grid_screen.result.clone() {
+                            self.run_export(r, &table, true);
                         }
                     }
                     DataGridAction::LoadMore | DataGridAction::ApplyFilter => {}
@@ -276,6 +301,18 @@ impl App {
             AppState::SqlResultGrid => {
                 match self.sql_result_grid_screen.handle_key(key) {
                     DataGridAction::Back => self.state = AppState::SqlEditor,
+                    DataGridAction::ExportCsv => {
+                        let table = self.sql_result_grid_screen.table_name.clone();
+                        if let Some(ref r) = self.sql_result_grid_screen.result.clone() {
+                            self.run_export(r, &table, false);
+                        }
+                    }
+                    DataGridAction::ExportJson => {
+                        let table = self.sql_result_grid_screen.table_name.clone();
+                        if let Some(ref r) = self.sql_result_grid_screen.result.clone() {
+                            self.run_export(r, &table, true);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -616,6 +653,27 @@ impl App {
             }
             None => {
                 self.sql_editor_screen.set_error("Not connected".into());
+            }
+        }
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+
+    fn run_export(&mut self, result: &crate::db::types::DbQueryResult, table_name: &str, as_json: bool) {
+        let res = if as_json {
+            export::export_json(result, table_name)
+        } else {
+            export::export_csv(result, table_name)
+        };
+        match res {
+            Ok(path) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                self.status_message = Some((format!("Saved: ~/{name}"), false));
+                self.status_message_ttl = 80;
+            }
+            Err(e) => {
+                self.status_message = Some((format!("Export failed: {e}"), true));
+                self.status_message_ttl = 80;
             }
         }
     }
