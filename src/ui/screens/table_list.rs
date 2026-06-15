@@ -129,18 +129,10 @@ impl TableListScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1), // header / connection info
                 Constraint::Min(0),    // table list
                 Constraint::Length(3), // filter input or help bar
             ])
             .split(area);
-
-        // Header
-        f.render_widget(
-            Paragraph::new(format!(" Connected: {}", screen.db_info))
-                .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            chunks[0],
-        );
 
         // Table list — collect owned Strings to release the immutable borrow
         // before we need &mut screen.list_state for render_stateful_widget.
@@ -169,7 +161,7 @@ impl TableListScreen {
             .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
             .highlight_symbol("> ");
 
-        f.render_stateful_widget(list, chunks[1], &mut screen.list_state);
+        f.render_stateful_widget(list, chunks[0], &mut screen.list_state);
 
         // Filter bar or help bar
         if screen.filter_mode {
@@ -178,16 +170,16 @@ impl TableListScreen {
                 Paragraph::new(filter_display.clone())
                     .block(Block::default().borders(Borders::ALL))
                     .style(Style::default().fg(Color::Yellow)),
-                chunks[2],
+                chunks[1],
             );
             // cursor after the '/' and the typed text
-            f.set_cursor(chunks[2].x + 1 + filter_display.len() as u16, chunks[2].y + 1);
+            f.set_cursor(chunks[1].x + 1 + filter_display.len() as u16, chunks[1].y + 1);
         } else {
             f.render_widget(
                 Paragraph::new(" j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect ")
                     .block(Block::default().borders(Borders::ALL))
                     .style(Style::default().fg(Color::DarkGray)),
-                chunks[2],
+                chunks[1],
             );
         }
     }
