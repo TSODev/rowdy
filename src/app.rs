@@ -56,6 +56,7 @@ pub enum AppState {
     FkGrid,
     EditRecord,
     SqlEditor,
+    SqlResultGrid,
     Quit,
 }
 
@@ -67,8 +68,9 @@ pub struct App {
     pub connection_screen: ConnectionScreen,
     pub table_list_screen: TableListScreen,
     pub data_grid_screen: DataGridScreen,
-    pub fk_grid_screen: DataGridScreen,  // current FK level
-    fk_history: Vec<DataGridScreen>,      // previous FK levels (navigation stack)
+    pub fk_grid_screen: DataGridScreen,      // current FK level
+    fk_history: Vec<DataGridScreen>,         // previous FK levels (navigation stack)
+    pub sql_result_grid_screen: DataGridScreen, // read-only grid for SQL Editor results
     pub edit_record_screen: EditRecordScreen,
     pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
@@ -90,6 +92,7 @@ impl App {
             data_grid_screen: DataGridScreen::new(String::new()),
             fk_grid_screen: DataGridScreen::new(String::new()),
             fk_history: Vec::new(),
+            sql_result_grid_screen: DataGridScreen::new(String::new()),
             edit_record_screen: EditRecordScreen::new(String::new(), vec![], vec![]),
             sql_editor_screen: SqlEditorScreen::new(String::new()),
             active_client: None,
@@ -246,7 +249,14 @@ impl App {
                 match self.sql_editor_screen.handle_key(key) {
                     SqlEditorAction::Execute(sql) => self.spawn_execute_query(sql),
                     SqlEditorAction::Back => self.state = AppState::TableList,
+                    SqlEditorAction::OpenGrid(result) => self.open_sql_result_grid(result),
                     SqlEditorAction::None => {}
+                }
+            }
+            AppState::SqlResultGrid => {
+                match self.sql_result_grid_screen.handle_key(key) {
+                    DataGridAction::Back => self.state = AppState::SqlEditor,
+                    _ => {}
                 }
             }
             _ => {
@@ -406,6 +416,22 @@ impl App {
         let db_info = self.table_list_screen.db_info.clone();
         self.sql_editor_screen = SqlEditorScreen::new(db_info);
         self.state = AppState::SqlEditor;
+    }
+
+    fn open_sql_result_grid(&mut self, result: DbQueryResult) {
+        let count = result.rows.len();
+        let mut screen = DataGridScreen::new(String::new());
+        screen.display_name = Some("SQL Result".into());
+        screen.read_only = true;
+        screen.has_more = false;
+        screen.loading = false;
+        screen.loaded_count = count;
+        screen.total_count = Some(count as u64);
+        screen.status = None;
+        screen.table_state.select(if count > 0 { Some(0) } else { None });
+        screen.result = Some(result);
+        self.sql_result_grid_screen = screen;
+        self.state = AppState::SqlResultGrid;
     }
 
     // ── Async connection ──────────────────────────────────────────────────────

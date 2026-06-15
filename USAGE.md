@@ -283,16 +283,16 @@ Depuis le Data Grid, appuyez sur `Enter` pour ouvrir la vue d'édition de la lig
 
 ```
 ┌─ Edit: books ──────────────────────────────────────────────────────┐
-│   id           [PK]      5                                         │
-│ > title                  The Great Journey — vol. 5               │
-│   author_id    [→authors] 3                                        │
-│   isbn                   978-2-07-036024-5                        │
+│   id           [PK]      integer         5                         │
+│ > title                  character var…  The Great Journey — vol.5 │
+│   author_id    [→authors]integer         3                         │
+│   isbn                   text            978-2-07-036024-5         │
 └────────────────────────────────────────────────────────────────────┘
 ┌─ SQL Preview ──────────────────────────────────────────────────────┐
 │  UPDATE "books" SET "title" = 'The Great Journey — vol. 5'        │
 │  WHERE "id" = 5                                                    │
 └────────────────────────────────────────────────────────────────────┘
-  j/k: field   Enter/i: edit   Ctrl+S: save   Esc: back
+  j/k: field   Enter/i: edit   Space: toggle bool   Ctrl+S: save   Esc: back
 ```
 
 ### Navigation (mode Normal)
@@ -302,6 +302,7 @@ Depuis le Data Grid, appuyez sur `Enter` pour ouvrir la vue d'édition de la lig
 | `j` / `↓` | Champ suivant |
 | `k` / `↑` | Champ précédent |
 | `Enter` / `i` | Activer l'édition du champ sélectionné |
+| `Space` | Basculer `true` ↔ `false` sur un champ booléen (sans passer en mode édition) |
 | `Ctrl+S` | Sauvegarder (exécute l'UPDATE et recharge la grille) |
 | `Esc` / `q` | Retour au Data Grid sans sauvegarder |
 
@@ -323,6 +324,19 @@ Depuis le Data Grid, appuyez sur `Enter` pour ouvrir la vue d'édition de la lig
 |-------|---------------|
 | `[PK]` (cyan) | Clé primaire — lecture seule, non éditable |
 | `[→table]` (magenta) | Clé étrangère pointant vers `table` |
+
+### Colonne type
+
+Le type SQL brut du champ est affiché en bleu entre le badge et la valeur (`integer`, `character varying`, `boolean`, `timestamp with time zone`…). Les types longs sont tronqués à 16 caractères.
+
+### Types supportés
+
+| Type | Comportement |
+|------|-------------|
+| Numériques (`INT`, `FLOAT`, `NUMERIC`…) | SQL généré sans guillemets (`42`, `3.14`) |
+| `BOOLEAN` | `Space` pour toggler ; SQL génère `TRUE`/`FALSE` |
+| `DATE`, `TIMESTAMP`, `UUID`, `JSON`… | Édition texte libre ; la base de données caste automatiquement |
+| `TEXT`, `VARCHAR`… | Édition texte standard |
 
 Les champs modifiés sont surlignés en **vert**. L'aperçu SQL se met à jour en temps réel et n'affiche `-- No changes` que si aucune valeur n'a été modifiée.
 
@@ -356,6 +370,7 @@ Depuis la vue liste des tables, appuyez sur `e` pour ouvrir l'éditeur SQL.
 | _(frappe)_ | Saisir du SQL multi-lignes |
 | `F5` | Exécuter la requête |
 | `Ctrl+Enter` | Exécuter la requête |
+| `F4` | Ouvrir le résultat SELECT dans le Data Grid complet |
 | `Tab` | Basculer vers le panneau Résultats (si résultat disponible) |
 | `Ctrl+Q` | Retour à la liste des tables |
 
@@ -373,7 +388,12 @@ Toutes les touches d'édition standard sont supportées : flèches, `Backspace`,
 | `G` | Dernière ligne |
 | `PgDown` | +10 lignes |
 | `PgUp` | -10 lignes |
+| `F4` | Ouvrir le résultat dans le Data Grid complet |
 | `Tab` / `Esc` | Retour dans l'éditeur |
+
+### Data Grid en lecture seule (`F4`)
+
+`F4` transfère le résultat du SELECT dans un Data Grid complet (`SQL Result`) avec toutes les fonctionnalités de navigation : `j/k/h/l`, resize `[/]`, panel preview, collapse. Les filtres et l'édition sont désactivés. `q`/`Esc` retourne à l'éditeur SQL avec la requête et le résultat intacts.
 
 ### Détection automatique SELECT / DML
 

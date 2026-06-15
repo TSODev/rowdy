@@ -7,6 +7,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-06-15
+
+### Added
+
+#### EditRecord — affichage du type et gestion des booléens
+- **Colonne type** (16 caractères, bleu) affichée entre le badge `[PK]`/`[→FK]` et la valeur — le type SQL brut (`integer`, `character varying`, `boolean`…) est visible directement dans l'écran d'édition
+- **Toggle booléen** : `Space` en mode navigation bascule `true` ↔ `false` sur tout champ de type `BOOL`/`BOOLEAN`/`TINYINT(1)` sans passer en mode édition
+- **`sql_literal` BOOLEAN** : génère désormais `TRUE`/`FALSE` sans guillemets (au lieu de `'true'`/`'false'`)
+
+#### SQL Editor → Data Grid (`F4`)
+- **`F4`** depuis l'éditeur SQL (quel que soit le focus — éditeur ou panneau résultats) ouvre le résultat SELECT courant dans le Data Grid complet (`AppState::SqlResultGrid`)
+- La grille est en **lecture seule** (`read_only = true`) : navigation `j/k/h/l`, resize `[/]`, panel preview, collapse — tout fonctionne ; filtres et édition (`Enter`) sont désactivés
+- La barre d'info affiche `SQL Result` ; la barre d'aide indique `q: back to editor`
+- `q`/`Esc` retourne à l'éditeur SQL avec la requête et le résultat intacts
+
 ## [0.5.3] — 2026-06-15
 
 ### Added
@@ -215,7 +230,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/TSODev/rowdy/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/TSODev/rowdy/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/TSODev/rowdy/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/TSODev/rowdy/compare/v0.5.0...v0.5.1

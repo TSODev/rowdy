@@ -30,6 +30,7 @@ pub enum SqlEditorAction {
     None,
     Execute(String),
     Back,
+    OpenGrid(DbQueryResult),
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -106,6 +107,12 @@ impl SqlEditorScreen {
                     Input { key: Key::Char('q'), ctrl: true, .. } => {
                         return SqlEditorAction::Back;
                     }
+                    // Open result in full grid: F4
+                    Input { key: Key::F(4), .. } => {
+                        if let Some(QueryResult::Rows(r)) = &self.result {
+                            return SqlEditorAction::OpenGrid(r.clone());
+                        }
+                    }
                     // Switch focus to results (only when results exist)
                     Input { key: Key::Tab, .. } => {
                         if self.result.is_some() {
@@ -123,6 +130,11 @@ impl SqlEditorScreen {
                     Input { key: Key::Tab, .. }
                     | Input { key: Key::Esc, .. } => {
                         self.focus = EditorFocus::Editor;
+                    }
+                    Input { key: Key::F(4), .. } => {
+                        if let Some(QueryResult::Rows(r)) = &self.result {
+                            return SqlEditorAction::OpenGrid(r.clone());
+                        }
                     }
                     Input { key: Key::Char('j'), .. }
                     | Input { key: Key::Down, .. }   => self.result_move_row(1),
@@ -382,9 +394,9 @@ fn draw_results(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
 fn draw_help(f: &mut Frame<'_>, screen: &SqlEditorScreen, area: Rect) {
     let text = match screen.focus {
         EditorFocus::Editor =>
-            " F5 / Ctrl+Enter: execute   Tab: results pane   Ctrl+Q: back ",
+            " F5 / Ctrl+Enter: execute   Tab: results pane   F4: open in grid   Ctrl+Q: back ",
         EditorFocus::Results =>
-            " j/k: rows   h/l: cols   g/G: first/last   PgUp/Dn: page   Tab/Esc: editor ",
+            " j/k: rows   h/l: cols   g/G: first/last   PgUp/Dn: page   F4: open in grid   Tab/Esc: editor ",
     };
     f.render_widget(
         Paragraph::new(text)

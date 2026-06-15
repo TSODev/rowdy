@@ -43,6 +43,7 @@ pub struct DataGridScreen {
     pub col_offset: usize,
     pub collapsed_cols: HashSet<usize>,
     pub col_widths: HashMap<usize, u16>,
+    pub read_only: bool,
     pub status: Option<String>,
     // Filtering
     pub filters: BTreeMap<String, String>,
@@ -68,6 +69,7 @@ impl DataGridScreen {
             col_offset: 0,
             collapsed_cols: HashSet::new(),
             col_widths: HashMap::new(),
+            read_only: false,
             status: Some("Loading…".into()),
             filters: BTreeMap::new(),
             filter_input: None,
@@ -211,12 +213,12 @@ impl DataGridScreen {
             }
 
             // Filter: open input for selected column
-            KeyCode::Char('f') => {
+            KeyCode::Char('f') if !self.read_only => {
                 self.start_filter();
                 DataGridAction::None
             }
             // Remove filter on selected column
-            KeyCode::Char('d') => {
+            KeyCode::Char('d') if !self.read_only => {
                 if let Some(name) = self.selected_col_name() {
                     if self.filters.remove(&name).is_some() {
                         return DataGridAction::ApplyFilter;
@@ -225,7 +227,7 @@ impl DataGridScreen {
                 DataGridAction::None
             }
             // Clear all filters
-            KeyCode::Char('F') => {
+            KeyCode::Char('F') if !self.read_only => {
                 if !self.filters.is_empty() {
                     self.filters.clear();
                     DataGridAction::ApplyFilter
@@ -234,7 +236,7 @@ impl DataGridScreen {
                 }
             }
 
-            KeyCode::Enter => DataGridAction::EnterCell,
+            KeyCode::Enter if !self.read_only => DataGridAction::EnterCell,
 
             // Manual column resize
             KeyCode::Char('[') => {
@@ -590,6 +592,15 @@ impl DataGridScreen {
             f.set_cursor(
                 chunks[3].x + 1 + prompt.len() as u16,
                 chunks[3].y + 1,
+            );
+        } else if screen.read_only {
+            f.render_widget(
+                Paragraph::new(
+                    " j/k: rows   h/l: cols   [/]: resize   g/G: first/last   Space: collapse   q: back to editor"
+                )
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default().fg(Color::DarkGray)),
+                chunks[3],
             );
         } else {
             let collapse_label = if screen.collapsed_cols.contains(&screen.selected_col) {

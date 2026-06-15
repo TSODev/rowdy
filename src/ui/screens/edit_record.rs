@@ -10,6 +10,7 @@ use crate::db::types::ColumnSchema;
 
 const NAME_W: usize = 20;
 const BADGE_W: usize = 14;
+const TYPE_W: usize = 16;
 
 // ── Modes ─────────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,17 @@ impl EditRecordScreen {
                         self.cursor_pos = self.current_values[self.selected_field].chars().count();
                         self.mode = EditFieldMode::Editing;
                         self.status = None;
+                    }
+                }
+                EditRecordAction::None
+            }
+
+            // Toggle boolean with Space
+            KeyCode::Char(' ') => {
+                if let Some(col) = self.schema.get(self.selected_field) {
+                    if !col.is_pk && is_bool_type(&col.type_name) {
+                        let val = &mut self.current_values[self.selected_field];
+                        *val = if is_truthy(val) { "false".to_string() } else { "true".to_string() };
                     }
                 }
                 EditRecordAction::None
@@ -220,7 +232,7 @@ impl EditRecordScreen {
             screen.scroll_offset = screen.selected_field - visible_rows + 1;
         }
 
-        let val_w = (chunks[0].width as usize).saturating_sub(2 + NAME_W + BADGE_W);
+        let val_w = (chunks[0].width as usize).saturating_sub(2 + NAME_W + BADGE_W + TYPE_W);
 
         // ── Build field lines ─────────────────────────────────────────────────
         let mut lines: Vec<Line> = vec![];
@@ -287,9 +299,21 @@ impl EditRecordScreen {
                 Style::default()
             };
 
+            let raw_type = &col.type_name;
+            let type_str = format!(
+                "{:<TYPE_W$}",
+                if raw_type.chars().count() > TYPE_W {
+                    raw_type.chars().take(TYPE_W - 1).collect::<String>() + "…"
+                } else {
+                    raw_type.clone()
+                }
+            );
+            let type_style = Style::default().fg(Color::Blue);
+
             lines.push(Line::from(vec![
                 Span::styled(format!("{sel_str}{name_str}"), name_style),
                 Span::styled(badge_str, badge_style),
+                Span::styled(type_str, type_style),
                 Span::styled(display_val, val_style),
             ]));
         }
@@ -314,7 +338,7 @@ impl EditRecordScreen {
         if matches!(screen.mode, EditFieldMode::Editing) {
             let field_row = screen.selected_field.saturating_sub(screen.scroll_offset);
             let visible_cursor = screen.cursor_pos.min(val_w);
-            let cursor_x = chunks[0].x + 1 + (NAME_W + BADGE_W) as u16 + visible_cursor as u16;
+            let cursor_x = chunks[0].x + 1 + (NAME_W + BADGE_W + TYPE_W) as u16 + visible_cursor as u16;
             let cursor_y = chunks[0].y + 1 + field_row as u16;
             if cursor_y < chunks[0].y + chunks[0].height.saturating_sub(1) {
                 f.set_cursor(cursor_x, cursor_y);
@@ -340,7 +364,7 @@ impl EditRecordScreen {
         let help = if matches!(screen.mode, EditFieldMode::Editing) {
             " ← →: cursor   Backspace/Del: delete   Enter/Esc: done"
         } else {
-            " j/k: field   Enter/i: edit   Ctrl+S: save   Esc: back"
+            " j/k: field   Enter/i: edit   Space: toggle bool   Ctrl+S: save   Esc: back"
         };
         f.render_widget(
             Paragraph::new(help)
@@ -353,11 +377,23 @@ impl EditRecordScreen {
 
 // ── SQL helpers ───────────────────────────────────────────────────────────────
 
+fn is_bool_type(type_name: &str) -> bool {
+    let tn = type_name.to_uppercase();
+    tn.contains("BOOL") || tn == "TINYINT(1)"
+}
+
+fn is_truthy(val: &str) -> bool {
+    matches!(val.to_lowercase().as_str(), "true" | "t" | "1" | "yes" | "on")
+}
+
 fn sql_literal(val: &str, type_name: &str) -> String {
     if val == "NULL" {
         return "NULL".to_string();
     }
     let tn = type_name.to_uppercase();
+    if is_bool_type(type_name) {
+        return if is_truthy(val) { "TRUE".to_string() } else { "FALSE".to_string() };
+    }
     let is_num = tn.contains("INT") || tn.contains("FLOAT") || tn.contains("REAL")
         || tn.contains("NUMERIC") || tn.contains("DECIMAL") || tn.contains("DOUBLE")
         || tn.contains("NUMBER");
