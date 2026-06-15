@@ -25,6 +25,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Liste des tables — en-tête "Connected:"** : ligne redondante supprimée (la barre de statut affiche déjà le type et l'URL de connexion) — la liste gagne une ligne de hauteur
 - **Écran de connexion — message "Connecting…"** : l'URL affichée pendant la connexion passe maintenant par `redact_url()` — le mot de passe et les tokens (`authToken`, `password`, etc.) sont masqués `***` comme dans la barre de statut
 - **Data Grid — redimensionnement de colonne** : les touches `[` / `]` remplacées par `-` / `=`, directement accessibles sur les claviers AZERTY et QWERTY sans modificateur
 - **Mode read-only — double `?` dans l'URL** : `strip_readonly_param` normalise les `?` supplémentaires en `&` avant de parser les paramètres — `?readonly=true` est détecté même quand d'autres paramètres sont déjà présents (`?sslmode=require&channel_binding=require?readonly=true` fonctionne)

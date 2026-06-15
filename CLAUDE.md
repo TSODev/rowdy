@@ -198,6 +198,7 @@ src/
 - [x] `redact_url()` — masque `user:password@` et paramètres sensibles (`authToken`, `token`, `password`, `pwd`, `secret`, `key`, `auth`) dans toute URL affichée dans l'UI (status bar, en-tête liste des tables, message "Connecting…")
 - [x] Historique des requêtes SQL — `QueryHistory` persisté dans `~/.config/rowdy/history.toml` (max 200 entrées, dédoublonné), `Alt+↑/↓` dans l'éditeur SQL pour naviguer
 - [x] Export CSV / JSON — `E` depuis DataGrid/FkGrid/SqlResultGrid, prompt `c`=CSV / `j`=JSON / `Esc`=cancel, fichier écrit dans `~/rowdy_<table>_<timestamp>.<ext>`
+- [x] Liste des tables : en-tête "Connected:" supprimé (doublon avec la status bar)
 - [x] Modal de confirmation / erreur — overlay centré, `Ctrl+S` dans EditRecord ouvre confirmation avant UPDATE, erreurs de sauvegarde en modal d'erreur rouge, `Y`=confirme / `N`/`Esc`=annule
 - [x] Mode read-only prod — `?readonly=true` (ou `&readonly=true`) dans l'URL, badge `READ-ONLY` rouge en status bar, bloque EditRecord + DML SQL editor, filtres/export conservés, reset à la déconnexion ; double `?` toléré (`strip_readonly_param` normalise en `&`)
 
