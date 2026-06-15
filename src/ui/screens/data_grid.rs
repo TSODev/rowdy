@@ -46,6 +46,7 @@ pub struct DataGridScreen {
     pub collapsed_cols: HashSet<usize>,
     pub col_widths: HashMap<usize, u16>,
     pub read_only: bool,
+    pub prod_readonly: bool,
     pub status: Option<String>,
     pub export_prompt: bool,
     // Filtering
@@ -73,6 +74,7 @@ impl DataGridScreen {
             collapsed_cols: HashSet::new(),
             col_widths: HashMap::new(),
             read_only: false,
+            prod_readonly: false,
             status: Some("Loading…".into()),
             export_prompt: false,
             filters: BTreeMap::new(),
@@ -626,6 +628,21 @@ impl DataGridScreen {
                 Paragraph::new(
                     " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Space: collapse   E: export   q: back"
                 )
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default().fg(Color::DarkGray)),
+                chunks[3],
+            );
+        } else if screen.prod_readonly {
+            let filter_hint = if screen.filters.is_empty() {
+                "f: filter col"
+            } else {
+                "f: edit filter   d: rm col filter   F: clear all"
+            };
+            f.render_widget(
+                Paragraph::new(format!(
+                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   {}   E: export   q: back   [READ-ONLY]",
+                    filter_hint
+                ))
                 .block(Block::default().borders(Borders::ALL))
                 .style(Style::default().fg(Color::DarkGray)),
                 chunks[3],

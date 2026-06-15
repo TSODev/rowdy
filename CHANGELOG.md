@@ -7,6 +7,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+#### Mode read-only production
+- Ajouter `?readonly=true` à n'importe quelle URL de connexion pour activer le mode lecture seule
+- **Badge `READ-ONLY`** rouge en barre de statut, visible depuis tous les écrans
+- **Écriture bloquée** : Enter (EditRecord) désactivé en Data Grid et FK View ; INSERT/UPDATE/DELETE/DROP refusés dans l'éditeur SQL avec message d'erreur explicite
+- **Navigation conservée** : filtres, pagination, export CSV/JSON, redimensionnement colonnes continuent de fonctionner
+- Le flag est réinitialisé à la déconnexion
+- Le paramètre `readonly` est strippé de l'URL avant connexion (non transmis au driver)
+
 ### Fixed
 
 - **Écran de connexion — message "Connecting…"** : l'URL affichée pendant la connexion passe maintenant par `redact_url()` — le mot de passe et les tokens (`authToken`, `password`, etc.) sont masqués `***` comme dans la barre de statut

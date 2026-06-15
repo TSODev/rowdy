@@ -76,6 +76,7 @@ pub struct App {
     pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
     pub connected_db_info: Option<String>,
+    pub prod_readonly: bool,
     pub status_message: Option<(String, bool)>,
     pub status_message_ttl: u8,
     pub history: QueryHistory,
@@ -102,6 +103,7 @@ impl App {
             sql_editor_screen: SqlEditorScreen::new(String::new()),
             active_client: None,
             connected_db_info: None,
+            prod_readonly: false,
             status_message: None,
             status_message_ttl: 0,
             history: QueryHistory::load(),
@@ -205,6 +207,7 @@ impl App {
                     TableListAction::OpenEditor => self.open_sql_editor(),
                     TableListAction::Disconnect => {
                         self.active_client = None;
+                        self.prod_readonly = false;
                         self.table_list_screen = TableListScreen::new();
                         self.connection_screen.reset_input();
                         self.state = AppState::Connection;
@@ -218,7 +221,10 @@ impl App {
                     DataGridAction::ApplyFilter => self.spawn_reload_filters(),
                     DataGridAction::LoadMore => self.spawn_load_more(),
                     DataGridAction::EnterCell => {
-                        if let Some((ref_table, ref_col, fk_val)) = self.selected_fk_info(false) {
+                        if self.prod_readonly {
+                            self.status_message = Some(("Read-only mode — edits disabled".into(), true));
+                            self.status_message_ttl = 60;
+                        } else if let Some((ref_table, ref_col, fk_val)) = self.selected_fk_info(false) {
                             self.open_fk_subgrid(ref_table, ref_col, fk_val);
                         } else {
                             self.open_edit_record();
@@ -249,7 +255,10 @@ impl App {
                         }
                     }
                     DataGridAction::EnterCell => {
-                        if let Some((ref_table, ref_col, fk_val)) = self.selected_fk_info(true) {
+                        if self.prod_readonly {
+                            self.status_message = Some(("Read-only mode — edits disabled".into(), true));
+                            self.status_message_ttl = 60;
+                        } else if let Some((ref_table, ref_col, fk_val)) = self.selected_fk_info(true) {
                             self.open_fk_subgrid(ref_table, ref_col, fk_val);
                         } else {
                             self.open_fk_edit_record();
@@ -350,6 +359,7 @@ impl App {
         let display = format!("{} [{}={}]", ref_table, ref_col, fk_val);
         let mut screen = DataGridScreen::new(ref_table.clone());
         screen.display_name = Some(display);
+        screen.prod_readonly = self.prod_readonly;
         self.fk_grid_screen = screen;
         self.state = AppState::FkGrid;
 
@@ -489,18 +499,20 @@ impl App {
     // ── Async connection ──────────────────────────────────────────────────────
 
     fn spawn_connect(&mut self, url: String, db_type: String) {
+        let (clean_url, is_readonly) = strip_readonly_param(&url);
+        self.prod_readonly = is_readonly;
         self.connection_screen.status =
-            Some(format!("Connecting [{db_type}] {} …", redact_url(&url)));
+            Some(format!("Connecting [{db_type}] {} …", redact_url(&clean_url)));
         let tx = self.db_tx.clone();
         tokio::spawn(async move {
             let event = if db_type == "redis" {
-                match connectors::connect_kv(&db_type, &url).await {
-                    Ok(c)  => DbEvent::KvConnected { client: Arc::from(c), url, db_type },
+                match connectors::connect_kv(&db_type, &clean_url).await {
+                    Ok(c)  => DbEvent::KvConnected { client: Arc::from(c), url: clean_url, db_type },
                     Err(e) => DbEvent::ConnectionFailed(e.to_string()),
                 }
             } else {
-                match connectors::connect_sql(&db_type, &url).await {
-                    Ok(c)  => DbEvent::SqlConnected { client: Arc::from(c), url, db_type },
+                match connectors::connect_sql(&db_type, &clean_url).await {
+                    Ok(c)  => DbEvent::SqlConnected { client: Arc::from(c), url: clean_url, db_type },
                     Err(e) => DbEvent::ConnectionFailed(e.to_string()),
                 }
             };
@@ -541,6 +553,7 @@ impl App {
 
     fn spawn_load_data(&mut self, table_name: String) {
         self.data_grid_screen = DataGridScreen::new(table_name.clone());
+        self.data_grid_screen.prod_readonly = self.prod_readonly;
         self.fk_history.clear();
         self.state = AppState::DataGrid;
 
@@ -601,6 +614,10 @@ impl App {
     // ── Async SQL execution (SQL editor) ──────────────────────────────────────
 
     fn spawn_execute_query(&mut self, sql: String) {
+        if self.prod_readonly && !is_select_query(&sql) {
+            self.sql_editor_screen.set_error("Read-only mode — write statements are disabled".into());
+            return;
+        }
         self.sql_editor_screen.set_running();
         let tx = self.db_tx.clone();
         match &self.active_client {
@@ -816,6 +833,34 @@ fn redact_url(url: &str) -> String {
     }
 
     result
+}
+
+// ── Read-only URL param stripping ─────────────────────────────────────────────
+
+fn strip_readonly_param(url: &str) -> (String, bool) {
+    let Some(q_pos) = url.find('?') else {
+        return (url.to_string(), false);
+    };
+    let base = &url[..q_pos];
+    let query = &url[q_pos + 1..];
+    let mut readonly = false;
+    let remaining: Vec<&str> = query.split('&').filter(|pair| {
+        if let Some(eq) = pair.find('=') {
+            if pair[..eq].to_ascii_lowercase() == "readonly"
+                && pair[eq + 1..].to_ascii_lowercase() == "true"
+            {
+                readonly = true;
+                return false;
+            }
+        }
+        true
+    }).collect();
+    let new_url = if remaining.is_empty() {
+        base.to_string()
+    } else {
+        format!("{}?{}", base, remaining.join("&"))
+    };
+    (new_url, readonly)
 }
 
 // ── SQL query helpers ─────────────────────────────────────────────────────────

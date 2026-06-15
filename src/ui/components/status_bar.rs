@@ -56,6 +56,12 @@ pub fn draw(f: &mut Frame<'_>, area: Rect, app: &App) {
         spans.push(Span::styled(format!("  [{count} rows]"), dim_style));
     }
 
+    if app.prod_readonly {
+        let ro_style = Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD);
+        spans.push(Span::styled("  ", bg));
+        spans.push(Span::styled(" READ-ONLY ", ro_style));
+    }
+
     // Flash message — right-aligned, fills remaining space
     if let Some((ref msg, is_err)) = app.status_message {
         let flash_style = if is_err {
