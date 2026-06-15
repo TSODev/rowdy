@@ -7,6 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-06-15
+
 ### Added
 
 #### Distinction TABLE / VIEW dans la liste des tables
@@ -358,7 +360,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/TSODev/rowdy/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/TSODev/rowdy/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/TSODev/rowdy/compare/v0.5.8...v0.6.0
 [0.5.8]: https://github.com/TSODev/rowdy/compare/v0.5.7...v0.5.8
