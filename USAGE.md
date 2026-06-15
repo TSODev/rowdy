@@ -203,8 +203,8 @@ Depuis la vue liste des tables, appuyez sur `Enter` pour ouvrir une table.
 | `PgDown` | +10 lignes |
 | `PgUp` | -10 lignes |
 | `Space` | Réduire / agrandir la colonne sélectionnée (collapse) |
-| `[` | Réduire la largeur de la colonne sélectionnée (−5, min 4) |
-| `]` | Agrandir la largeur de la colonne sélectionnée (+5, max 80) |
+| `-` | Réduire la largeur de la colonne sélectionnée (−5, min 4) |
+| `=` | Agrandir la largeur de la colonne sélectionnée (+5, max 80) |
 | `Enter` | Cellule FK → ouvre la sous-grille liée ; cellule normale → édition de la ligne |
 | `E` | Ouvrir le prompt d'export (puis `c`=CSV, `j`=JSON, `Esc`=annuler) |
 | `q` / `Esc` | Retour à la liste des tables |
@@ -214,7 +214,7 @@ Depuis la vue liste des tables, appuyez sur `Enter` pour ouvrir une table.
 - La **colonne sélectionnée** est indiquée par un en-tête souligné en jaune (`h/l` pour naviguer).
 - Les **colonnes filtrées** sont mises en évidence en cyan dans l'en-tête.
 - `Space` **collapse** une colonne à 3 caractères pour gagner de la place, ou la **restaure**.
-- `[` / `]` ajuste finement la largeur par pas de 5 caractères (min 4, max 80) — la valeur est mémorisée pour la session.
+- `-` / `=` ajuste finement la largeur par pas de 5 caractères (min 4, max 80) — la valeur est mémorisée pour la session.
 - Les colonnes défilent automatiquement pour garder la colonne sélectionnée toujours visible.
 - La largeur naturelle est calculée d'après le contenu (max 40 caractères). Valeurs longues tronquées avec `…`.
 
@@ -276,7 +276,7 @@ La sous-grille FK fonctionne comme le Data Grid normal :
 |--------|--------|
 | `j` / `k` | Ligne suivante / précédente |
 | `h` / `l` | Colonne suivante / précédente |
-| `[` / `]` | Redimensionner la colonne |
+| `-` / `=` | Redimensionner la colonne |
 | `Enter` | Cellule FK → niveau FK suivant (récursif) ; cellule normale → édition |
 | `Esc` / `q` | Remonter d'un niveau (ou retour au Data Grid si niveau racine) |
 
@@ -408,7 +408,7 @@ Le curseur d'historique se réinitialise dès qu'une nouvelle requête est exéc
 
 ### Data Grid en lecture seule (`F4`)
 
-`F4` transfère le résultat du SELECT dans un Data Grid complet (`SQL Result`) avec toutes les fonctionnalités de navigation : `j/k/h/l`, resize `[/]`, panel preview, collapse. Les filtres et l'édition sont désactivés. `q`/`Esc` retourne à l'éditeur SQL avec la requête et le résultat intacts. L'export (`E`) est disponible depuis ce mode.
+`F4` transfère le résultat du SELECT dans un Data Grid complet (`SQL Result`) avec toutes les fonctionnalités de navigation : `j/k/h/l`, resize `-/=`, panel preview, collapse. Les filtres et l'édition sont désactivés. `q`/`Esc` retourne à l'éditeur SQL avec la requête et le résultat intacts. L'export (`E`) est disponible depuis ce mode.
 
 ### Détection automatique SELECT / DML
 
@@ -442,6 +442,57 @@ La status bar confirme le nom du fichier créé : `Saved: ~/rowdy_books_17184534
 
 ---
 
+## Mode read-only (production)
+
+Pour se connecter en lecture seule et bloquer toute modification accidentelle, ajoutez `?readonly=true` (ou `&readonly=true` si d'autres paramètres sont déjà présents) à l'URL de connexion.
+
+### Activation
+
+**Saisie manuelle :**
+```
+postgres://user:pass@prod-host/mydb?readonly=true
+```
+
+**Dans le fichier de config :**
+```toml
+[[connections]]
+name = "Production (read-only)"
+type = "postgres"
+url = "postgres://user:pass@prod-host/mydb?readonly=true"
+```
+
+Si d'autres paramètres existent déjà, utilisez `&` :
+```
+postgres://user:pass@prod-host/mydb?sslmode=require&readonly=true
+```
+
+Le paramètre `readonly=true` est strippé de l'URL avant connexion — il n'est pas transmis au driver.
+
+### Indicateur visuel
+
+La barre de statut affiche un badge rouge permanent :
+
+```
+ DATA GRID   ● [postgres] prod-host/mydb   READ-ONLY
+```
+
+### Ce qui est bloqué
+
+| Action | Comportement |
+|--------|-------------|
+| `Enter` sur une cellule (Data Grid / FK View) | Message d'erreur flash, aucune ouverture de l'écran d'édition |
+| `INSERT`, `UPDATE`, `DELETE`, `DROP`, `CREATE`… dans l'éditeur SQL | Message d'erreur rouge, requête non exécutée |
+
+### Ce qui reste disponible
+
+Navigation, filtres, pagination infinite scroll, redimensionnement de colonnes, prévisualisation de cellule, sous-grilles FK, export CSV/JSON — tout fonctionne normalement.
+
+### Désactivation
+
+Le mode read-only est lié à la session de connexion. Se déconnecter (`q` depuis la liste des tables) le réinitialise automatiquement.
+
+---
+
 ## Barre de statut
 
 Une ligne permanente est affichée en bas de l'écran depuis tous les écrans. Elle indique :
@@ -456,6 +507,7 @@ Une ligne permanente est affichée en bas de l'écran depuis tous les écrans. E
 | `●` vert / `○` rouge | Connecté / déconnecté |
 | Info DB | Type de BDD + URL (mot de passe et tokens masqués, ex. `user:***@host`, `authToken=***`) |
 | `[N rows]` | Nombre total de lignes (DataGrid / FK View / SQL Result seulement) |
+| Badge `READ-ONLY` (fond rouge) | Connexion en mode lecture seule — toute écriture est bloquée |
 | Message flash | Confirmation (vert) ou erreur (rouge) pendant ~4 secondes après une action |
 
 ---
