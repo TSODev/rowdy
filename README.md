@@ -52,7 +52,6 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Redis key-detail view — `Enter` on a key shows its content (string/hash/list/set/zset) in a read-only grid with TTL | ✅ |
 | Schema panel in table list — columns with PK/FK badges, outgoing and incoming FK relations, auto-loaded on connect | ✅ |
 | ERD graph view (`r`) — star layout with box-drawing, bent arrows routed from exact FK column, navigate between boxes | ✅ |
-| Schema / ERD view of FK relationships | 🔲 planned |
 | MongoDB connector | 🔲 planned |
 
 ---
@@ -143,6 +142,7 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | `j` / `k` | Navigate tables |
 | `Enter` | Open table in Data Grid |
 | `e` | Open SQL Editor |
+| `r` | Open ERD graph view centered on selected table |
 | `/` | Filter tables |
 | `q` | Disconnect |
 
@@ -175,6 +175,16 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | `Backspace` / `Del` | Delete character |
 | `Ctrl+S` | Save changes — opens confirmation modal before executing UPDATE |
 | `Esc` / `q` | Back to Data Grid without saving |
+
+### ERD graph view (`r`)
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` or `Tab` | Cycle between visible table boxes |
+| `Enter` | Re-center view on selected box (navigate the graph) |
+| `q` / `Esc` | Back to table list |
+
+The ERD view displays a **star layout**: the selected table in the center (yellow box), tables with incoming FK on the left (cyan), and tables referenced by outgoing FK on the right (cyan). Arrows are routed from the exact FK column line. No additional queries are made — the schema is reused from the panel loaded on connect.
 
 ### SQL Editor
 
