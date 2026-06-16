@@ -9,6 +9,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+#### Hooks pre-connect / post-disconnect par profil
+- Champs optionnels `pre_connect` et `post_disconnect` dans `ConnectionProfile` (TOML) — rétrocompatibles (`skip_serializing_if = "Option::is_none"`)
+- `pre_connect` : exécuté via `sh -c` **avant** l'établissement de la connexion DB — cas d'usage : ouvrir un tunnel SSH, activer un VPN, initialiser un proxy
+  - Rowdy affiche "Running pre-connect script…" pendant l'exécution, puis "Connecting…" une fois terminé
+  - Un code de retour non-zéro n'est pas bloquant : la connexion DB est tentée malgré tout (tunnel déjà ouvert, etc.)
+- `post_disconnect` : exécuté via `sh -c` dans deux cas :
+  - Retour à l'écran de connexion (`q` depuis la liste des tables) — fire & forget, non-bloquant
+  - Fermeture de l'application (`Ctrl-C` ou `q`) — **attendu** avant la sortie pour une fermeture propre du tunnel
+- Saisie directe dans l'écran de connexion (champs Pre-connect et Post-disconnect) et sauvegarde avec `Ctrl+S`
+
+#### Écran de connexion — navigation multi-champs
+- Le panneau "New Connection" expose désormais 4 champs distincts : **Type**, **URL**, **Pre-connect script**, **Post-disconnect script**
+- `Tab` cycle le focus entre les champs (Type → URL → Pre-connect → Post-disconnect → Type) ; champ actif surligné en jaune
+- `←` / `→` (ou toute touche alphanumérique) change le type de BDD quand le champ **Type** est actif
+- `Enter` se connecte avec l'URL et les scripts courants quel que soit le champ actif
+- `Ctrl+S` sauvegarde l'ensemble (URL + scripts + nom de profil)
+
 #### Vue ERD graphique (niveau 2)
 - Touche `r` depuis la liste des tables ouvre une vue ERD centrée sur la table sélectionnée
 - Layout en étoile : table centrale (encadré jaune) entourée des tables liées par FK
@@ -26,7 +43,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Section **Outgoing FK** : clés étrangères qui partent de la table sélectionnée
 - Section **Incoming FK** : clés étrangères d'autres tables qui pointent vers la table sélectionnée
 - Non disponible pour les connecteurs KV (Redis) : liste pleine largeur conservée
-- Roadmap : niveau 2 (boîtes box-drawing + flèches ASCII graphiques) prévu
 
 ### Fixed
 
