@@ -13,6 +13,7 @@ pub enum TableListAction {
     None,
     OpenTable { name: String, is_view: bool },
     OpenEditor,
+    OpenErd(String),
     Disconnect,
     SelectionChanged,
 }
@@ -112,6 +113,13 @@ impl TableListScreen {
             }
             KeyCode::Char('/')                   => { self.filter_mode = true; TableListAction::None }
             KeyCode::Char('e')                   => TableListAction::OpenEditor,
+            KeyCode::Char('r') => {
+                if let Some(name) = self.selected_table_name() {
+                    TableListAction::OpenErd(name)
+                } else {
+                    TableListAction::None
+                }
+            }
             KeyCode::Enter => {
                 if let Some((name, is_view)) = self.selected_object() {
                     TableListAction::OpenTable { name, is_view }
@@ -197,9 +205,9 @@ impl TableListScreen {
             f.set_cursor(help_area.x + 1 + filter_display.len() as u16, help_area.y + 1);
             filter_display
         } else if screen.is_kv {
-            " j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect ".into()
+            " j/k: move   Enter: open   e: SQL editor   r: ERD   /: filter   q: disconnect ".into()
         } else {
-            " j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect ".into()
+            " j/k: move   Enter: open   e: SQL editor   r: ERD   /: filter   q: disconnect ".into()
         };
 
         let help_style = if screen.filter_mode {

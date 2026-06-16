@@ -26,6 +26,8 @@ pub fn draw(f: &mut Frame<'_>, app: &mut App) {
             screens::edit_record::EditRecordScreen::draw(f, &mut app.edit_record_screen, main_area),
         crate::app::AppState::SqlEditor =>
             screens::sql_editor::SqlEditorScreen::draw(f, &mut app.sql_editor_screen, main_area),
+        crate::app::AppState::ErdGraph =>
+            screens::erd_graph::ErdGraphScreen::draw(f, &mut app.erd_graph_screen, main_area),
     }
 
     crate::ui::components::status_bar::draw(f, status_area, app);

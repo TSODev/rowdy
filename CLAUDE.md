@@ -206,7 +206,7 @@ src/
 
 #### Différenciation (priorité haute)
 - [x] **Vue schema/ERD FK (niveau 1 — panneau relations)** — panneau droit intégré dans `TableListScreen` (pas d'état séparé) ; chargement auto en arrière-plan après `TableObjectsLoaded` → `DbEvent::AllSchemasLoaded(HashMap<String, Vec<ColumnSchema>>)` stocké dans `table_list_screen.all_schemas` ; panneau gauche = liste tables (28 chars), panneau droit = colonnes avec badges [PK]/[FK] + sections "Outgoing FK / Incoming FK" avec flèches ASCII `──►` ; désactivé si KV store
-- [ ] **Vue schema/ERD FK (niveau 2 — boîtes + flèches ASCII)** — _(après niveau 1)_ rendu graphique : chaque table = boîte box-drawing, lignes `─ ─ →` tracées entre boîtes pour les FK ; navigation spatiale h/j/k/l entre boîtes
+- [x] **Vue schema/ERD FK (niveau 2 — boîtes + flèches ASCII)** — touche `r` depuis TableList → `AppState::ErdGraph` + `ErdGraphScreen` (`src/ui/screens/erd_graph.rs`) ; layout étoile : table centrale (jaune) au centre, tables incoming FK à gauche (cyan), tables outgoing FK à droite (cyan) ; `CharCanvas` 2D (char + Style) avec flèches coudées `┐/└/┌/┘` routées depuis la colonne FK exacte dans la boîte centrale ; navigation `j/k` cycle entre boîtes, `Enter` recentre sur la boîte sélectionnée, `q` retour TableList ; réutilise `all_schemas` chargé par le niveau 1
 - [ ] **Connecteur MongoDB** — aucun concurrent TUI sérieux sur ce terrain ; trait `NoSqlClient` à définir, driver `mongodb` crate
 - [x] **Mode read-only prod** — ✅ implémenté (voir section Fait)
 

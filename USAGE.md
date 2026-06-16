@@ -136,21 +136,34 @@ La barre d'aide affiche en rouge : `Delete "nom"? y: delete from file   n: remov
 
 ## Vue liste des tables
 
-Après une connexion réussie, Rowdy charge automatiquement la liste des tables et vues (ou des clés pour Redis, triées alphabétiquement).
+Après une connexion réussie, Rowdy charge automatiquement la liste des tables et vues (ou des clés pour Redis). Pour les connecteurs SQL, le schéma de toutes les tables est chargé en arrière-plan et affiché dans un **panneau schema à droite**.
 
 ```
- Connected: [postgres] postgres://user@localhost/my_db
-┌─ Tables (12) ───────────────────────────────────────┐
-│                                                      │
-│ > [T] orders                                         │
-│   [T] products                                       │
-│   [T] users                                          │
-│   [V] v_books_with_author                            │
-│   ...                                                │
-│                                                      │
-└──────────────────────────────────────────────────────┘
-  j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect
+┌─ Tables (12) ──────────┬─ books ──────────────────────────────────────────┐
+│                        │                                                   │
+│ > [T] authors          │  Columns                                          │
+│   [T] books            │  [PK]  id                   integer               │
+│   [T] orders           │  [FK]  author_id             integer  →authors.id  │
+│   [V] v_summary        │        title                 text                  │
+│                        │        created_at            timestamp             │
+│                        │                                                   │
+│                        │  Outgoing FK                                      │
+│                        │  author_id  ──►  authors.id                       │
+│                        │                                                   │
+│                        │  Incoming FK                                      │
+│                        │  orders.book_id  ──►  books.id                    │
+└────────────────────────┴───────────────────────────────────────────────────┘
+  j/k: move   Enter: open   e: SQL editor   r: ERD   /: filter   q: disconnect
 ```
+
+### Panneau schema (droite)
+
+Le panneau droit affiche en temps réel le schéma de la table sélectionnée :
+- **Colonnes** avec badges `[PK]` jaune, `[FK]` magenta, type SQL en gris
+- **Outgoing FK** : clés étrangères qui partent de cette table
+- **Incoming FK** : clés étrangères d'autres tables qui pointent vers cette table
+
+> Le chargement du schéma s'effectue une seule fois à la connexion, en arrière-plan (le panneau affiche "Loading schema…" pendant ce temps). Non disponible pour Redis.
 
 ### Badges TABLE / VIEW (connecteurs SQL uniquement)
 
@@ -171,6 +184,7 @@ L'ouverture d'une vue active automatiquement le mode lecture seule : la barre de
 | `k` / `↑` | Table précédente |
 | `Enter` | Ouvrir la table dans le Data Grid |
 | `e` | Ouvrir l'éditeur SQL |
+| `r` | Ouvrir la vue ERD graphique centrée sur la table sélectionnée |
 | `/` | Activer le filtre |
 | `q` / `Esc` | Se déconnecter et revenir à l'écran de connexion |
 
@@ -558,7 +572,7 @@ Une ligne permanente est affichée en bas de l'écran depuis tous les écrans. E
 
 | Élément | Description |
 |---------|-------------|
-| Badge mode | Écran actif (`CONNECTION`, `TABLES`, `DATA GRID`, `FK VIEW`, `EDIT`, `SQL EDITOR`, `QUERY RESULT`) |
+| Badge mode | Écran actif (`CONNECTION`, `TABLES`, `DATA GRID`, `FK VIEW`, `EDIT`, `SQL EDITOR`, `QUERY RESULT`, `ERD`) |
 | `●` vert / `○` rouge | Connecté / déconnecté |
 | Info DB | Type de BDD + URL (mot de passe et tokens masqués, ex. `user:***@host`, `authToken=***`) |
 | `[N rows]` | Nombre total de lignes (DataGrid / FK View / SQL Result seulement) |
@@ -600,6 +614,44 @@ La barre d'info affiche le nom de la clé et son TTL :
 Toutes les fonctionnalités de navigation du Data Grid sont disponibles : `j/k/h/l`, resize `-/=`, panel de prévisualisation, collapse `Space`, export `E` (CSV ou JSON). `q` retourne à la liste des clés.
 
 > **Note :** la vue détail est en lecture seule — l'édition et les filtres sont désactivés.
+
+---
+
+## Vue ERD graphique
+
+Depuis la liste des tables, appuyez sur `r` pour ouvrir la vue ERD centrée sur la table sélectionnée.
+
+```
+┌──────────────┐                    ┌──────────────┐
+│  authors     │                    │    books     │
+├──────────────┤                    ├──────────────┤
+│[PK] id       ├────────────────────►[PK] id       │
+│     name     │    author_id       │[FK] author_id│──────┐
+└──────────────┘                    │     title    │      │
+                                    └──────────────┘      │
+                                                          │  ┌──────────────┐
+                                    ┌──────────────┐      │  │   genres     │
+                                    │   orders     │      └──►──────────────│
+                                    ├──────────────┤         │[PK] id       │
+                ┌───────────────────►[PK] id       │         │     label    │
+                │                   │[FK] book_id  │         └──────────────┘
+                │                   └──────────────┘
+```
+
+- **Table centrale** (encadré jaune) : la table sélectionnée avec toutes ses colonnes
+- **Gauche** (Incoming FK) : tables dont une FK pointe vers la table centrale
+- **Droite** (Outgoing FK) : tables référencées par la table centrale
+- Les **flèches** partent depuis la ligne de la colonne FK exacte dans la table centrale
+
+### Navigation
+
+| Touche | Action |
+|--------|--------|
+| `j` / `k` ou `Tab` | Cycler entre toutes les boîtes visibles |
+| `Enter` | Recentrer la vue sur la boîte sélectionnée (navigue dans le graphe) |
+| `q` / `Esc` | Retour à la liste des tables |
+
+> La vue ERD réutilise le schéma déjà chargé — aucune requête supplémentaire n'est effectuée.
 
 ---
 

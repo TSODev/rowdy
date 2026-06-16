@@ -9,6 +9,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+#### Vue ERD graphique (niveau 2)
+- Touche `r` depuis la liste des tables ouvre une vue ERD centrée sur la table sélectionnée
+- Layout en étoile : table centrale (encadré jaune) entourée des tables liées par FK
+  - Gauche : tables dont une FK pointe vers la table centrale (incoming)
+  - Droite : tables référencées par la table centrale (outgoing)
+- Flèches `──►` avec coudes (`┐ └ ┌ ┘`) routées depuis la colonne FK exacte dans la boîte centrale
+- Navigation `j/k` ou `Tab` pour cycler entre toutes les boîtes, `Enter` pour recentrer sur la boîte sélectionnée
+- Retour à la liste avec `q` / `Esc`
+- Badge `ERD` en barre de statut ; réutilise le schema déjà chargé (pas de requête supplémentaire)
+
 #### Panneau schema/ERD intégré dans la liste des tables
 - Le panneau droit de la liste des tables affiche le schema de la table sélectionnée en temps réel
 - Chargement automatique en arrière-plan après connexion SQL via `get_schema()` sur toutes les tables

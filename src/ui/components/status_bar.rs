@@ -16,6 +16,7 @@ pub fn draw(f: &mut Frame<'_>, area: Rect, app: &App) {
         AppState::EditRecord    => "EDIT",
         AppState::SqlEditor     => "SQL EDITOR",
         AppState::SqlResultGrid => "QUERY RESULT",
+        AppState::ErdGraph      => "ERD",
     };
 
     let (dot, dot_color) = if app.active_client.is_some() {

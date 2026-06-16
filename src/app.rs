@@ -15,6 +15,7 @@ use crate::ui::components::modal::Modal;
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
 use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen, PAGE_SIZE};
 use crate::ui::screens::edit_record::{EditRecordAction, EditRecordScreen};
+use crate::ui::screens::erd_graph::{ErdGraphAction, ErdGraphScreen};
 use crate::ui::screens::sql_editor::{SqlEditorAction, SqlEditorScreen};
 use crate::ui::screens::table_list::{TableListAction, TableListScreen};
 
@@ -71,6 +72,7 @@ pub enum AppState {
     EditRecord,
     SqlEditor,
     SqlResultGrid,
+    ErdGraph,
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -85,6 +87,7 @@ pub struct App {
     fk_history: Vec<DataGridScreen>,         // previous FK levels (navigation stack)
     pub sql_result_grid_screen: DataGridScreen, // read-only grid for SQL Editor results
     pub edit_record_screen: EditRecordScreen,
+    pub erd_graph_screen: ErdGraphScreen,
     pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
     pub connected_db_info: Option<String>,
@@ -114,6 +117,7 @@ impl App {
             fk_history: Vec::new(),
             sql_result_grid_screen: DataGridScreen::new(String::new()),
             edit_record_screen: EditRecordScreen::new(String::new(), vec![], vec![]),
+            erd_graph_screen: ErdGraphScreen::new(String::new(), std::collections::HashMap::new()),
             sql_editor_screen: SqlEditorScreen::new(String::new()),
             active_client: None,
             connected_db_info: None,
@@ -230,6 +234,7 @@ impl App {
                         }
                     }
                     TableListAction::OpenEditor => self.open_sql_editor(),
+                    TableListAction::OpenErd(name) => self.open_erd_graph(name),
                     TableListAction::SelectionChanged => {}
                     TableListAction::Disconnect => {
                         self.active_client = None;
@@ -352,6 +357,12 @@ impl App {
                         self.sql_editor_screen.set_editor_content(content.unwrap_or(""));
                     }
                     SqlEditorAction::None => {}
+                }
+            }
+            AppState::ErdGraph => {
+                match self.erd_graph_screen.handle_key(key) {
+                    ErdGraphAction::Back => self.state = AppState::TableList,
+                    ErdGraphAction::None => {}
                 }
             }
             AppState::SqlResultGrid => {
@@ -541,6 +552,20 @@ impl App {
         screen.result = Some(result);
         self.sql_result_grid_screen = screen;
         self.state = AppState::SqlResultGrid;
+    }
+
+    // ── ERD graph (level 2) ───────────────────────────────────────────────────
+
+    fn open_erd_graph(&mut self, name: String) {
+        if self.table_list_screen.schemas_loading {
+            self.table_list_screen.status = Some("Schema still loading…".into());
+            return;
+        }
+        self.erd_graph_screen = ErdGraphScreen::new(
+            name,
+            self.table_list_screen.all_schemas.clone(),
+        );
+        self.state = AppState::ErdGraph;
     }
 
     // ── Schema preload (for TableList ERD panel) ──────────────────────────────
