@@ -107,10 +107,15 @@ Ces champs peuvent être saisis directement depuis l'écran de connexion (voir c
 | `j` / `↓` | Profil suivant |
 | `k` / `↑` | Profil précédent |
 | `Enter` | Se connecter avec le profil sélectionné |
-| `n` | Passer en mode saisie manuelle |
+| `n` | Nouvelle connexion (panneau droit vierge) |
+| `e` | **Éditer** le profil sélectionné — charge tous ses champs dans le panneau droit |
 | `D` | Supprimer le profil sélectionné (avec confirmation) |
 | `q` | Quitter Rowdy |
 | `Ctrl-C` | Quitter Rowdy (toujours disponible) |
+
+**Édition d'un profil (`e`)** : le panneau droit affiche le titre **"Edit: nom"** et pré-remplit les champs Type, URL, Pre-connect et Post-disconnect. Modifiez ce que vous souhaitez, puis :
+- `Enter` → se connecte directement avec les valeurs modifiées
+- `Ctrl+S` → ouvre le champ Nom (pré-rempli avec le nom existant) pour re-sauvegarder ; `Enter` confirme, ou changez le nom avant de valider
 
 ### Mode Saisie (`n`)
 

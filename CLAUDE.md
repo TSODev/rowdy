@@ -201,6 +201,7 @@ src/
 - [x] Liste des tables : en-tête "Connected:" supprimé (doublon avec la status bar)
 - [x] Modal de confirmation / erreur — overlay centré, `Ctrl+S` dans EditRecord ouvre confirmation avant UPDATE, erreurs de sauvegarde en modal d'erreur rouge, `Y`=confirme / `N`/`Esc`=annule
 - [x] Mode read-only prod — `?readonly=true` (ou `&readonly=true`) dans l'URL, badge `READ-ONLY` rouge en status bar, bloque EditRecord + DML SQL editor, filtres/export conservés, reset à la déconnexion ; double `?` toléré (`strip_readonly_param` normalise en `&`)
+- [x] Édition de profil depuis l'écran de connexion — touche `e` en mode Normal charge le profil sélectionné (type, URL, pre/post scripts, nom) dans le panneau d'édition ; titre "Edit: name" ; `Config::save_profile` match par nom en priorité puis par URL pour mise à jour en place
 - [x] Hooks `pre_connect` / `post_disconnect` par profil — champs optionnels dans `ConnectionProfile` (TOML) ; `pre_connect` exécuté via `sh -c` avant `connect()` (tunnel SSH, VPN…) ; `post_disconnect` exécuté au retour à l'écran de connexion ET au quit de l'application (awaité pour fermeture propre) ; saisie directement dans l'écran de connexion (Tab → champ Pre-connect / Post-disconnect), sauvegardée avec `Ctrl+S`
 
 ### Roadmap

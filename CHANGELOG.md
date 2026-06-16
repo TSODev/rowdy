@@ -19,6 +19,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Fermeture de l'application (`Ctrl-C` ou `q`) — **attendu** avant la sortie pour une fermeture propre du tunnel
 - Saisie directe dans l'écran de connexion (champs Pre-connect et Post-disconnect) et sauvegarde avec `Ctrl+S`
 
+#### Édition d'un profil existant depuis l'écran de connexion
+- `e` en mode Normal charge le profil sélectionné dans le panneau d'édition (type, URL, pre-connect, post-disconnect, nom)
+- Le titre du panneau passe à **"Edit: nom_du_profil"** pour distinguer clairement édition et création
+- `Ctrl+S` → écran de nom pré-rempli avec le nom existant ; `Enter` confirme, ou modifier le nom avant
+- `Config::save_profile` match désormais par **nom en priorité**, puis par URL : un profil édité est toujours mis à jour en place même si l'URL change
+
 #### Écran de connexion — navigation multi-champs
 - Le panneau "New Connection" expose désormais 4 champs distincts : **Type**, **URL**, **Pre-connect script**, **Post-disconnect script**
 - `Tab` cycle le focus entre les champs (Type → URL → Pre-connect → Post-disconnect → Type) ; champ actif surligné en jaune

@@ -144,6 +144,7 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | `j` / `k` | Navigate profiles |
 | `Enter` | Connect to selected profile |
 | `n` | Enter a new connection URL |
+| `e` | Edit selected profile (pre-fills all fields for modification) |
 | `Tab` | Cycle focus between fields: DB Type → URL → Pre-connect → Post-disconnect |
 | `←` / `→` | Cycle database type when DB Type field is active |
 | `Ctrl+S` | Save current connection (URL + scripts) as a named profile |
