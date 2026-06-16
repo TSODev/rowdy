@@ -35,6 +35,7 @@ pub struct ConnectionScreen {
     pub post_disconnect_input: String,
     pub db_type_idx: usize,
     pub focused_field: EditField,
+    pub editing_profile_name: Option<String>,
     pub status: Option<String>,
     pub pending_delete: Option<usize>,
 }
@@ -63,6 +64,7 @@ impl ConnectionScreen {
             post_disconnect_input: String::new(),
             db_type_idx: 0,
             focused_field: EditField::Url,
+            editing_profile_name: None,
             status: None,
             pending_delete: None,
         }
@@ -75,6 +77,7 @@ impl ConnectionScreen {
         self.pre_connect_input.clear();
         self.post_disconnect_input.clear();
         self.focused_field = EditField::Url;
+        self.editing_profile_name = None;
         self.status = None;
     }
 
@@ -113,7 +116,22 @@ impl ConnectionScreen {
                 self.pre_connect_input.clear();
                 self.post_disconnect_input.clear();
                 self.focused_field = EditField::Url;
+                self.editing_profile_name = None;
                 self.status = None;
+                ConnectionAction::None
+            }
+            KeyCode::Char('e') => {
+                if let Some(p) = self.selected_profile().cloned() {
+                    self.db_type_idx = DB_TYPES.iter().position(|&t| t == p.db_type).unwrap_or(0);
+                    self.url_input = p.url;
+                    self.pre_connect_input = p.pre_connect.unwrap_or_default();
+                    self.post_disconnect_input = p.post_disconnect.unwrap_or_default();
+                    self.editing_profile_name = Some(p.name.clone());
+                    self.name_input = p.name;
+                    self.focused_field = EditField::Url;
+                    self.input_mode = InputMode::Editing;
+                    self.status = None;
+                }
                 ConnectionAction::None
             }
             KeyCode::Char('D') | KeyCode::Delete => {
@@ -148,7 +166,6 @@ impl ConnectionScreen {
                 if self.url_input.is_empty() {
                     self.status = Some("Enter a URL first".into());
                 } else {
-                    self.name_input.clear();
                     self.input_mode = InputMode::SavingName;
                     self.status = None;
                 }
@@ -346,9 +363,14 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
         Style::default()
     };
 
+    let panel_title = if let Some(ref name) = screen.editing_profile_name {
+        format!(" Edit: {name} ")
+    } else {
+        " New Connection ".to_string()
+    };
     f.render_widget(
         Block::default()
-            .title(" New Connection ")
+            .title(panel_title)
             .borders(Borders::ALL)
             .border_style(border_style),
         area,
@@ -384,7 +406,7 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
 
     // URL input
     let url_display = if screen.url_input.is_empty() && !is_editing && !is_saving {
-        "Press 'n' to enter a URL…".to_string()
+        "Press 'n' to enter a URL, or 'e' to edit selected profile…".to_string()
     } else {
         screen.url_input.clone()
     };
@@ -478,9 +500,9 @@ fn draw_help(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect) {
     let confirm_text;
     let text: &str = match screen.input_mode {
         InputMode::Normal =>
-            " j/k: move   Enter: connect   n: new   D: delete profile   q: quit ",
+            " j/k: move   Enter: connect   n: new   e: edit   D: delete   q: quit ",
         InputMode::Editing =>
-            " Esc: cancel   Tab: type   Enter: connect   Ctrl+S: save profile ",
+            " Tab: field   ← →: type   Enter: connect   Ctrl+S: save   Esc: cancel ",
         InputMode::SavingName =>
             " Type a name for this connection   Enter: save   Esc: back ",
         InputMode::ConfirmDelete => {

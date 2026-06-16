@@ -42,9 +42,11 @@ impl Config {
 
     pub fn save_profile(profile: ConnectionProfile) -> Result<(), Box<dyn std::error::Error>> {
         let mut config = Self::load().unwrap_or_default();
-        // replace existing entry with same URL, or append
-        if let Some(existing) = config.connections.iter_mut().find(|p| p.url == profile.url) {
-            *existing = profile;
+        // match by name first (edit existing), then by URL, then append
+        let pos = config.connections.iter().position(|p| p.name == profile.name)
+            .or_else(|| config.connections.iter().position(|p| p.url == profile.url));
+        if let Some(i) = pos {
+            config.connections[i] = profile;
         } else {
             config.connections.push(profile);
         }
