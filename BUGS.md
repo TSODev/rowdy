@@ -57,7 +57,7 @@ Il reste uniquement le warning externe `sqlx-postgres v0.7.4 future-incompat` (d
 ## EditRecord
 
 - 🟠 **Tables sans clé primaire** — `Ctrl+S` affiche `-- No primary key` et bloque la sauvegarde. Pas de workaround proposé à l'utilisateur (UPDATE avec WHERE sur toutes les colonnes non-NULL pourrait être une alternative future).
-- 🟡 **Pas de validation de format** pour les types DATE / TIMESTAMP / UUID / JSON — une valeur invalide est acceptée dans l'UI et provoque une erreur SQL au moment du `Ctrl+S`. L'erreur est bien affichée, mais l'UX pourrait indiquer le format attendu.
+- ✅ **Validation de format** — corrigé : `validate_field()` sur sortie du mode édition, valeur invalide en rouge, hint format en cyan, `Ctrl+S` bloqué si erreurs.
 - 🟡 **Champ BOOLEAN éditable en texte libre** — `Space` toggle entre `true`/`false`, mais `Enter`/`i` ouvre quand même l'éditeur texte, permettant de saisir une valeur invalide (ex. `maybe`). À envisager : bloquer l'édition texte sur les champs booléens.
 - 🟡 **Valeurs NULL** — il n'est pas possible de remettre un champ à NULL depuis l'édition (la valeur `"NULL"` serait insérée comme texte `'NULL'`). Pourrait nécessiter un raccourci dédié (`Ctrl+Del` ou similaire).
 - ⚪ **Troncature du nom de table dans le titre** — si `table_name` est très long, le titre déborde sans troncature.
@@ -85,9 +85,12 @@ Il reste uniquement le warning externe `sqlx-postgres v0.7.4 future-incompat` (d
 
 - 🟡 **Pas de validation du DSN** avant de lancer la connexion — une URL malformée provoque une erreur async dont le message peut être cryptique.
 - ⚪ **Ordre des profils dans `config.toml`** non garanti après une mise à jour (TOML reécrit entièrement).
+- 🟡 **Script `pre_connect` sans timeout** — si le script ne se termine pas (ex. SSH bloqué), l'UI reste sur "Running pre-connect script…" indéfiniment sans possibilité d'annuler. Contournement futur : `tokio::time::timeout` autour de l'exécution du script.
+- 🟡 **Script `post_disconnect` bloque la fermeture** — à la sortie de l'app (`Ctrl-C`), le script est attendu (`await`). Si le script est long ou bloquant, rowdy ne quitte pas. Contournement futur : timeout de ~5 s.
+- ⚪ **Champ URL tronqué visuellement** dans le panneau d'édition — les URLs longues dépassent la largeur du champ sans scroll horizontal. La valeur complète est utilisée en interne.
 
 ---
 
 ## Redis
 
-- 🟠 **Pas de vue clé-détail** — les valeurs Redis (strings, listes, hashes…) ne sont pas affichées dans le Data Grid, seulement les clés dans la table list.
+- ✅ **Vue clé-détail Redis** — corrigé : `Enter` sur une clé ouvre son contenu (string/hash/list/set/zset) dans un Data Grid read-only avec TTL affiché.
