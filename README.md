@@ -48,6 +48,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Export JSON simple (`j`) or with recursive FK resolution (`J`) — nested `__ref` objects up to 3 levels deep, cycle detection | ✅ |
 | Table list — TABLE / VIEW distinction with `[T]` / `[V]` badges; VIEW opens read-only with cyan badge | ✅ |
 | Read-only safe mode — `?readonly=true` in URL, blocks all writes, `READ-ONLY` badge in status bar | ✅ |
+| Pre-connect / post-disconnect hooks per profile — run shell scripts before connecting and after disconnecting (SSH tunnels, VPN…) | ✅ |
 | Async I/O — UI never blocks during queries | ✅ |
 | Redis key-detail view — `Enter` on a key shows its content (string/hash/list/set/zset) in a read-only grid with TTL | ✅ |
 | Schema panel in table list — columns with PK/FK badges, outgoing and incoming FK relations, auto-loaded on connect | ✅ |
@@ -108,6 +109,19 @@ url = "mysql://root:password@localhost:3306/my_db"
 
 Profiles appear in the left panel of the connection screen at startup.
 
+You can also add optional **pre-connect** and **post-disconnect** shell scripts per profile (useful for SSH tunnels, VPN, etc.):
+
+```toml
+[[connections]]
+name = "VPS Postgres (SSH tunnel)"
+type = "postgres"
+url = "postgres://user:password@localhost:5432/mydb"
+pre_connect = "ssh -f -N -L 5432:localhost:5432 user@remote-host"
+post_disconnect = "pkill -f 'ssh -L 5432:localhost:5432'"
+```
+
+The `pre_connect` script runs before the database connection is established; `post_disconnect` runs when you disconnect or quit the app.
+
 To connect in **read-only mode** (blocks all writes — safe for production), append `?readonly=true` to any URL:
 
 ```toml
@@ -130,8 +144,9 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | `j` / `k` | Navigate profiles |
 | `Enter` | Connect to selected profile |
 | `n` | Enter a new connection URL |
-| `Tab` | Cycle database type (postgres → sqlite → libsql → mysql → redis) |
-| `Ctrl+S` | Save current URL as a named profile |
+| `Tab` | Cycle focus between fields: DB Type → URL → Pre-connect → Post-disconnect |
+| `←` / `→` | Cycle database type when DB Type field is active |
+| `Ctrl+S` | Save current connection (URL + scripts) as a named profile |
 | `D` | Delete selected profile (with confirmation) |
 | `q` | Quit |
 

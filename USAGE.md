@@ -62,6 +62,28 @@ url = "mysql://root:password@localhost:3306/my_db"
 
 Les profils apparaissent dans le panneau gauche de l'écran de connexion au démarrage.
 
+### Hooks pre-connect / post-disconnect
+
+Chaque profil peut inclure des scripts shell optionnels exécutés automatiquement avant la connexion et après la déconnexion. Cas d'usage typique : tunnel SSH vers un serveur distant.
+
+```toml
+[[connections]]
+name = "VPS Postgres (tunnel SSH)"
+type = "postgres"
+url = "postgres://user:password@localhost:5432/mydb"
+pre_connect = "ssh -f -N -L 5432:localhost:5432 user@remote-host"
+post_disconnect = "pkill -f 'ssh -L 5432:localhost:5432'"
+```
+
+| Champ | Comportement |
+|-------|-------------|
+| `pre_connect` | Exécuté via `sh -c` avant l'établissement de la connexion DB. Rowdy affiche "Running pre-connect script…" puis "Connecting…" une fois le script terminé. |
+| `post_disconnect` | Exécuté via `sh -c` lors du retour à l'écran de connexion (`q` depuis la liste des tables) **et** à la fermeture de l'application (`Ctrl-C` ou `q`). À la fermeture, Rowdy attend la fin du script avant de quitter. |
+
+> Les scripts sont exécutés même en cas d'échec (code de retour non-zéro). Si le tunnel SSH est déjà ouvert, `ssh -f` retourne une erreur — Rowdy continue la connexion DB malgré tout.
+
+Ces champs peuvent être saisis directement depuis l'écran de connexion (voir ci-dessous) et sauvegardés avec `Ctrl+S`.
+
 ---
 
 ## Écran de connexion
@@ -92,14 +114,19 @@ Les profils apparaissent dans le panneau gauche de l'écran de connexion au dém
 
 ### Mode Saisie (`n`)
 
+Le panneau de saisie comprend quatre champs navigables. Le champ actif est surligné en jaune.
+
 | Touche | Action |
 |--------|--------|
-| `Tab` | Changer le type de BDD (`postgres` → `sqlite` → `libsql` → `mysql` → `redis`) |
-| _(frappe)_ | Saisir l'URL de connexion |
-| `Backspace` | Effacer un caractère |
-| `Enter` | Se connecter à l'URL saisie |
-| `Ctrl+S` | Sauvegarder la connexion (ouvre le champ Nom) |
+| `Tab` | Passer au champ suivant : Type → URL → Pre-connect → Post-disconnect → Type |
+| `←` / `→` | Changer le type de BDD quand le champ **Type** est actif |
+| _(frappe)_ | Saisir du texte dans le champ actif ; sur le champ Type, toute touche cycle le type |
+| `Backspace` | Effacer un caractère dans le champ actif |
+| `Enter` | Se connecter avec l'URL et les scripts saisis |
+| `Ctrl+S` | Sauvegarder URL + scripts pré/post comme profil nommé |
 | `Esc` | Annuler et revenir en mode Normal |
+
+Les champs **Pre-connect** et **Post-disconnect** sont optionnels. Laissez-les vides si vous n'avez pas besoin de scripts.
 
 ### Mode Sauvegarde (`Ctrl+S`)
 
