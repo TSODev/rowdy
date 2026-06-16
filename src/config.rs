@@ -13,6 +13,10 @@ pub struct ConnectionProfile {
     #[serde(rename = "type")]
     pub db_type: String,
     pub url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pre_connect: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_disconnect: Option<String>,
 }
 
 impl Config {

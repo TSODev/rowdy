@@ -16,21 +16,33 @@ pub enum InputMode {
     ConfirmDelete,
 }
 
+#[derive(Default, PartialEq)]
+pub enum EditField {
+    #[default]
+    DbType,
+    Url,
+    PreConnect,
+    PostDisconnect,
+}
+
 pub struct ConnectionScreen {
     pub profiles: Vec<ConnectionProfile>,
     pub list_state: ListState,
     pub input_mode: InputMode,
     pub url_input: String,
     pub name_input: String,
+    pub pre_connect_input: String,
+    pub post_disconnect_input: String,
     pub db_type_idx: usize,
+    pub focused_field: EditField,
     pub status: Option<String>,
     pub pending_delete: Option<usize>,
 }
 
 pub enum ConnectionAction {
     None,
-    Connect { url: String, db_type: String },
-    SaveProfile { name: String, url: String, db_type: String },
+    Connect { url: String, db_type: String, pre_connect: Option<String>, post_disconnect: Option<String> },
+    SaveProfile { name: String, url: String, db_type: String, pre_connect: Option<String>, post_disconnect: Option<String> },
     DeleteProfile { idx: usize, persist: bool },
     Quit,
 }
@@ -47,7 +59,10 @@ impl ConnectionScreen {
             input_mode: InputMode::Normal,
             url_input: String::new(),
             name_input: String::new(),
+            pre_connect_input: String::new(),
+            post_disconnect_input: String::new(),
             db_type_idx: 0,
+            focused_field: EditField::Url,
             status: None,
             pending_delete: None,
         }
@@ -57,6 +72,9 @@ impl ConnectionScreen {
         self.input_mode = InputMode::Normal;
         self.url_input.clear();
         self.name_input.clear();
+        self.pre_connect_input.clear();
+        self.post_disconnect_input.clear();
+        self.focused_field = EditField::Url;
         self.status = None;
     }
 
@@ -92,6 +110,9 @@ impl ConnectionScreen {
                 self.input_mode = InputMode::Editing;
                 self.url_input.clear();
                 self.name_input.clear();
+                self.pre_connect_input.clear();
+                self.post_disconnect_input.clear();
+                self.focused_field = EditField::Url;
                 self.status = None;
                 ConnectionAction::None
             }
@@ -110,6 +131,8 @@ impl ConnectionScreen {
                     ConnectionAction::Connect {
                         url: p.url.clone(),
                         db_type: p.db_type.clone(),
+                        pre_connect: p.pre_connect.clone(),
+                        post_disconnect: p.post_disconnect.clone(),
                     }
                 } else {
                     ConnectionAction::None
@@ -138,7 +161,12 @@ impl ConnectionScreen {
                 ConnectionAction::None
             }
             KeyCode::Tab => {
-                self.db_type_idx = (self.db_type_idx + 1) % DB_TYPES.len();
+                self.focused_field = match self.focused_field {
+                    EditField::DbType      => EditField::Url,
+                    EditField::Url         => EditField::PreConnect,
+                    EditField::PreConnect  => EditField::PostDisconnect,
+                    EditField::PostDisconnect => EditField::DbType,
+                };
                 ConnectionAction::None
             }
             KeyCode::Enter => {
@@ -149,14 +177,30 @@ impl ConnectionScreen {
                 ConnectionAction::Connect {
                     url: self.url_input.clone(),
                     db_type: self.current_db_type().to_string(),
+                    pre_connect: nonempty(self.pre_connect_input.trim()),
+                    post_disconnect: nonempty(self.post_disconnect_input.trim()),
                 }
             }
+            KeyCode::Left | KeyCode::Right if self.focused_field == EditField::DbType => {
+                self.db_type_idx = (self.db_type_idx + 1) % DB_TYPES.len();
+                ConnectionAction::None
+            }
             KeyCode::Backspace => {
-                self.url_input.pop();
+                match self.focused_field {
+                    EditField::DbType         => {}
+                    EditField::Url            => { self.url_input.pop(); }
+                    EditField::PreConnect     => { self.pre_connect_input.pop(); }
+                    EditField::PostDisconnect => { self.post_disconnect_input.pop(); }
+                }
                 ConnectionAction::None
             }
             KeyCode::Char(c) => {
-                self.url_input.push(c);
+                match self.focused_field {
+                    EditField::DbType         => { self.db_type_idx = (self.db_type_idx + 1) % DB_TYPES.len(); }
+                    EditField::Url            => { self.url_input.push(c); }
+                    EditField::PreConnect     => { self.pre_connect_input.push(c); }
+                    EditField::PostDisconnect => { self.post_disconnect_input.push(c); }
+                }
                 ConnectionAction::None
             }
             _ => ConnectionAction::None,
@@ -202,6 +246,8 @@ impl ConnectionScreen {
                     name: self.name_input.clone(),
                     url: self.url_input.clone(),
                     db_type: self.current_db_type().to_string(),
+                    pre_connect: nonempty(self.pre_connect_input.trim()),
+                    post_disconnect: nonempty(self.post_disconnect_input.trim()),
                 };
                 self.name_input.clear();
                 self.input_mode = InputMode::Normal;
@@ -314,19 +360,27 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
         .constraints([
             Constraint::Length(3), // Type
             Constraint::Length(3), // URL
+            Constraint::Length(3), // Pre-connect
+            Constraint::Length(3), // Post-disconnect
             Constraint::Length(3), // Name (for save)
             Constraint::Min(0),    // Hint
         ])
         .split(area);
 
+    let active = |field: &EditField| is_editing && &screen.focused_field == field;
+
     // DB type selector
-    let type_text = format!(" < {} >  (Tab to cycle)", screen.current_db_type());
-    f.render_widget(
-        Paragraph::new(type_text)
-            .block(Block::default().title(" Type ").borders(Borders::ALL))
-            .style(Style::default().fg(Color::Cyan)),
-        inner[0],
-    );
+    let type_text = format!(" < {} >  (Tab / ← → to cycle)", screen.current_db_type());
+    let type_style = if active(&EditField::DbType) {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Cyan)
+    };
+    let type_block = Block::default()
+        .title(" Type ")
+        .borders(Borders::ALL)
+        .border_style(if active(&EditField::DbType) { Style::default().fg(Color::Yellow) } else { Style::default() });
+    f.render_widget(Paragraph::new(type_text).block(type_block).style(type_style), inner[0]);
 
     // URL input
     let url_display = if screen.url_input.is_empty() && !is_editing && !is_saving {
@@ -334,19 +388,41 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
     } else {
         screen.url_input.clone()
     };
-    let url_style = if is_editing {
-        Style::default().fg(Color::Yellow)
-    } else if is_saving {
-        Style::default().fg(Color::White)
+    let url_focused = active(&EditField::Url) || is_saving;
+    let url_style = if url_focused { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) };
+    let url_block = Block::default()
+        .title(" URL ")
+        .borders(Borders::ALL)
+        .border_style(if active(&EditField::Url) { Style::default().fg(Color::Yellow) } else { Style::default() });
+    f.render_widget(Paragraph::new(url_display).block(url_block).style(url_style), inner[1]);
+
+    // Pre-connect script
+    let pre_display = if screen.pre_connect_input.is_empty() && !is_editing {
+        String::new()
     } else {
-        Style::default().fg(Color::DarkGray)
+        screen.pre_connect_input.clone()
     };
-    f.render_widget(
-        Paragraph::new(url_display)
-            .block(Block::default().title(" URL ").borders(Borders::ALL))
-            .style(url_style),
-        inner[1],
-    );
+    let pre_focused = active(&EditField::PreConnect);
+    let pre_style = if pre_focused { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) };
+    let pre_block = Block::default()
+        .title(" Pre-connect script (optional) ")
+        .borders(Borders::ALL)
+        .border_style(if pre_focused { Style::default().fg(Color::Yellow) } else { Style::default() });
+    f.render_widget(Paragraph::new(pre_display).block(pre_block).style(pre_style), inner[2]);
+
+    // Post-disconnect script
+    let post_display = if screen.post_disconnect_input.is_empty() && !is_editing {
+        String::new()
+    } else {
+        screen.post_disconnect_input.clone()
+    };
+    let post_focused = active(&EditField::PostDisconnect);
+    let post_style = if post_focused { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) };
+    let post_block = Block::default()
+        .title(" Post-disconnect script (optional) ")
+        .borders(Borders::ALL)
+        .border_style(if post_focused { Style::default().fg(Color::Yellow) } else { Style::default() });
+    f.render_widget(Paragraph::new(post_display).block(post_block).style(post_style), inner[3]);
 
     // Name input (visible when saving)
     let name_display = if screen.name_input.is_empty() && !is_saving {
@@ -354,48 +430,32 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
     } else {
         screen.name_input.clone()
     };
-    let name_style = if is_saving {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    let name_block_style = if is_saving {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    f.render_widget(
-        Paragraph::new(name_display)
-            .block(
-                Block::default()
-                    .title(" Save as (name) ")
-                    .borders(Borders::ALL)
-                    .border_style(name_block_style),
-            )
-            .style(name_style),
-        inner[2],
-    );
+    let name_style = if is_saving { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) };
+    let name_block = Block::default()
+        .title(" Save as (name) ")
+        .borders(Borders::ALL)
+        .border_style(if is_saving { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) });
+    f.render_widget(Paragraph::new(name_display).block(name_block).style(name_style), inner[4]);
 
     // Cursor positioning
     if is_editing {
-        f.set_cursor(
-            inner[1].x + 1 + screen.url_input.len() as u16,
-            inner[1].y + 1,
-        );
+        match screen.focused_field {
+            EditField::DbType         => {}
+            EditField::Url            => { f.set_cursor(inner[1].x + 1 + screen.url_input.len() as u16, inner[1].y + 1); }
+            EditField::PreConnect     => { f.set_cursor(inner[2].x + 1 + screen.pre_connect_input.len() as u16, inner[2].y + 1); }
+            EditField::PostDisconnect => { f.set_cursor(inner[3].x + 1 + screen.post_disconnect_input.len() as u16, inner[3].y + 1); }
+        }
     } else if is_saving {
-        f.set_cursor(
-            inner[2].x + 1 + screen.name_input.len() as u16,
-            inner[2].y + 1,
-        );
+        f.set_cursor(inner[4].x + 1 + screen.name_input.len() as u16, inner[4].y + 1);
     }
 
     // Status / hint
     let hint_text = if let Some(ref msg) = screen.status {
         msg.as_str()
     } else if is_saving {
-        "Enter: save profile   Esc: back to URL"
+        "Enter: save profile   Esc: back"
     } else if is_editing {
-        "Enter: connect   Ctrl+S: save   Esc: cancel   Tab: type"
+        "Tab: next field   ← →: type   Enter: connect   Ctrl+S: save   Esc: cancel"
     } else {
         "'n' to enter a new connection"
     };
@@ -405,11 +465,13 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
         Style::default().fg(Color::DarkGray)
     };
     f.render_widget(
-        Paragraph::new(hint_text)
-            .style(hint_style)
-            .wrap(Wrap { trim: false }),
-        inner[3],
+        Paragraph::new(hint_text).style(hint_style).wrap(Wrap { trim: false }),
+        inner[5],
     );
+}
+
+fn nonempty(s: &str) -> Option<String> {
+    if s.is_empty() { None } else { Some(s.to_string()) }
 }
 
 fn draw_help(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect) {

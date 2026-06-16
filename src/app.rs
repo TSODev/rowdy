@@ -53,6 +53,7 @@ pub enum DbEvent {
     ExportFailed(String),
     KvKeyLoaded { detail: KvKeyDetail, key: String, ttl: i64 },
     AllSchemasLoaded(std::collections::HashMap<String, Vec<ColumnSchema>>),
+    StatusUpdate(String),
 }
 
 // ── Pending modal action ──────────────────────────────────────────────────────
@@ -92,6 +93,7 @@ pub struct App {
     pub active_client: Option<ActiveClient>,
     pub connected_db_info: Option<String>,
     pub prod_readonly: bool,
+    post_disconnect_script: Option<String>,
     pub modal: Option<Modal>,
     pending_action: Option<PendingAction>,
     pub status_message: Option<(String, bool)>,
@@ -122,6 +124,7 @@ impl App {
             active_client: None,
             connected_db_info: None,
             prod_readonly: false,
+            post_disconnect_script: None,
             modal: None,
             pending_action: None,
             status_message: None,
@@ -147,6 +150,7 @@ impl App {
             terminal.draw(|f| crate::ui::layout::draw(f, self))?;
 
             if self.should_quit {
+                self.run_post_disconnect().await;
                 break;
             }
 
@@ -175,8 +179,8 @@ impl App {
             AppState::Connection => {
                 match self.connection_screen.handle_key(key) {
                     ConnectionAction::Quit => self.should_quit = true,
-                    ConnectionAction::Connect { url, db_type } => {
-                        self.spawn_connect(url, db_type);
+                    ConnectionAction::Connect { url, db_type, pre_connect, post_disconnect } => {
+                        self.spawn_connect(url, db_type, pre_connect, post_disconnect);
                     }
                     ConnectionAction::DeleteProfile { idx, persist } => {
                         if idx < self.connection_screen.profiles.len() {
@@ -201,8 +205,8 @@ impl App {
                             }
                         }
                     }
-                    ConnectionAction::SaveProfile { name, url, db_type } => {
-                        let profile = ConnectionProfile { name: name.clone(), db_type, url };
+                    ConnectionAction::SaveProfile { name, url, db_type, pre_connect, post_disconnect } => {
+                        let profile = ConnectionProfile { name: name.clone(), db_type, url, pre_connect, post_disconnect };
                         match Config::save_profile(profile) {
                             Ok(()) => {
                                 let profiles = Config::load().unwrap_or_default().connections;
@@ -237,6 +241,7 @@ impl App {
                     TableListAction::OpenErd(name) => self.open_erd_graph(name),
                     TableListAction::SelectionChanged => {}
                     TableListAction::Disconnect => {
+                        self.spawn_post_disconnect();
                         self.active_client = None;
                         self.prod_readonly = false;
                         self.table_list_screen = TableListScreen::new();
@@ -618,13 +623,33 @@ impl App {
 
     // ── Async connection ──────────────────────────────────────────────────────
 
-    fn spawn_connect(&mut self, url: String, db_type: String) {
+    fn spawn_connect(&mut self, url: String, db_type: String, pre_connect: Option<String>, post_disconnect: Option<String>) {
         let (clean_url, is_readonly) = strip_readonly_param(&url);
         self.prod_readonly = is_readonly;
-        self.connection_screen.status =
-            Some(format!("Connecting [{db_type}] {} …", redact_url(&clean_url)));
+        self.post_disconnect_script = post_disconnect;
+
+        if pre_connect.is_some() {
+            self.connection_screen.status = Some("Running pre-connect script…".into());
+        } else {
+            self.connection_screen.status =
+                Some(format!("Connecting [{db_type}] {} …", redact_url(&clean_url)));
+        }
+
         let tx = self.db_tx.clone();
         tokio::spawn(async move {
+            if let Some(script) = pre_connect {
+                let _ = tokio::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(&script)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .await;
+                let _ = tx.send(DbEvent::StatusUpdate(
+                    format!("Connecting [{db_type}] {} …", redact_url(&clean_url))
+                )).await;
+            }
+
             let event = if db_type == "redis" {
                 match connectors::connect_kv(&db_type, &clean_url).await {
                     Ok(c)  => DbEvent::KvConnected { client: Arc::from(c), url: clean_url, db_type },
@@ -638,6 +663,32 @@ impl App {
             };
             let _ = tx.send(event).await;
         });
+    }
+
+    fn spawn_post_disconnect(&mut self) {
+        if let Some(script) = self.post_disconnect_script.take() {
+            tokio::spawn(async move {
+                let _ = tokio::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(&script)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .await;
+            });
+        }
+    }
+
+    async fn run_post_disconnect(&mut self) {
+        if let Some(script) = self.post_disconnect_script.take() {
+            let _ = tokio::process::Command::new("sh")
+                .arg("-c")
+                .arg(&script)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .await;
+        }
     }
 
     // ── Async table listing ───────────────────────────────────────────────────
@@ -979,6 +1030,9 @@ impl App {
             DbEvent::ExportFailed(msg) => {
                 self.status_message = Some((format!("Export failed: {msg}"), true));
                 self.status_message_ttl = 80;
+            }
+            DbEvent::StatusUpdate(msg) => {
+                self.connection_screen.status = Some(msg);
             }
         }
     }
