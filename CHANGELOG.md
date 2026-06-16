@@ -9,6 +9,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+#### Connecteur MongoDB (feature optionnelle)
+- Nouveau trait `NoSqlClient` (`list_collections`, `find`, `aggregate`, `count`) dans `src/db/traits/nosql_client.rs`
+- `MongoDbConnector` via `mongodb` 3 dans `src/db/connectors/mongodb.rs`, compilé uniquement avec `--features mongodb` ; dépendance absente par défaut pour ne pas pénaliser les autres utilisateurs
+- Factory `connect_nosql()` dans `connectors/mod.rs` — retourne une erreur explicite (`"MongoDB support not compiled in — reinstall with --features mongodb"`) si le feature est absent
+- `ActiveClient::NoSql(Arc<dyn NoSqlClient>)` et `DbEvent::NoSqlConnected` ajoutés dans `app.rs`
+- `"mongodb"` intégré au sélecteur de type (Tab/←→) dans l'écran de connexion ; URL attendue : `mongodb://host:27017/dbname` (nom de DB obligatoire dans le path)
+- Connexion avec ping de vérification ; `list_collections()` triée alphabétiquement affichée dans la vue liste
+- `spawn_load_data` : `find("{}", PAGE_SIZE, 0)` + `count` parallèle, grille read-only
+- `spawn_load_more` : pagination par offset sur `find`
+- MQL editor (F5/Ctrl+Enter depuis la liste des collections) : filtre JSON `{…}` → `find`, pipeline JSON `[…]` → `aggregate` ; titre "MQL Editor │ … │ collection: nom" ; placeholder MQL dédié
+
+#### Navigation dans les champs imbriqués MongoDB
+- `Value::NestedDoc(String)` et `Value::NestedArray(String)` ajoutés à l'enum `Value` — portent le JSON sérialisé du sous-document ou du tableau BSON
+- Badge vert `[obj]` sur les cellules contenant un objet BSON imbriqué ; badge vert `[arr:N]` avec compte des éléments pour les tableaux
+- La preview bar (bande grise sous la grille) affiche le JSON réel du champ sélectionné au lieu de `{…}`
+- `Enter` sur un badge (autorisé même en mode `read_only`) ouvre une sous-grille de navigation :
+  - **Objet** → 1 ligne × N colonnes (une par clé)
+  - **Tableau d'objets** → N lignes × union des clés
+  - **Tableau scalaire** → colonnes `index` + `value`
+  - Les valeurs imbriquées à l'intérieur produisent récursivement de nouveaux `NestedDoc`/`NestedArray`
+- Breadcrumb dans la barre d'info : `users › address › city` construit via `display_name`
+- Réutilise la pile `fk_history` et la navigation `Esc` existantes (aucun nouvel état `AppState`)
+- Help bar en mode read-only complété : `Enter: explore`
+
 #### Hooks pre-connect / post-disconnect par profil
 - Champs optionnels `pre_connect` et `post_disconnect` dans `ConnectionProfile` (TOML) — rétrocompatibles (`skip_serializing_if = "Option::is_none"`)
 - `pre_connect` : exécuté via `sh -c` **avant** l'établissement de la connexion DB — cas d'usage : ouvrir un tunnel SSH, activer un VPN, initialiser un proxy

@@ -14,6 +14,7 @@
 | Base de données | `sqlx` 0.7 — SQLite + PostgreSQL + MySQL |
 | libsql / Turso | `libsql` 0.9 (remote) |
 | Key-value | `redis` 0.24 (tokio-comp) |
+| Document store | `mongodb` 3 (optionnel, `--features mongodb`) |
 | Traits async | `async-trait` |
 | Configuration | `serde` + `toml` |
 | Erreurs | `thiserror` |
@@ -36,7 +37,7 @@ Rowdy utilise une architecture découplée séparant le thread de rendu UI des o
         └───────────────────────┘   └───────────────────────┘  └───────────────────────┘
 ```
 
-Les connecteurs sont partagés via `Arc<dyn SqlClient>` / `Arc<dyn KvClient>` pour permettre l'accès concurrent depuis les tâches tokio sans déplacer la propriété.
+Les connecteurs sont partagés via `Arc<dyn SqlClient>` / `Arc<dyn KvClient>` / `Arc<dyn NoSqlClient>` pour permettre l'accès concurrent depuis les tâches tokio sans déplacer la propriété.
 
 ### Traits
 
@@ -61,6 +62,17 @@ pub trait KvClient: Send + Sync {
     async fn del(&self, key: &str) -> Result<bool, DbError>;
     async fn keys(&self, pattern: &str) -> Result<Vec<String>, DbError>;
 }
+
+// src/db/traits/nosql_client.rs
+#[async_trait]
+pub trait NoSqlClient: Send + Sync {
+    async fn connect(&mut self, url: &str) -> Result<(), DbError>;
+    async fn disconnect(&mut self) -> Result<(), DbError>;
+    async fn list_collections(&self) -> Result<Vec<TableObject>, DbError>;
+    async fn find(&self, collection: &str, filter: &str, limit: u64, offset: u64) -> Result<DbQueryResult, DbError>;
+    async fn aggregate(&self, collection: &str, pipeline: &str) -> Result<DbQueryResult, DbError>;
+    async fn count(&self, collection: &str, filter: &str) -> Result<u64, DbError>;
+}
 ```
 
 ### Flux de connexion async
@@ -69,18 +81,18 @@ pub trait KvClient: Send + Sync {
 User → Enter  →  ConnectionAction::Connect { url, db_type }
              →  App::spawn_connect()  →  tokio::spawn
                                               ↓ async
-                                     connectors::connect_sql/kv()
+                                     connectors::connect_sql/kv/nosql()
                                               ↓
-                                     DbEvent::SqlConnected(Arc<dyn SqlClient>)
+                                     DbEvent::SqlConnected / KvConnected / NoSqlConnected
                                               ↓ mpsc channel (≤ 50 ms)
                                      App::handle_db_event()
-                                     → active_client = Some(...)
+                                     → active_client = Some(Sql|Kv|NoSql(...))
                                      → AppState::TableList
                                      → spawn_load_tables()
                                               ↓ async
-                                     get_tables() / keys("*")
+                                     get_table_objects() / keys("*") / list_collections()
                                               ↓
-                                     DbEvent::TablesLoaded(Vec<String>)
+                                     DbEvent::TableObjectsLoaded / TablesLoaded
                                               ↓
                                      table_list_screen.set_tables(...)
 ```
@@ -131,14 +143,16 @@ src/
 │   ├── types.rs                   # Column, Row, Value, DbQueryResult
 │   ├── traits/
 │   │   ├── sql_client.rs          # trait SqlClient
-│   │   └── kv_client.rs           # trait KvClient
+│   │   ├── kv_client.rs           # trait KvClient
+│   │   └── nosql_client.rs        # trait NoSqlClient
 │   └── connectors/
-│       ├── mod.rs                 # connect_sql() / connect_kv() factories
+│       ├── mod.rs                 # connect_sql() / connect_kv() / connect_nosql() factories
 │       ├── postgres.rs            # ✅ implémenté
 │       ├── sqlite.rs              # ✅ implémenté
 │       ├── mysql.rs               # ✅ implémenté
 │       ├── redis.rs               # ✅ implémenté (KvClient)
-│       └── turso.rs               # ✅ implémenté (libsql remote)
+│       ├── turso.rs               # ✅ implémenté (libsql remote)
+│       └── mongodb.rs             # ✅ implémenté (NoSqlClient, feature-gated)
 └── ui/
     ├── layout.rs                  # dispatch draw() selon AppState
     ├── screens/
@@ -203,13 +217,16 @@ src/
 - [x] Mode read-only prod — `?readonly=true` (ou `&readonly=true`) dans l'URL, badge `READ-ONLY` rouge en status bar, bloque EditRecord + DML SQL editor, filtres/export conservés, reset à la déconnexion ; double `?` toléré (`strip_readonly_param` normalise en `&`)
 - [x] Édition de profil depuis l'écran de connexion — touche `e` en mode Normal charge le profil sélectionné (type, URL, pre/post scripts, nom) dans le panneau d'édition ; titre "Edit: name" ; `Config::save_profile` match par nom en priorité puis par URL pour mise à jour en place
 - [x] Hooks `pre_connect` / `post_disconnect` par profil — champs optionnels dans `ConnectionProfile` (TOML) ; `pre_connect` exécuté via `sh -c` avant `connect()` (tunnel SSH, VPN…) ; `post_disconnect` exécuté au retour à l'écran de connexion ET au quit de l'application (awaité pour fermeture propre) ; saisie directement dans l'écran de connexion (Tab → champ Pre-connect / Post-disconnect), sauvegardée avec `Ctrl+S`
+- [x] Connecteur MongoDB (`--features mongodb`) — trait `NoSqlClient` (`list_collections`, `find`, `aggregate`, `count`) ; `MongoDbConnector` via `mongodb` 3 (feature-gated, non inclus par défaut) ; `connect_nosql()` factory avec message d'erreur clair si feature absent ; `"mongodb"` ajouté au sélecteur de type dans l'écran de connexion ; URL `mongodb://host:27017/dbname` (nom de DB requis dans le path)
+- [x] Intégration MongoDB dans App — `ActiveClient::NoSql` + `DbEvent::NoSqlConnected` ; `spawn_load_tables` → `list_collections()` ; `spawn_load_data` → `find("{}", PAGE_SIZE, 0)` + `count` parallèle, grille read-only ; `spawn_load_more` → `find` paginé ; MQL editor (F5) : `[` en tête = `aggregate`, sinon `find` avec le texte comme filtre ; titre "MQL Editor │ … │ collection: nom" et placeholder MQL
+- [x] Navigation champs imbriqués MongoDB — `Value::NestedDoc(json)` et `Value::NestedArray(json)` dans l'enum `Value` ; badges verts `[obj]` / `[arr:N]` dans le DataGrid (priorité sur badge FK magenta) ; preview bar affiche le JSON réel ; `Enter` sur badge (même en read-only) ouvre une sous-grille `FkGrid` avec le contenu converti en `DbQueryResult` (`json_to_result` : objet → 1 ligne × N cols, tableau d'objets → N lignes, scalaires → index+value) ; navigation récursive avec breadcrumb `collection › address › orders` via `display_name` ; `fk_history` / Esc remonte d'un niveau
 
 ### Roadmap
 
 #### Différenciation (priorité haute)
 - [x] **Vue schema/ERD FK (niveau 1 — panneau relations)** — panneau droit intégré dans `TableListScreen` (pas d'état séparé) ; chargement auto en arrière-plan après `TableObjectsLoaded` → `DbEvent::AllSchemasLoaded(HashMap<String, Vec<ColumnSchema>>)` stocké dans `table_list_screen.all_schemas` ; panneau gauche = liste tables (28 chars), panneau droit = colonnes avec badges [PK]/[FK] + sections "Outgoing FK / Incoming FK" avec flèches ASCII `──►` ; désactivé si KV store
 - [x] **Vue schema/ERD FK (niveau 2 — boîtes + flèches ASCII)** — touche `r` depuis TableList → `AppState::ErdGraph` + `ErdGraphScreen` (`src/ui/screens/erd_graph.rs`) ; layout étoile : table centrale (jaune) au centre, tables incoming FK à gauche (cyan), tables outgoing FK à droite (cyan) ; `CharCanvas` 2D (char + Style) avec flèches coudées `┐/└/┌/┘` routées depuis la colonne FK exacte dans la boîte centrale ; navigation `j/k` cycle entre boîtes, `Enter` recentre sur la boîte sélectionnée, `q` retour TableList ; réutilise `all_schemas` chargé par le niveau 1
-- [ ] **Connecteur MongoDB** — aucun concurrent TUI sérieux sur ce terrain ; trait `NoSqlClient` à définir, driver `mongodb` crate
+- [x] **Connecteur MongoDB** — trait `NoSqlClient`, driver `mongodb` 3, feature-gated `--features mongodb` ; navigation champs imbriqués avec badges verts + sous-grilles récursives (même pile `fk_history`)
 - [x] **Mode read-only prod** — ✅ implémenté (voir section Fait)
 
 #### Fonctionnel
@@ -240,4 +257,6 @@ cargo clippy       # linter
 - Binaire standalone, pas de dépendances runtime système
 - `Frame<'_>` sans générique Backend (ratatui 0.27)
 - `Table::new(rows, widths)` — ratatui 0.27 requiert les widths en 2e argument
-- `DataGridScreen.table_name` = nom SQL brut ; `display_name: Option<String>` = label affiché (ex. `books [id=1]` pour FkGrid)
+- `DataGridScreen.table_name` = nom SQL brut ; `display_name: Option<String>` = label affiché (ex. `books [id=1]` pour FkGrid, `users › address` pour nested MongoDB)
+- `Value::NestedDoc(json)` / `Value::NestedArray(json)` — variants produits par le connecteur MongoDB pour les sous-documents/tableaux BSON ; rendus comme badges verts dans le DataGrid ; `Enter` ouvre `json_to_result()` sans async
+- `connect_nosql()` — factory dans `connectors/mod.rs`, toujours compilée ; retourne une erreur lisible si le feature `mongodb` n'est pas activé à la compilation

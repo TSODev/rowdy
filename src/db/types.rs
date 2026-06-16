@@ -13,6 +13,10 @@ pub enum Value {
     Float(f64),
     Text(String),
     Bytes(Vec<u8>),
+    #[allow(dead_code)]
+    NestedDoc(String),   // JSON string of a nested BSON/document object
+    #[allow(dead_code)]
+    NestedArray(String), // JSON string of a BSON/document array
 }
 
 #[derive(Debug, Clone)]

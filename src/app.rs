@@ -10,7 +10,7 @@ use tokio::{
 use crate::config::{Config, ConnectionProfile};
 use crate::export;
 use crate::history::QueryHistory;
-use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{Column, ColumnSchema, DbQueryResult, KvKeyDetail, Row, TableObject, Value}};
+use crate::db::{connectors, traits::{KvClient, NoSqlClient, SqlClient}, types::{Column, ColumnSchema, DbQueryResult, KvKeyDetail, Row, TableObject, Value}};
 use crate::ui::components::modal::Modal;
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
 use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen, PAGE_SIZE};
@@ -24,13 +24,15 @@ use crate::ui::screens::table_list::{TableListAction, TableListScreen};
 pub enum ActiveClient {
     Sql(Arc<dyn SqlClient>),
     Kv(Arc<dyn KvClient>),
+    NoSql(Arc<dyn NoSqlClient>),
 }
 
 // ── Async DB events ───────────────────────────────────────────────────────────
 
 pub enum DbEvent {
-    SqlConnected { client: Arc<dyn SqlClient>, url: String, db_type: String },
-    KvConnected  { client: Arc<dyn KvClient>,  url: String, db_type: String },
+    SqlConnected   { client: Arc<dyn SqlClient>,   url: String, db_type: String },
+    KvConnected    { client: Arc<dyn KvClient>,    url: String, db_type: String },
+    NoSqlConnected { client: Arc<dyn NoSqlClient>, url: String, db_type: String },
     ConnectionFailed(String),
     TablesLoaded(Vec<String>),       // KV stores (Redis key names)
     TableObjectsLoaded(Vec<TableObject>), // SQL: TABLE + VIEW with kind
@@ -257,7 +259,9 @@ impl App {
                     DataGridAction::ApplyFilter => self.spawn_reload_filters(),
                     DataGridAction::LoadMore => self.spawn_load_more(),
                     DataGridAction::EnterCell => {
-                        if self.prod_readonly {
+                        if let Some((col, json, arr)) = nested_info_from(&self.data_grid_screen) {
+                            self.open_nested_subgrid(col, json, arr);
+                        } else if self.prod_readonly || self.data_grid_screen.read_only {
                             self.status_message = Some(("Read-only mode — edits disabled".into(), true));
                             self.status_message_ttl = 60;
                         } else if let Some((ref_table, ref_col, fk_val)) = self.selected_fk_info(false) {
@@ -298,7 +302,9 @@ impl App {
                         }
                     }
                     DataGridAction::EnterCell => {
-                        if self.prod_readonly {
+                        if let Some((col, json, arr)) = nested_info_from(&self.fk_grid_screen) {
+                            self.open_nested_subgrid(col, json, arr);
+                        } else if self.prod_readonly || self.fk_grid_screen.read_only {
                             self.status_message = Some(("Read-only mode — edits disabled".into(), true));
                             self.status_message_ttl = 60;
                         } else if let Some((ref_table, ref_col, fk_val)) = self.selected_fk_info(true) {
@@ -457,6 +463,40 @@ impl App {
         }
     }
 
+    fn open_nested_subgrid(&mut self, col_name: String, json: String, is_array: bool) {
+        // Capture the breadcrumb label before any move/replace
+        let parent_name = if self.state == AppState::FkGrid {
+            self.fk_grid_screen.display_name.clone()
+                .unwrap_or_else(|| self.fk_grid_screen.table_name.clone())
+        } else {
+            self.data_grid_screen.display_name.clone()
+                .unwrap_or_else(|| self.data_grid_screen.table_name.clone())
+        };
+
+        if self.state == AppState::FkGrid {
+            let prev = std::mem::replace(&mut self.fk_grid_screen, DataGridScreen::new(String::new()));
+            self.fk_history.push(prev);
+        }
+
+        let result = json_to_result(&json, is_array);
+        let count  = result.rows.len();
+
+        let mut screen = DataGridScreen::new(col_name.clone());
+        screen.display_name  = Some(format!("{} › {}", parent_name, col_name));
+        screen.read_only     = true;
+        screen.has_more      = false;
+        screen.loading       = false;
+        screen.total_count   = Some(count as u64);
+        screen.loaded_count  = count;
+        if count > 0 {
+            screen.table_state.select(Some(0));
+        }
+        screen.result = Some(result);
+
+        self.fk_grid_screen = screen;
+        self.state = AppState::FkGrid;
+    }
+
     fn open_fk_edit_record(&mut self) {
         let result = match self.fk_grid_screen.result.as_ref() {
             Some(r) => r,
@@ -540,6 +580,10 @@ impl App {
     fn open_sql_editor(&mut self) {
         let db_info = self.table_list_screen.db_info.clone();
         self.sql_editor_screen = SqlEditorScreen::new(db_info);
+        if matches!(self.active_client, Some(ActiveClient::NoSql(_))) {
+            let coll = self.table_list_screen.selected_table_name();
+            self.sql_editor_screen.set_nosql_collection(coll);
+        }
         self.state = AppState::SqlEditor;
     }
 
@@ -655,6 +699,11 @@ impl App {
                     Ok(c)  => DbEvent::KvConnected { client: Arc::from(c), url: clean_url, db_type },
                     Err(e) => DbEvent::ConnectionFailed(e.to_string()),
                 }
+            } else if db_type == "mongodb" {
+                match connectors::connect_nosql(&db_type, &clean_url).await {
+                    Ok(c)  => DbEvent::NoSqlConnected { client: Arc::from(c), url: clean_url, db_type },
+                    Err(e) => DbEvent::ConnectionFailed(e.to_string()),
+                }
             } else {
                 match connectors::connect_sql(&db_type, &clean_url).await {
                     Ok(c)  => DbEvent::SqlConnected { client: Arc::from(c), url: clean_url, db_type },
@@ -716,6 +765,16 @@ impl App {
                     let _ = tx.send(ev).await;
                 });
             }
+            Some(ActiveClient::NoSql(c)) => {
+                let c = Arc::clone(c);
+                tokio::spawn(async move {
+                    let ev = match c.list_collections().await {
+                        Ok(objs) => DbEvent::TableObjectsLoaded(objs),
+                        Err(e)   => DbEvent::TablesLoadFailed(e.to_string()),
+                    };
+                    let _ = tx.send(ev).await;
+                });
+            }
             None => {}
         }
     }
@@ -743,6 +802,22 @@ impl App {
             });
         } else if let Some(ActiveClient::Kv(_)) = &self.active_client {
             self.spawn_load_kv_key(table_name);
+        } else if let Some(ActiveClient::NoSql(c)) = &self.active_client {
+            let c = Arc::clone(c);
+            let tx = self.db_tx.clone();
+            self.data_grid_screen.read_only = true;
+            tokio::spawn(async move {
+                let count_ev = match c.count(&table_name, "{}").await {
+                    Ok(n)  => DbEvent::DataCountLoaded(n),
+                    Err(_) => DbEvent::DataCountLoaded(0),
+                };
+                let page_ev = match c.find(&table_name, "{}", PAGE_SIZE as u64, 0).await {
+                    Ok(r)  => DbEvent::DataPageLoaded(r),
+                    Err(e) => DbEvent::DataLoadFailed(e.to_string()),
+                };
+                let _ = tx.send(count_ev).await;
+                let _ = tx.send(page_ev).await;
+            });
         } else {
             self.data_grid_screen.set_error("Not connected".into());
         }
@@ -781,6 +856,16 @@ impl App {
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
             spawn_sql_page(Arc::clone(c), &table, &filters, offset, false, schema, self.db_tx.clone());
+        } else if let Some(ActiveClient::NoSql(c)) = &self.active_client {
+            let c = Arc::clone(c);
+            let tx = self.db_tx.clone();
+            tokio::spawn(async move {
+                let ev = match c.find(&table, "{}", PAGE_SIZE as u64, offset as u64).await {
+                    Ok(r)  => DbEvent::DataPageLoaded(r),
+                    Err(e) => DbEvent::DataLoadFailed(e.to_string()),
+                };
+                let _ = tx.send(ev).await;
+            });
         }
     }
 
@@ -858,6 +943,33 @@ impl App {
                     "SQL editor requires a SQL connection (not Redis)".into(),
                 );
             }
+            Some(ActiveClient::NoSql(c)) => {
+                let collection = match &self.sql_editor_screen.nosql_collection {
+                    Some(c) => c.clone(),
+                    None => {
+                        self.sql_editor_screen.set_error(
+                            "No collection selected — open the editor from the collection list".into(),
+                        );
+                        return;
+                    }
+                };
+                let c = Arc::clone(c);
+                tokio::spawn(async move {
+                    let query = sql.trim();
+                    let ev = if query.starts_with('[') {
+                        match c.aggregate(&collection, query).await {
+                            Ok(r)  => DbEvent::QueryRows(r),
+                            Err(e) => DbEvent::QueryFailed(e.to_string()),
+                        }
+                    } else {
+                        match c.find(&collection, query, 500, 0).await {
+                            Ok(r)  => DbEvent::QueryRows(r),
+                            Err(e) => DbEvent::QueryFailed(e.to_string()),
+                        }
+                    };
+                    let _ = tx.send(ev).await;
+                });
+            }
             None => {
                 self.sql_editor_screen.set_error("Not connected".into());
             }
@@ -934,6 +1046,16 @@ impl App {
             }
             DbEvent::KvConnected { client, url, db_type } => {
                 self.active_client = Some(ActiveClient::Kv(client));
+                let safe_url = redact_url(&url);
+                self.connected_db_info = Some(format!("[{db_type}] {safe_url}"));
+                self.connection_screen.status = None;
+                self.table_list_screen = TableListScreen::new();
+                self.table_list_screen.db_info = format!("[{db_type}] {safe_url}");
+                self.state = AppState::TableList;
+                self.spawn_load_tables();
+            }
+            DbEvent::NoSqlConnected { client, url, db_type } => {
+                self.active_client = Some(ActiveClient::NoSql(client));
                 let safe_url = redact_url(&url);
                 self.connected_db_info = Some(format!("[{db_type}] {safe_url}"));
                 self.connection_screen.status = None;
@@ -1085,12 +1207,13 @@ fn kv_detail_to_result(detail: KvKeyDetail) -> DbQueryResult {
 
 fn value_to_string(v: &Value) -> String {
     match v {
-        Value::Null     => "NULL".into(),
-        Value::Bool(b)  => b.to_string(),
-        Value::Int(i)   => i.to_string(),
-        Value::Float(f) => f.to_string(),
-        Value::Text(s)  => s.clone(),
-        Value::Bytes(b) => format!("<{} bytes>", b.len()),
+        Value::Null                              => "NULL".into(),
+        Value::Bool(b)                           => b.to_string(),
+        Value::Int(i)                            => i.to_string(),
+        Value::Float(f)                          => f.to_string(),
+        Value::Text(s)                           => s.clone(),
+        Value::Bytes(b)                          => format!("<{} bytes>", b.len()),
+        Value::NestedDoc(s) | Value::NestedArray(s) => s.clone(),
     }
 }
 
@@ -1290,6 +1413,110 @@ fn spawn_sql_page(
         };
         let _ = tx.send(ev).await;
     });
+}
+
+// ── Nested document navigation ────────────────────────────────────────────────
+
+/// Returns (col_name, json_string, is_array) if the selected cell holds a nested value.
+fn nested_info_from(screen: &DataGridScreen) -> Option<(String, String, bool)> {
+    let result = screen.result.as_ref()?;
+    let col_idx = screen.selected_col;
+    let col_name = result.columns.get(col_idx)?.name.clone();
+    let sel_row = screen.table_state.selected()?;
+    match result.rows.get(sel_row)?.values.get(col_idx)? {
+        Value::NestedDoc(s)   => Some((col_name, s.clone(), false)),
+        Value::NestedArray(s) => Some((col_name, s.clone(), true)),
+        _ => None,
+    }
+}
+
+/// Convert a JSON string into a `DbQueryResult`, preserving nested objects/arrays
+/// as `Value::NestedDoc` / `Value::NestedArray` for recursive navigation.
+fn json_to_result(json: &str, is_array: bool) -> DbQueryResult {
+    use crate::db::types::{Column, Row as DbRow};
+
+    let parsed: serde_json::Value = match serde_json::from_str(json) {
+        Ok(v)  => v,
+        Err(_) => return DbQueryResult {
+            columns: vec![Column { name: "value".into(), type_name: "json".into() }],
+            rows:    vec![DbRow { values: vec![Value::Text(json.into())] }],
+            rows_affected: 0,
+        },
+    };
+
+    if is_array {
+        let items = match parsed.as_array() {
+            Some(a) => a.clone(),
+            None    => return DbQueryResult { columns: vec![], rows: vec![], rows_affected: 0 },
+        };
+        if items.is_empty() {
+            return DbQueryResult { columns: vec![], rows: vec![], rows_affected: 0 };
+        }
+        if items[0].is_object() {
+            // Array of objects → union of keys as columns, one row per item
+            let mut col_names: Vec<String> = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+            for item in &items {
+                if let Some(obj) = item.as_object() {
+                    for key in obj.keys() {
+                        if seen.insert(key.clone()) {
+                            col_names.push(key.clone());
+                        }
+                    }
+                }
+            }
+            let columns: Vec<Column> = col_names.iter()
+                .map(|n| Column { name: n.clone(), type_name: "json".into() })
+                .collect();
+            let rows: Vec<DbRow> = items.iter()
+                .map(|item| DbRow {
+                    values: col_names.iter()
+                        .map(|cn| item.get(cn).map(json_val_to_value).unwrap_or(Value::Null))
+                        .collect(),
+                })
+                .collect();
+            DbQueryResult { columns, rows, rows_affected: 0 }
+        } else {
+            // Scalar array → index + value
+            let columns = vec![
+                Column { name: "index".into(), type_name: "int".into() },
+                Column { name: "value".into(), type_name: "json".into() },
+            ];
+            let rows: Vec<DbRow> = items.iter().enumerate()
+                .map(|(i, v)| DbRow { values: vec![Value::Int(i as i64), json_val_to_value(v)] })
+                .collect();
+            DbQueryResult { columns, rows, rows_affected: 0 }
+        }
+    } else {
+        // Single object → one row, one column per key
+        let obj = match parsed.as_object() {
+            Some(o) => o,
+            None => return DbQueryResult {
+                columns: vec![Column { name: "value".into(), type_name: "json".into() }],
+                rows:    vec![DbRow { values: vec![json_val_to_value(&parsed)] }],
+                rows_affected: 0,
+            },
+        };
+        let columns: Vec<Column> = obj.keys()
+            .map(|k| Column { name: k.clone(), type_name: "json".into() })
+            .collect();
+        let values: Vec<Value> = obj.values().map(json_val_to_value).collect();
+        DbQueryResult { columns, rows: vec![DbRow { values }], rows_affected: 0 }
+    }
+}
+
+fn json_val_to_value(v: &serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null       => Value::Null,
+        serde_json::Value::Bool(b)    => Value::Bool(*b),
+        serde_json::Value::Number(n)  => {
+            if let Some(i) = n.as_i64() { Value::Int(i) }
+            else { Value::Float(n.as_f64().unwrap_or(0.0)) }
+        }
+        serde_json::Value::String(s)  => Value::Text(s.clone()),
+        serde_json::Value::Object(_)  => Value::NestedDoc(v.to_string()),
+        serde_json::Value::Array(_)   => Value::NestedArray(v.to_string()),
+    }
 }
 
 fn spawn_sql_count(

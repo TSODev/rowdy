@@ -191,17 +191,21 @@ fn value_to_jsvalue(v: &Value) -> serde_json::Value {
             let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
             serde_json::Value::String(hex)
         }
+        Value::NestedDoc(s) | Value::NestedArray(s) => {
+            serde_json::from_str(s).unwrap_or(serde_json::Value::String(s.clone()))
+        }
     }
 }
 
 fn value_str(v: &Value) -> String {
     match v {
-        Value::Null      => String::new(),
-        Value::Bool(b)   => b.to_string(),
-        Value::Int(i)    => i.to_string(),
-        Value::Float(f)  => f.to_string(),
-        Value::Text(s)   => s.clone(),
-        Value::Bytes(b)  => b.iter().map(|x| format!("{x:02x}")).collect(),
+        Value::Null                              => String::new(),
+        Value::Bool(b)                           => b.to_string(),
+        Value::Int(i)                            => i.to_string(),
+        Value::Float(f)                          => f.to_string(),
+        Value::Text(s)                           => s.clone(),
+        Value::Bytes(b)                          => b.iter().map(|x| format!("{x:02x}")).collect(),
+        Value::NestedDoc(s) | Value::NestedArray(s) => s.clone(),
     }
 }
 

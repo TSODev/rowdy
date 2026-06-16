@@ -10,6 +10,9 @@ keywords = ["database", "tui", "terminal", "postgres", "sqlite"]
 categories = ["development-tools", "database"]
 repository = "https://github.com/TSODev/rowdy"
 
+[features]
+mongodb = ["dep:mongodb"]
+
 [dependencies]
 # Interface graphique de terminal
 ratatui = "0.27"
@@ -37,4 +40,5 @@ thiserror = "1"
 tui-textarea = "0.5"
 clap = { version = "4", features = ["derive"] }
 libsql = { version = "0.9.30", features = ["remote"] }
+mongodb = { version = "3", optional = true }
 

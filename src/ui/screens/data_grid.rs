@@ -256,7 +256,7 @@ impl DataGridScreen {
                 }
             }
 
-            KeyCode::Enter if !self.read_only => DataGridAction::EnterCell,
+            KeyCode::Enter if !self.read_only || self.selected_value_is_nested() => DataGridAction::EnterCell,
 
             // Manual column resize
             // Export prompt
@@ -299,6 +299,15 @@ impl DataGridScreen {
 
     fn selected_col_name(&self) -> Option<String> {
         self.result.as_ref()?.columns.get(self.selected_col).map(|c| c.name.clone())
+    }
+
+    pub fn selected_value_is_nested(&self) -> bool {
+        let Some(result) = &self.result else { return false };
+        let Some(sel_row) = self.table_state.selected() else { return false };
+        matches!(
+            result.rows.get(sel_row).and_then(|r| r.values.get(self.selected_col)),
+            Some(Value::NestedDoc(_)) | Some(Value::NestedArray(_))
+        )
     }
 
     fn row_count(&self) -> usize {
@@ -544,6 +553,10 @@ impl DataGridScreen {
                                         .map(|c| format!("{c}…"))
                                         .unwrap_or_else(|| "…".into());
                                     (abbrev, String::new())
+                                } else if matches!(val, Value::NestedDoc(_)) {
+                                    (String::new(), " [obj]".to_string())
+                                } else if matches!(val, Value::NestedArray(_)) {
+                                    (String::new(), format!(" {}", s))
                                 } else if let Some(tbl) = fk_table {
                                     // Always show the FK badge; truncate the value to whatever
                                     // space remains (can be 0 if the badge fills the column).
@@ -570,7 +583,11 @@ impl DataGridScreen {
                                     Style::default()
                                 };
 
-                                let badge_style = Style::default().fg(Color::Magenta);
+                                let badge_style = if matches!(val, Value::NestedDoc(_) | Value::NestedArray(_)) {
+                                    Style::default().fg(Color::Green)
+                                } else {
+                                    Style::default().fg(Color::Magenta)
+                                };
                                 let cell_line = Line::from(vec![
                                     Span::styled(val_display, style),
                                     Span::styled(badge, badge_style),
@@ -599,7 +616,11 @@ impl DataGridScreen {
             let row = r.rows.get(row_idx)?;
             let col_name = r.columns.get(screen.selected_col).map(|c| c.name.as_str()).unwrap_or("");
             let val = row.values.get(screen.selected_col).unwrap_or(&Value::Null);
-            Some(format!(" ▸ {} : {}", col_name, value_display(val)))
+            let display = match val {
+                Value::NestedDoc(s) | Value::NestedArray(s) => s.as_str(),
+                _ => return Some(format!(" ▸ {} : {}", col_name, value_display(val))),
+            };
+            Some(format!(" ▸ {} : {}", col_name, display))
         }).unwrap_or_default();
         f.render_widget(
             Paragraph::new(preview_text)
@@ -630,7 +651,7 @@ impl DataGridScreen {
         } else if screen.read_only {
             f.render_widget(
                 Paragraph::new(
-                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Space: collapse   E: export   q: back"
+                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Space: collapse   Enter: explore   E: export   q: back"
                 )
                 .block(Block::default().borders(Borders::ALL))
                 .style(Style::default().fg(Color::DarkGray)),
@@ -694,12 +715,20 @@ fn format_float(f: f64) -> String {
 
 fn value_display(v: &Value) -> String {
     match v {
-        Value::Null     => "NULL".into(),
-        Value::Bool(b)  => b.to_string(),
-        Value::Int(i)   => i.to_string(),
-        Value::Float(f) => format_float(*f),
-        Value::Text(s)  => s.replace('\n', "↵").replace('\r', ""),
-        Value::Bytes(b) => format!("<{} bytes>", b.len()),
+        Value::Null          => "NULL".into(),
+        Value::Bool(b)       => b.to_string(),
+        Value::Int(i)        => i.to_string(),
+        Value::Float(f)      => format_float(*f),
+        Value::Text(s)       => s.replace('\n', "↵").replace('\r', ""),
+        Value::Bytes(b)      => format!("<{} bytes>", b.len()),
+        Value::NestedDoc(_)  => "{…}".into(),
+        Value::NestedArray(s) => {
+            let count = serde_json::from_str::<serde_json::Value>(s)
+                .ok()
+                .and_then(|v| v.as_array().map(|a| a.len()))
+                .unwrap_or(0);
+            format!("[arr:{count}]")
+        }
     }
 }
 

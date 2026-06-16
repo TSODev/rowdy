@@ -45,6 +45,7 @@ pub struct SqlEditorScreen {
     pub focus: EditorFocus,
     pub running: bool,
     pub db_info: String,
+    pub nosql_collection: Option<String>,
 }
 
 impl SqlEditorScreen {
@@ -61,7 +62,18 @@ impl SqlEditorScreen {
             focus: EditorFocus::Editor,
             running: false,
             db_info,
+            nosql_collection: None,
         }
+    }
+
+    pub fn set_nosql_collection(&mut self, collection: Option<String>) {
+        self.nosql_collection = collection;
+        let placeholder = if self.nosql_collection.is_some() {
+            "-- MQL filter: {\"field\": value}  or pipeline: [{\"$match\": {…}}]"
+        } else {
+            "-- Write your SQL here…"
+        };
+        self.editor.set_placeholder_text(placeholder);
     }
 
     pub fn set_rows(&mut self, result: DbQueryResult) {
@@ -251,7 +263,11 @@ fn draw_editor(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
         Style::default().fg(Color::DarkGray)
     };
     let status_label = if screen.running { " ⏳ " } else { "" };
-    let title = format!(" SQL Editor {}│ {} ", status_label, screen.db_info);
+    let title = if let Some(ref coll) = screen.nosql_collection {
+        format!(" MQL Editor {}│ {} │ collection: {} ", status_label, screen.db_info, coll)
+    } else {
+        format!(" SQL Editor {}│ {} ", status_label, screen.db_info)
+    };
     screen.editor.set_block(
         Block::default()
             .title(title)
@@ -464,12 +480,13 @@ fn col_display_width(result: &DbQueryResult, col_idx: usize) -> u16 {
 
 fn value_str(v: &Value) -> String {
     match v {
-        Value::Null     => "NULL".into(),
-        Value::Bool(b)  => b.to_string(),
-        Value::Int(i)   => i.to_string(),
-        Value::Float(f) => format!("{f:.4}"),
-        Value::Text(s)  => s.replace('\n', "↵").replace('\r', ""),
-        Value::Bytes(b) => format!("<{} bytes>", b.len()),
+        Value::Null                              => "NULL".into(),
+        Value::Bool(b)                           => b.to_string(),
+        Value::Int(i)                            => i.to_string(),
+        Value::Float(f)                          => format!("{f:.4}"),
+        Value::Text(s)                           => s.replace('\n', "↵").replace('\r', ""),
+        Value::Bytes(b)                          => format!("<{} bytes>", b.len()),
+        Value::NestedDoc(s) | Value::NestedArray(s) => s.clone(),
     }
 }
 
