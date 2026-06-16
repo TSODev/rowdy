@@ -44,7 +44,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Status bar — mode, connection indicator, DB info, row count, flash messages | ✅ |
 | URL redaction — passwords and tokens masked in UI (`user:***@host`, `authToken=***`) | ✅ |
 | Export CSV / JSON — `E` key in any data grid, file saved to `~/rowdy_<table>_<ts>.csv/json` | ✅ |
-| Export JSON with recursive FK resolution — nested `__ref` objects up to 3 levels deep, cycle detection | ✅ |
+| Export JSON simple (`j`) or with recursive FK resolution (`J`) — nested `__ref` objects up to 3 levels deep, cycle detection | ✅ |
 | Table list — TABLE / VIEW distinction with `[T]` / `[V]` badges; VIEW opens read-only with cyan badge | ✅ |
 | Read-only safe mode — `?readonly=true` in URL, blocks all writes, `READ-ONLY` badge in status bar | ✅ |
 | Async I/O — UI never blocks during queries | ✅ |
@@ -157,7 +157,7 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | `d` | Remove filter on selected column |
 | `F` | Clear all filters |
 | `Enter` | FK cell → open linked sub-grid ; other cell → Edit Record |
-| `E` | Export prompt (then `c`=CSV, `j`=JSON, `Esc`=cancel) |
+| `E` | Export prompt (then `c`=CSV, `j`=JSON, `J`=JSON+FK, `Esc`=cancel) |
 | `q` | Back to table list |
 
 ### Edit Record

@@ -7,6 +7,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+#### Export JSON — choix simple vs résolution FK
+- Le prompt d'export distingue désormais deux variantes JSON : `j = JSON   J = JSON+FK`
+- `j` (minuscule) → JSON simple, synchrone, sans résolution des clés étrangères
+- `J` (majuscule) → JSON avec résolution FK récursive jusqu'à 3 niveaux (comportement précédent de `j`)
+- Depuis la vue SQL Result (`F4`), `j` et `J` produisent le même résultat (pas de schéma de table disponible)
+
 ## [0.7.1] — 2026-06-15
 
 ### Added

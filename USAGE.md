@@ -215,7 +215,7 @@ Depuis la vue liste des tables, appuyez sur `Enter` pour ouvrir une table.
 | `-` | Réduire la largeur de la colonne sélectionnée (−5, min 4) |
 | `=` | Agrandir la largeur de la colonne sélectionnée (+5, max 80) |
 | `Enter` | Cellule FK → ouvre la sous-grille liée ; cellule normale → édition de la ligne |
-| `E` | Ouvrir le prompt d'export (puis `c`=CSV, `j`=JSON, `Esc`=annuler) |
+| `E` | Ouvrir le prompt d'export (puis `c`=CSV, `j`=JSON, `J`=JSON+FK, `Esc`=annuler) |
 | `q` / `Esc` | Retour à la liste des tables |
 
 ### Colonnes
@@ -434,22 +434,23 @@ Le curseur d'historique se réinitialise dès qu'une nouvelle requête est exéc
 Depuis n'importe quelle grille de données (Data Grid, sous-grille FK, SQL Result), appuyez sur `E` pour exporter les données chargées.
 
 ```
- Export:  c = CSV   j = JSON   Esc = cancel
+ Export:  c = CSV   j = JSON   J = JSON+FK   Esc = cancel
 ```
 
 | Touche | Action |
 |--------|--------|
 | `c` | Exporter en CSV (RFC 4180 : guillemets si la valeur contient une virgule, un guillemet ou un saut de ligne) |
-| `j` | Exporter en JSON avec résolution FK récursive (voir ci-dessous) |
-| `Esc` | Cancel |
+| `j` | Exporter en JSON simple (tableau d'objets, sans résolution des FK) |
+| `J` | Exporter en JSON avec résolution FK récursive (voir ci-dessous) |
+| `Esc` | Annuler |
 
 Le fichier est écrit dans votre répertoire personnel : `~/rowdy_<table>_<timestamp>.csv` ou `.json`.
 
 La status bar confirme le nom du fichier créé : `Saved: ~/rowdy_books_1718453421.json`
 
-### Export JSON avec résolution FK
+### Export JSON avec résolution FK (`J`)
 
-Lorsqu'un schéma de table est disponible (Data Grid ou sous-grille FK), l'export JSON résout automatiquement les clés étrangères. Pour chaque colonne FK, la ligne référencée est récupérée dans la base et embarquée sous la clé `<colonne>__ref` :
+Lorsqu'un schéma de table est disponible (Data Grid ou sous-grille FK), `J` résout les clés étrangères. Pour chaque colonne FK, la ligne référencée est récupérée dans la base et embarquée sous la clé `<colonne>__ref` :
 
 ```json
 [
@@ -476,7 +477,7 @@ La résolution est **récursive jusqu'à 3 niveaux** : si la table liée contien
 
 L'export s'effectue de manière **asynchrone** : l'interface reste réactive pendant les requêtes de résolution. La status bar affiche "JSON export with FK resolution in progress…" puis "Saved: ~/rowdy_…json" à la fin.
 
-> **Note :** la résolution FK n'est disponible que depuis les Data Grid et FK Grid (le schéma de table est connu). Depuis la vue SQL Result (`F4`), l'export JSON produit un tableau simple sans résolution FK.
+> **Note :** `J` (résolution FK) n'est disponible que depuis les Data Grid et FK Grid (schéma de table connu). Depuis la vue SQL Result (`F4`), `j` et `J` produisent le même résultat : un tableau JSON simple sans résolution FK.
 
 > **Note :** l'export porte sur les données actuellement chargées en mémoire (jusqu'à la page en cours pour le scroll infini). Pour exporter une table complète, chargez toutes les pages avant d'exporter.
 

@@ -217,6 +217,7 @@ src/
 - [ ] Tests d'intégration sur les connecteurs
 - [ ] _(priorité basse)_ Validation de format et helpers d'édition par type : format de date, JSON valide, UUID, etc.
 - [x] **Export JSON avec résolution FK récursive** — `export_json_with_fk()` dans `src/export.rs` ; pour chaque colonne FK, récupère la ligne référencée et l'embarque en `<col>__ref` ; récursif jusqu'à 3 niveaux (paramètre `max_depth`), détection de cycles via `HashSet<(table.col=val)>`, cache des schémas per-table ; colonnes JSON/JSONB inlinées directement ; fallback sync pour SQL result grid (pas de schéma) ; le résultat revient via `DbEvent::ExportDone/ExportFailed` (canal mpsc existant).
+- [x] **Export JSON — choix simple vs FK** — prompt d'export étendu : `j` = JSON simple (synchrone, sans FK), `J` = JSON avec résolution FK récursive (comportement précédent) ; `DataGridAction::ExportJsonSimple` ajouté ; depuis SQL Result Grid `j` et `J` sont équivalents (pas de schéma).
 
 ## Commandes utiles
 

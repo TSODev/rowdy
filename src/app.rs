@@ -266,6 +266,12 @@ impl App {
                             self.run_export(r, &table, schema, true);
                         }
                     }
+                    DataGridAction::ExportJsonSimple => {
+                        let table = self.data_grid_screen.table_name.clone();
+                        if let Some(ref r) = self.data_grid_screen.result.clone() {
+                            self.run_export(r, &table, None, true);
+                        }
+                    }
                     DataGridAction::None => {}
                 }
             }
@@ -299,6 +305,12 @@ impl App {
                         let schema = self.fk_grid_screen.schema.clone();
                         if let Some(ref r) = self.fk_grid_screen.result.clone() {
                             self.run_export(r, &table, schema, true);
+                        }
+                    }
+                    DataGridAction::ExportJsonSimple => {
+                        let table = self.fk_grid_screen.table_name.clone();
+                        if let Some(ref r) = self.fk_grid_screen.result.clone() {
+                            self.run_export(r, &table, None, true);
                         }
                     }
                     DataGridAction::LoadMore | DataGridAction::ApplyFilter => {}
@@ -348,7 +360,7 @@ impl App {
                             self.run_export(r, &table, None, false);
                         }
                     }
-                    DataGridAction::ExportJson => {
+                    DataGridAction::ExportJson | DataGridAction::ExportJsonSimple => {
                         let table = self.sql_result_grid_screen.table_name.clone();
                         if let Some(ref r) = self.sql_result_grid_screen.result.clone() {
                             self.run_export(r, &table, None, true);

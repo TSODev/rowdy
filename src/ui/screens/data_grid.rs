@@ -31,6 +31,7 @@ pub enum DataGridAction {
     EnterCell,
     ExportCsv,
     ExportJson,
+    ExportJsonSimple,
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -149,7 +150,8 @@ impl DataGridScreen {
             self.export_prompt = false;
             return match key.code {
                 KeyCode::Char('c') | KeyCode::Char('C') => DataGridAction::ExportCsv,
-                KeyCode::Char('j') | KeyCode::Char('J') => DataGridAction::ExportJson,
+                KeyCode::Char('j') => DataGridAction::ExportJsonSimple,
+                KeyCode::Char('J') => DataGridAction::ExportJson,
                 _ => DataGridAction::None,
             };
         }
@@ -608,7 +610,7 @@ impl DataGridScreen {
         // ── Help / filter bar ─────────────────────────────────────────────────
         if screen.export_prompt {
             f.render_widget(
-                Paragraph::new(" Export:  c = CSV   j = JSON   Esc = cancel ")
+                Paragraph::new(" Export:  c = CSV   j = JSON   J = JSON+FK   Esc = cancel ")
                     .block(Block::default().borders(Borders::ALL))
                     .style(Style::default().fg(Color::Yellow)),
                 chunks[3],
