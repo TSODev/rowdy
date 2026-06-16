@@ -10,7 +10,7 @@ use tokio::{
 use crate::config::{Config, ConnectionProfile};
 use crate::export;
 use crate::history::QueryHistory;
-use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{ColumnSchema, DbQueryResult, TableObject, Value}};
+use crate::db::{connectors, traits::{KvClient, SqlClient}, types::{Column, ColumnSchema, DbQueryResult, KvKeyDetail, Row, TableObject, Value}};
 use crate::ui::components::modal::Modal;
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
 use crate::ui::screens::data_grid::{DataGridAction, DataGridScreen, PAGE_SIZE};
@@ -50,6 +50,7 @@ pub enum DbEvent {
     EditFailed(String),
     ExportDone(std::path::PathBuf),
     ExportFailed(String),
+    KvKeyLoaded { detail: KvKeyDetail, key: String, ttl: i64 },
 }
 
 // ── Pending modal action ──────────────────────────────────────────────────────
@@ -641,11 +642,30 @@ impl App {
                 let _ = tx.send(ev).await;
             });
         } else if let Some(ActiveClient::Kv(_)) = &self.active_client {
-            self.data_grid_screen.set_error(
-                "Data Grid not available for key-value stores. Use the SQL Editor.".into(),
-            );
+            self.spawn_load_kv_key(table_name);
         } else {
             self.data_grid_screen.set_error("Not connected".into());
+        }
+    }
+
+    fn spawn_load_kv_key(&mut self, key: String) {
+        self.data_grid_screen = DataGridScreen::new(key.clone());
+        self.data_grid_screen.read_only = true;
+        self.data_grid_screen.loading = true;
+        self.fk_history.clear();
+        self.state = AppState::DataGrid;
+
+        if let Some(ActiveClient::Kv(c)) = &self.active_client {
+            let c = Arc::clone(c);
+            let tx = self.db_tx.clone();
+            tokio::spawn(async move {
+                let ttl = c.ttl(&key).await.unwrap_or(-1);
+                let ev = match c.get_key_detail(&key).await {
+                    Ok(detail) => DbEvent::KvKeyLoaded { detail, key, ttl },
+                    Err(e)     => DbEvent::DataLoadFailed(e.to_string()),
+                };
+                let _ = tx.send(ev).await;
+            });
         }
     }
 
@@ -885,6 +905,19 @@ impl App {
             DbEvent::EditFailed(msg) => {
                 self.modal = Some(Modal::error("Save Failed", &msg));
             }
+            DbEvent::KvKeyLoaded { detail, key, ttl } => {
+                let ttl_label = match ttl {
+                    -1 => "no expiry".to_string(),
+                    -2 => "expired".to_string(),
+                    n  => format!("TTL: {n}s"),
+                };
+                self.data_grid_screen.display_name = Some(format!("{key} [{ttl_label}]"));
+                let result = kv_detail_to_result(detail);
+                let count = result.rows.len() as u64;
+                self.data_grid_screen.set_result(result);
+                self.data_grid_screen.total_count = Some(count);
+                self.data_grid_screen.has_more = false;
+            }
             DbEvent::ExportDone(path) => {
                 let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
                 self.status_message = Some((format!("Saved: ~/{name}"), false));
@@ -895,6 +928,49 @@ impl App {
                 self.status_message_ttl = 80;
             }
         }
+    }
+}
+
+// ── Redis key detail → DbQueryResult ─────────────────────────────────────────
+
+fn kv_detail_to_result(detail: KvKeyDetail) -> DbQueryResult {
+    let col = |n: &str| Column { name: n.to_string(), type_name: String::new() };
+    let txt = |s: String| Value::Text(s);
+
+    match detail {
+        KvKeyDetail::String(v) => DbQueryResult {
+            columns: vec![col("value")],
+            rows: vec![Row { values: vec![txt(v)] }],
+            rows_affected: 0,
+        },
+        KvKeyDetail::Hash(pairs) => DbQueryResult {
+            columns: vec![col("field"), col("value")],
+            rows: pairs.into_iter()
+                .map(|(f, v)| Row { values: vec![txt(f), txt(v)] })
+                .collect(),
+            rows_affected: 0,
+        },
+        KvKeyDetail::List(items) => DbQueryResult {
+            columns: vec![col("index"), col("value")],
+            rows: items.into_iter().enumerate()
+                .map(|(i, v)| Row { values: vec![Value::Int(i as i64), txt(v)] })
+                .collect(),
+            rows_affected: 0,
+        },
+        KvKeyDetail::Set(members) => DbQueryResult {
+            columns: vec![col("member")],
+            rows: members.into_iter()
+                .map(|m| Row { values: vec![txt(m)] })
+                .collect(),
+            rows_affected: 0,
+        },
+        KvKeyDetail::ZSet(pairs) => DbQueryResult {
+            columns: vec![col("member"), col("score")],
+            rows: pairs.into_iter()
+                .map(|(m, s)| Row { values: vec![txt(m), Value::Float(s)] })
+                .collect(),
+            rows_affected: 0,
+        },
     }
 }
 

@@ -55,3 +55,13 @@ pub struct ColumnSchema {
     pub is_nullable: bool,
     pub fk: Option<ForeignKey>,
 }
+
+/// Typed value of a Redis key, fetched via TYPE + the appropriate read command.
+#[derive(Debug, Clone)]
+pub enum KvKeyDetail {
+    String(String),
+    Hash(Vec<(String, String)>),   // (field, value) sorted by field
+    List(Vec<String>),              // ordered values
+    Set(Vec<String>),               // unordered members
+    ZSet(Vec<(String, f64)>),      // (member, score) ordered by score
+}

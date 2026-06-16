@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use crate::db::error::DbError;
+use crate::db::types::KvKeyDetail;
 
 #[async_trait]
 pub trait KvClient: Send + Sync {
@@ -13,4 +14,6 @@ pub trait KvClient: Send + Sync {
     #[allow(dead_code)]
     async fn del(&self, key: &str) -> Result<bool, DbError>;
     async fn keys(&self, pattern: &str) -> Result<Vec<String>, DbError>;
+    async fn get_key_detail(&self, key: &str) -> Result<KvKeyDetail, DbError>;
+    async fn ttl(&self, key: &str) -> Result<i64, DbError>;
 }

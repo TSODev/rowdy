@@ -22,6 +22,7 @@ pub struct TableListScreen {
     pub filter_mode: bool,
     pub status: Option<String>,
     pub db_info: String,
+    pub is_kv: bool,
 }
 
 impl TableListScreen {
@@ -33,6 +34,7 @@ impl TableListScreen {
             filter_mode: false,
             status: Some("Loading…".into()),
             db_info: String::new(),
+            is_kv: false,
         }
     }
 
@@ -47,7 +49,10 @@ impl TableListScreen {
 
     /// Called when a KV client returns key names (no VIEW distinction).
     pub fn set_tables_kv(&mut self, names: Vec<String>) {
-        self.tables = names.into_iter()
+        self.is_kv = true;
+        let mut sorted = names;
+        sorted.sort();
+        self.tables = sorted.into_iter()
             .map(|name| TableObject { name, kind: TableKind::Table })
             .collect();
         self.status = None;
@@ -167,6 +172,10 @@ impl TableListScreen {
             vec![ListItem::new(msg.as_str()).style(Style::default().fg(Color::DarkGray))]
         } else if filtered_items.is_empty() {
             vec![ListItem::new("No match").style(Style::default().fg(Color::DarkGray))]
+        } else if screen.is_kv {
+            filtered_items.iter().map(|(name, _)| {
+                ListItem::new(name.clone())
+            }).collect()
         } else {
             filtered_items.iter().map(|(name, is_view)| {
                 if *is_view {
