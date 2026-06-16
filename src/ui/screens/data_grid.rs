@@ -677,12 +677,27 @@ impl DataGridScreen {
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
+fn format_float(f: f64) -> String {
+    let s = format!("{f:.4}");
+    if let Some(dot_pos) = s.find('.') {
+        let frac = &s[dot_pos + 1..];
+        let sig = frac.trim_end_matches('0').len().max(2);
+        let display_frac: String = frac.chars()
+            .chain(std::iter::repeat('0'))
+            .take(sig)
+            .collect();
+        format!("{}.{}", &s[..dot_pos], display_frac)
+    } else {
+        s
+    }
+}
+
 fn value_display(v: &Value) -> String {
     match v {
         Value::Null     => "NULL".into(),
         Value::Bool(b)  => b.to_string(),
         Value::Int(i)   => i.to_string(),
-        Value::Float(f) => format!("{f:.4}"),
+        Value::Float(f) => format_float(*f),
         Value::Text(s)  => s.replace('\n', "↵").replace('\r', ""),
         Value::Bytes(b) => format!("<{} bytes>", b.len()),
     }

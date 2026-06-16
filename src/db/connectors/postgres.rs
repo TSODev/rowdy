@@ -203,7 +203,7 @@ fn pg_value(row: &PgRow, index: usize) -> Value {
         "FLOAT4"         => row.try_get::<f32, _>(index).map(|v| Value::Float(v as f64)).unwrap_or_else(|_| marker()),
         "FLOAT8"         => row.try_get::<f64, _>(index).map(Value::Float).unwrap_or_else(|_| marker()),
         "NUMERIC"        => row.try_get::<bigdecimal::BigDecimal, _>(index)
-                               .map(|d| Value::Text(d.to_string()))
+                               .map(|d| Value::Text(crate::db::types::format_decimal(d)))
                                .unwrap_or_else(|_| marker()),
         "BYTEA"          => row.try_get::<Vec<u8>, _>(index).map(Value::Bytes).unwrap_or_else(|_| marker()),
         // Dates and times

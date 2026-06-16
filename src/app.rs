@@ -51,6 +51,7 @@ pub enum DbEvent {
     ExportDone(std::path::PathBuf),
     ExportFailed(String),
     KvKeyLoaded { detail: KvKeyDetail, key: String, ttl: i64 },
+    AllSchemasLoaded(std::collections::HashMap<String, Vec<ColumnSchema>>),
 }
 
 // ── Pending modal action ──────────────────────────────────────────────────────
@@ -229,6 +230,7 @@ impl App {
                         }
                     }
                     TableListAction::OpenEditor => self.open_sql_editor(),
+                    TableListAction::SelectionChanged => {}
                     TableListAction::Disconnect => {
                         self.active_client = None;
                         self.prod_readonly = false;
@@ -541,6 +543,28 @@ impl App {
         self.state = AppState::SqlResultGrid;
     }
 
+    // ── Schema preload (for TableList ERD panel) ──────────────────────────────
+
+    fn spawn_load_all_schemas(&mut self) {
+        let tx = self.db_tx.clone();
+        let tables: Vec<String> = self.table_list_screen.tables.iter()
+            .map(|t| t.name.clone())
+            .collect();
+        if let Some(ActiveClient::Sql(c)) = &self.active_client {
+            let c = Arc::clone(c);
+            tokio::spawn(async move {
+                use std::collections::HashMap;
+                let mut schema: HashMap<String, Vec<ColumnSchema>> = HashMap::new();
+                for table in &tables {
+                    if let Ok(cols) = c.get_schema(table).await {
+                        schema.insert(table.clone(), cols);
+                    }
+                }
+                let _ = tx.send(DbEvent::AllSchemasLoaded(schema)).await;
+            });
+        }
+    }
+
     // ── Modal key handler ─────────────────────────────────────────────────────
 
     fn handle_modal_key(&mut self, key: crossterm::event::KeyEvent) {
@@ -850,6 +874,7 @@ impl App {
             }
             DbEvent::TableObjectsLoaded(objects) => {
                 self.table_list_screen.set_tables(objects);
+                self.spawn_load_all_schemas();
             }
             DbEvent::TablesLoadFailed(msg) => {
                 self.table_list_screen.set_error(format!("Error: {msg}"));
@@ -917,6 +942,9 @@ impl App {
                 self.data_grid_screen.set_result(result);
                 self.data_grid_screen.total_count = Some(count);
                 self.data_grid_screen.has_more = false;
+            }
+            DbEvent::AllSchemasLoaded(schemas) => {
+                self.table_list_screen.set_all_schemas(schemas);
             }
             DbEvent::ExportDone(path) => {
                 let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();

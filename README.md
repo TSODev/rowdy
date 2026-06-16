@@ -50,6 +50,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Read-only safe mode — `?readonly=true` in URL, blocks all writes, `READ-ONLY` badge in status bar | ✅ |
 | Async I/O — UI never blocks during queries | ✅ |
 | Redis key-detail view — `Enter` on a key shows its content (string/hash/list/set/zset) in a read-only grid with TTL | ✅ |
+| Schema panel in table list — columns with PK/FK badges, outgoing and incoming FK relations, auto-loaded on connect | ✅ |
 | Schema / ERD view of FK relationships | 🔲 planned |
 | MongoDB connector | 🔲 planned |
 

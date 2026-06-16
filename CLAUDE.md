@@ -205,7 +205,8 @@ src/
 ### Roadmap
 
 #### Différenciation (priorité haute)
-- [ ] **Vue schema/ERD FK** — visualisation graphique des relations entre tables (l'introspection `get_schema` est déjà en place sur les 4 connecteurs SQL)
+- [x] **Vue schema/ERD FK (niveau 1 — panneau relations)** — panneau droit intégré dans `TableListScreen` (pas d'état séparé) ; chargement auto en arrière-plan après `TableObjectsLoaded` → `DbEvent::AllSchemasLoaded(HashMap<String, Vec<ColumnSchema>>)` stocké dans `table_list_screen.all_schemas` ; panneau gauche = liste tables (28 chars), panneau droit = colonnes avec badges [PK]/[FK] + sections "Outgoing FK / Incoming FK" avec flèches ASCII `──►` ; désactivé si KV store
+- [ ] **Vue schema/ERD FK (niveau 2 — boîtes + flèches ASCII)** — _(après niveau 1)_ rendu graphique : chaque table = boîte box-drawing, lignes `─ ─ →` tracées entre boîtes pour les FK ; navigation spatiale h/j/k/l entre boîtes
 - [ ] **Connecteur MongoDB** — aucun concurrent TUI sérieux sur ce terrain ; trait `NoSqlClient` à définir, driver `mongodb` crate
 - [x] **Mode read-only prod** — ✅ implémenté (voir section Fait)
 
@@ -217,6 +218,7 @@ src/
 - [ ] Tests d'intégration sur les connecteurs
 - [x] **Validation de format dans EditRecord** — `validate_field()` sur sortie du mode édition ; types couverts : DATE/TIME/TIMESTAMP/UUID/JSON/INT/FLOAT/INET/CIDR ; valeur en rouge si invalide ; hint format en cyan pendant l'édition ; `Ctrl+S` bloqué si erreurs ; `format_hint()` + `is_valid_uuid()` dans `edit_record.rs`
 - [x] **Export JSON avec résolution FK récursive** — `export_json_with_fk()` dans `src/export.rs` ; pour chaque colonne FK, récupère la ligne référencée et l'embarque en `<col>__ref` ; récursif jusqu'à 3 niveaux (paramètre `max_depth`), détection de cycles via `HashSet<(table.col=val)>`, cache des schémas per-table ; colonnes JSON/JSONB inlinées directement ; fallback sync pour SQL result grid (pas de schéma) ; le résultat revient via `DbEvent::ExportDone/ExportFailed` (canal mpsc existant).
+- [x] **Affichage NUMERIC/DECIMAL/REAL** — `format_decimal()` dans `db/types.rs` (PostgreSQL NUMERIC + MySQL DECIMAL via BigDecimal) et `format_float()` dans `data_grid.rs` (libsql REAL + FLOAT4/FLOAT8) : suppression des zéros trailing, minimum 2 décimales conservées (`10.6900` → `10.69`, `12.9000` → `12.90`, `1.0000` → `1.00`)
 - [x] **Export JSON — choix simple vs FK** — prompt d'export étendu : `j` = JSON simple (synchrone, sans FK), `J` = JSON avec résolution FK récursive (comportement précédent) ; `DataGridAction::ExportJsonSimple` ajouté ; depuis SQL Result Grid `j` et `J` sont équivalents (pas de schéma).
 
 ## Commandes utiles

@@ -56,6 +56,24 @@ pub struct ColumnSchema {
     pub fk: Option<ForeignKey>,
 }
 
+/// Format a BigDecimal for display: strips trailing zeros but keeps at least 2 decimal places.
+/// PostgreSQL/MySQL encode NUMERIC/DECIMAL in base-10000 groups internally, so `10.69`
+/// often comes back as `10.6900`. This normalises it: `10.6900` → `10.69`, `12.9000` → `12.90`.
+pub fn format_decimal(d: bigdecimal::BigDecimal) -> String {
+    let s = d.to_string();
+    if let Some(dot_pos) = s.find('.') {
+        let frac = &s[dot_pos + 1..];
+        let sig = frac.trim_end_matches('0').len().max(2);
+        let display_frac: String = frac.chars()
+            .chain(std::iter::repeat('0'))
+            .take(sig)
+            .collect();
+        format!("{}.{}", &s[..dot_pos], display_frac)
+    } else {
+        s
+    }
+}
+
 /// Typed value of a Redis key, fetched via TYPE + the appropriate read command.
 #[derive(Debug, Clone)]
 pub enum KvKeyDetail {

@@ -1,18 +1,20 @@
+use std::collections::HashMap;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
-use crate::db::types::{TableKind, TableObject};
+use crate::db::types::{ColumnSchema, TableKind, TableObject};
 
 pub enum TableListAction {
     None,
     OpenTable { name: String, is_view: bool },
     OpenEditor,
     Disconnect,
+    SelectionChanged,
 }
 
 pub struct TableListScreen {
@@ -23,6 +25,8 @@ pub struct TableListScreen {
     pub status: Option<String>,
     pub db_info: String,
     pub is_kv: bool,
+    pub all_schemas: HashMap<String, Vec<ColumnSchema>>,
+    pub schemas_loading: bool,
 }
 
 impl TableListScreen {
@@ -35,19 +39,20 @@ impl TableListScreen {
             status: Some("Loading…".into()),
             db_info: String::new(),
             is_kv: false,
+            all_schemas: HashMap::new(),
+            schemas_loading: false,
         }
     }
 
-    /// Called when a SQL client returns table/view objects.
     pub fn set_tables(&mut self, tables: Vec<TableObject>) {
         self.tables = tables;
         self.status = None;
+        self.schemas_loading = true;
         if !self.tables.is_empty() {
             self.list_state.select(Some(0));
         }
     }
 
-    /// Called when a KV client returns key names (no VIEW distinction).
     pub fn set_tables_kv(&mut self, names: Vec<String>) {
         self.is_kv = true;
         let mut sorted = names;
@@ -59,6 +64,11 @@ impl TableListScreen {
         if !self.tables.is_empty() {
             self.list_state.select(Some(0));
         }
+    }
+
+    pub fn set_all_schemas(&mut self, schemas: HashMap<String, Vec<ColumnSchema>>) {
+        self.all_schemas = schemas;
+        self.schemas_loading = false;
     }
 
     pub fn set_error(&mut self, msg: String) {
@@ -82,14 +92,24 @@ impl TableListScreen {
             }))
     }
 
+    pub fn selected_table_name(&self) -> Option<String> {
+        self.selected_object().map(|(name, _)| name)
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> TableListAction {
         if self.filter_mode {
             return self.handle_filter(key);
         }
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => TableListAction::Disconnect,
-            KeyCode::Char('j') | KeyCode::Down  => { self.select_next(); TableListAction::None }
-            KeyCode::Char('k') | KeyCode::Up    => { self.select_prev(); TableListAction::None }
+            KeyCode::Char('j') | KeyCode::Down  => {
+                self.select_next();
+                self.emit_selection_changed()
+            }
+            KeyCode::Char('k') | KeyCode::Up    => {
+                self.select_prev();
+                self.emit_selection_changed()
+            }
             KeyCode::Char('/')                   => { self.filter_mode = true; TableListAction::None }
             KeyCode::Char('e')                   => TableListAction::OpenEditor,
             KeyCode::Enter => {
@@ -100,6 +120,14 @@ impl TableListScreen {
                 }
             }
             _ => TableListAction::None,
+        }
+    }
+
+    fn emit_selection_changed(&self) -> TableListAction {
+        if self.selected_table_name().is_some() {
+            TableListAction::SelectionChanged
+        } else {
+            TableListAction::None
         }
     }
 
@@ -146,16 +174,49 @@ impl TableListScreen {
     }
 
     pub fn draw(f: &mut Frame<'_>, screen: &mut TableListScreen, area: Rect) {
-
-        let chunks = Layout::default()
+        let vert = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(0),    // table list
-                Constraint::Length(3), // filter input or help bar
-            ])
+            .constraints([Constraint::Min(0), Constraint::Length(3)])
             .split(area);
+        let main_area = vert[0];
+        let help_area = vert[1];
 
-        // Collect owned data to release the immutable borrow before render_stateful_widget.
+        if screen.is_kv {
+            Self::draw_table_list(f, screen, main_area);
+        } else {
+            let horiz = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Length(28), Constraint::Min(0)])
+                .split(main_area);
+            Self::draw_table_list(f, screen, horiz[0]);
+            Self::draw_schema_panel(f, screen, horiz[1]);
+        }
+
+        let help_text = if screen.filter_mode {
+            let filter_display = format!("/{}", screen.filter);
+            f.set_cursor(help_area.x + 1 + filter_display.len() as u16, help_area.y + 1);
+            filter_display
+        } else if screen.is_kv {
+            " j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect ".into()
+        } else {
+            " j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect ".into()
+        };
+
+        let help_style = if screen.filter_mode {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        f.render_widget(
+            Paragraph::new(help_text)
+                .block(Block::default().borders(Borders::ALL))
+                .style(help_style),
+            help_area,
+        );
+    }
+
+    fn draw_table_list(f: &mut Frame<'_>, screen: &mut TableListScreen, area: Rect) {
         let (filtered_items, total): (Vec<(String, bool)>, usize) = {
             let v = screen.filtered();
             let items = v.iter().map(|o| (o.name.clone(), o.kind == TableKind::View)).collect();
@@ -165,7 +226,7 @@ impl TableListScreen {
         let title = if screen.filter.is_empty() {
             format!(" Tables ({}) ", filtered_items.len())
         } else {
-            format!(" Tables ({} / {}) ", filtered_items.len(), total)
+            format!(" Tables ({}/{}) ", filtered_items.len(), total)
         };
 
         let items: Vec<ListItem> = if let Some(ref msg) = screen.status {
@@ -173,9 +234,7 @@ impl TableListScreen {
         } else if filtered_items.is_empty() {
             vec![ListItem::new("No match").style(Style::default().fg(Color::DarkGray))]
         } else if screen.is_kv {
-            filtered_items.iter().map(|(name, _)| {
-                ListItem::new(name.clone())
-            }).collect()
+            filtered_items.iter().map(|(name, _)| ListItem::new(name.clone())).collect()
         } else {
             filtered_items.iter().map(|(name, is_view)| {
                 if *is_view {
@@ -197,26 +256,151 @@ impl TableListScreen {
             .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
             .highlight_symbol("> ");
 
-        f.render_stateful_widget(list, chunks[0], &mut screen.list_state);
+        f.render_stateful_widget(list, area, &mut screen.list_state);
+    }
 
-        // Filter bar or help bar
-        if screen.filter_mode {
-            let filter_display = format!("/{}", screen.filter);
+    fn draw_schema_panel(f: &mut Frame<'_>, screen: &TableListScreen, area: Rect) {
+        let Some(table_name) = screen.selected_table_name() else {
             f.render_widget(
-                Paragraph::new(filter_display.clone())
-                    .block(Block::default().borders(Borders::ALL))
-                    .style(Style::default().fg(Color::Yellow)),
-                chunks[1],
-            );
-            // cursor after the '/' and the typed text
-            f.set_cursor(chunks[1].x + 1 + filter_display.len() as u16, chunks[1].y + 1);
-        } else {
-            f.render_widget(
-                Paragraph::new(" j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect ")
-                    .block(Block::default().borders(Borders::ALL))
+                Paragraph::new("Select a table")
+                    .block(Block::default().title(" Schema ").borders(Borders::ALL))
                     .style(Style::default().fg(Color::DarkGray)),
-                chunks[1],
+                area,
             );
+            return;
+        };
+
+        if screen.schemas_loading {
+            f.render_widget(
+                Paragraph::new("Loading schema…")
+                    .block(Block::default().title(format!(" {} ", table_name)).borders(Borders::ALL))
+                    .style(Style::default().fg(Color::DarkGray)),
+                area,
+            );
+            return;
         }
+
+        let cols = match screen.all_schemas.get(&table_name) {
+            Some(c) => c.clone(),
+            None => {
+                f.render_widget(
+                    Paragraph::new("Schema not available")
+                        .block(Block::default().title(format!(" {} ", table_name)).borders(Borders::ALL))
+                        .style(Style::default().fg(Color::DarkGray)),
+                    area,
+                );
+                return;
+            }
+        };
+
+        let mut lines: Vec<Line> = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                "  Columns",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED),
+            )),
+            Line::from(""),
+        ];
+
+        for col in &cols {
+            let badge = if col.is_pk {
+                Span::styled("[PK] ", Style::default().fg(Color::Yellow))
+            } else if col.fk.is_some() {
+                Span::styled("[FK] ", Style::default().fg(Color::Magenta))
+            } else {
+                Span::raw("     ")
+            };
+
+            let name_span = Span::styled(
+                format!("{:<20}", col.name),
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            );
+            let type_span = Span::styled(
+                col.type_name.to_lowercase(),
+                Style::default().fg(Color::DarkGray),
+            );
+
+            let mut row_spans = vec![Span::raw("  "), badge, name_span, type_span];
+
+            if let Some(ref fk) = col.fk {
+                row_spans.push(Span::styled(
+                    format!("  →{}.{}", fk.table, fk.column),
+                    Style::default().fg(Color::Magenta),
+                ));
+            }
+
+            lines.push(Line::from(row_spans));
+        }
+
+        // Outgoing FK relations
+        let outgoing: Vec<_> = cols.iter()
+            .filter_map(|c| c.fk.as_ref().map(|fk| (c.name.as_str(), fk)))
+            .collect();
+
+        if !outgoing.is_empty() {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  Outgoing FK",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED),
+            )));
+            lines.push(Line::from(""));
+            for (col_name, fk) in &outgoing {
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(col_name.to_string(), Style::default().fg(Color::White)),
+                    Span::styled("  ──►  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        format!("{}.{}", fk.table, fk.column),
+                        Style::default().fg(Color::Magenta),
+                    ),
+                ]));
+            }
+        }
+
+        // Incoming FK relations (other tables referencing this one)
+        let incoming: Vec<(String, String, String)> = screen.all_schemas.iter()
+            .filter(|(t, _)| **t != table_name)
+            .flat_map(|(t, tcols)| {
+                tcols.iter()
+                    .filter_map(|c| c.fk.as_ref().and_then(|fk| {
+                        if fk.table == table_name {
+                            Some((t.clone(), c.name.clone(), fk.column.clone()))
+                        } else {
+                            None
+                        }
+                    }))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        if !incoming.is_empty() {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "  Incoming FK",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED),
+            )));
+            lines.push(Line::from(""));
+            for (from_table, from_col, to_col) in &incoming {
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        format!("{}.{}", from_table, from_col),
+                        Style::default().fg(Color::Magenta),
+                    ),
+                    Span::styled("  ──►  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        format!("{}.{}", table_name, to_col),
+                        Style::default().fg(Color::White),
+                    ),
+                ]));
+            }
+        }
+
+        f.render_widget(
+            Paragraph::new(lines)
+                .block(Block::default().title(format!(" {} ", table_name)).borders(Borders::ALL))
+                .wrap(Wrap { trim: false }),
+            area,
+        );
     }
 }

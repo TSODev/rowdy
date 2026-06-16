@@ -9,6 +9,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+#### Panneau schema/ERD intégré dans la liste des tables
+- Le panneau droit de la liste des tables affiche le schema de la table sélectionnée en temps réel
+- Chargement automatique en arrière-plan après connexion SQL via `get_schema()` sur toutes les tables
+- Colonnes avec badges `[PK]` jaune / `[FK]` magenta, nom, type SQL, et flèche `──►` vers la table référencée
+- Section **Outgoing FK** : clés étrangères qui partent de la table sélectionnée
+- Section **Incoming FK** : clés étrangères d'autres tables qui pointent vers la table sélectionnée
+- Non disponible pour les connecteurs KV (Redis) : liste pleine largeur conservée
+- Roadmap : niveau 2 (boîtes box-drawing + flèches ASCII graphiques) prévu
+
+### Fixed
+
+#### Affichage des valeurs NUMERIC/DECIMAL/REAL — zéros trailing supprimés
+- PostgreSQL `NUMERIC` et MySQL `DECIMAL` : `BigDecimal::to_string()` produisait des zéros superflus dus à l'encodage interne base-10000 (ex. `10.69` → `10.6900`)
+- libsql/Turso `REAL` et floats PostgreSQL `FLOAT4`/`FLOAT8` : `{f:.4}` fixait 4 décimales même pour `1.0`
+- Nouvelle règle : suppression des zéros trailing, minimum 2 décimales conservées
+  - `10.6900` → `10.69`
+  - `12.9000` → `12.90`
+  - `1.0000` → `1.00`
+  - `10.1234` → `10.1234` (aucune troncature de chiffres significatifs)
+- Helper `format_decimal()` dans `db/types.rs` (PostgreSQL/MySQL) ; `format_float()` dans `data_grid.rs` (libsql/FLOAT)
+
 #### Validation de format dans EditRecord
 - À la sortie du mode édition (Esc/Enter), la valeur est validée contre le type SQL du champ
 - Types contrôlés : `DATE` (YYYY-MM-DD), `TIME` (HH:MM:SS), `TIMESTAMP`/`DATETIME` (YYYY-MM-DD HH:MM:SS ou ISO8601), `UUID` (8-4-4-4-12 hex), `JSON`/`JSONB` (JSON parseable), `INT`/`BIGINT`, `FLOAT`/`NUMERIC`/`DECIMAL`, `INET`/`CIDR`
