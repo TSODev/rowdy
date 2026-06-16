@@ -1,3 +1,4 @@
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -39,10 +40,12 @@ pub struct EditRecordScreen {
     pub mode: EditFieldMode,
     pub scroll_offset: usize,
     pub status: Option<String>,
+    pub validation_errors: Vec<Option<String>>,
 }
 
 impl EditRecordScreen {
     pub fn new(table_name: String, schema: Vec<ColumnSchema>, values: Vec<String>) -> Self {
+        let n = values.len();
         Self {
             table_name,
             original_values: values.clone(),
@@ -53,6 +56,7 @@ impl EditRecordScreen {
             mode: EditFieldMode::Navigate,
             scroll_offset: 0,
             status: None,
+            validation_errors: vec![None; n],
         }
     }
 
@@ -106,6 +110,11 @@ impl EditRecordScreen {
             }
 
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let error_count = self.validation_errors.iter().filter(|e| e.is_some()).count();
+                if error_count > 0 {
+                    self.status = Some(format!("{error_count} field(s) with invalid format"));
+                    return EditRecordAction::None;
+                }
                 let sql = self.build_update_sql();
                 if sql.starts_with("-- ") {
                     self.status = Some(sql);
@@ -122,6 +131,10 @@ impl EditRecordScreen {
     fn handle_edit(&mut self, key: KeyEvent) -> EditRecordAction {
         match key.code {
             KeyCode::Esc | KeyCode::Enter => {
+                if let Some(col) = self.schema.get(self.selected_field) {
+                    let val = &self.current_values[self.selected_field];
+                    self.validation_errors[self.selected_field] = validate_field(&col.type_name, val);
+                }
                 self.mode = EditFieldMode::Navigate;
             }
             KeyCode::Left => {
@@ -244,6 +257,7 @@ impl EditRecordScreen {
             let cur_val = &screen.current_values[i];
             let orig_val = &screen.original_values[i];
             let changed = cur_val != orig_val && !col.is_pk;
+            let has_error = screen.validation_errors.get(i).and_then(|e| e.as_ref()).is_some();
 
             let sel_str = if is_sel { "> " } else { "  " };
             let name_str = format!("{:<width$}", col.name, width = NAME_W - 2);
@@ -286,6 +300,8 @@ impl EditRecordScreen {
 
             let val_style = if col.is_pk {
                 Style::default().fg(Color::DarkGray)
+            } else if has_error && !is_editing {
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
             } else if is_editing {
                 Style::default().fg(Color::White).bg(Color::DarkGray)
             } else if is_sel {
@@ -360,18 +376,114 @@ impl EditRecordScreen {
         );
 
         // ── Help bar ──────────────────────────────────────────────────────────
-        let help = if matches!(screen.mode, EditFieldMode::Editing) {
-            " ← →: cursor   Backspace/Del: delete   Enter/Esc: done"
+        let (help_text, help_style) = if matches!(screen.mode, EditFieldMode::Editing) {
+            let hint = screen.schema.get(screen.selected_field)
+                .and_then(|col| format_hint(&col.type_name))
+                .map(|h| format!(" Format: {h}   ← →: cursor   Backspace/Del   Enter/Esc: done"))
+                .unwrap_or_else(|| " ← →: cursor   Backspace/Del: delete   Enter/Esc: done".into());
+            (hint, Style::default().fg(Color::Cyan))
+        } else if let Some(err) = screen.schema.get(screen.selected_field)
+            .and_then(|_| screen.validation_errors.get(screen.selected_field))
+            .and_then(|e| e.as_ref())
+        {
+            (format!(" ✗ {err}"), Style::default().fg(Color::Red))
         } else {
-            " j/k: field   Enter/i: edit   Space: toggle bool   Ctrl+S: save   Esc: back"
+            (
+                " j/k: field   Enter/i: edit   Space: toggle bool   Ctrl+S: save   Esc: back".into(),
+                Style::default().fg(Color::DarkGray),
+            )
         };
         f.render_widget(
-            Paragraph::new(help)
+            Paragraph::new(help_text.as_str())
                 .block(Block::default().borders(Borders::ALL))
-                .style(Style::default().fg(Color::DarkGray)),
+                .style(help_style),
             chunks[2],
         );
     }
+}
+
+// ── Format validation ─────────────────────────────────────────────────────────
+
+fn validate_field(type_name: &str, value: &str) -> Option<String> {
+    if value.is_empty() || value == "NULL" { return None; }
+    let tn = type_name.to_uppercase();
+
+    if (tn.contains("DATE") && !tn.contains("DATETIME") && !tn.contains("TIMESTAMP"))
+        || tn == "DATE"
+    {
+        if NaiveDate::parse_from_str(value, "%Y-%m-%d").is_err() {
+            return Some("expected YYYY-MM-DD".into());
+        }
+    } else if tn == "TIME" {
+        if NaiveTime::parse_from_str(value, "%H:%M:%S").is_err()
+            && NaiveTime::parse_from_str(value, "%H:%M").is_err()
+        {
+            return Some("expected HH:MM:SS".into());
+        }
+    } else if tn.contains("TIMESTAMP") || tn.contains("DATETIME") {
+        let ok = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S").is_ok()
+            || NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").is_ok()
+            || chrono::DateTime::parse_from_rfc3339(value).is_ok();
+        if !ok {
+            return Some("expected YYYY-MM-DD HH:MM:SS".into());
+        }
+    } else if tn.contains("UUID") {
+        if !is_valid_uuid(value) {
+            return Some("expected xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx".into());
+        }
+    } else if tn.contains("JSON") {
+        if serde_json::from_str::<serde_json::Value>(value).is_err() {
+            return Some("invalid JSON".into());
+        }
+    } else if (tn.contains("INT") || tn == "BIGINT" || tn == "SMALLINT")
+        && !tn.contains("INTERVAL")
+    {
+        if value.parse::<i64>().is_err() {
+            return Some("expected integer".into());
+        }
+    } else if tn.contains("FLOAT") || tn.contains("REAL") || tn.contains("DOUBLE")
+        || tn.contains("NUMERIC") || tn.contains("DECIMAL")
+    {
+        if value.parse::<f64>().is_err() {
+            return Some("expected number".into());
+        }
+    } else if tn.contains("INET") || tn.contains("CIDR") {
+        let host = value.splitn(2, '/').next().unwrap_or(value);
+        if host.parse::<std::net::IpAddr>().is_err() {
+            return Some("expected IP address".into());
+        }
+    }
+    None
+}
+
+fn format_hint(type_name: &str) -> Option<&'static str> {
+    let tn = type_name.to_uppercase();
+    if (tn.contains("DATE") && !tn.contains("DATETIME") && !tn.contains("TIMESTAMP"))
+        || tn == "DATE"
+    {
+        Some("YYYY-MM-DD")
+    } else if tn == "TIME" {
+        Some("HH:MM:SS")
+    } else if tn.contains("TIMESTAMP") || tn.contains("DATETIME") {
+        Some("YYYY-MM-DD HH:MM:SS")
+    } else if tn.contains("UUID") {
+        Some("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+    } else if tn.contains("JSON") {
+        Some("valid JSON")
+    } else if tn.contains("INET") || tn.contains("CIDR") {
+        Some("IP address  e.g. 192.168.1.1")
+    } else {
+        None
+    }
+}
+
+fn is_valid_uuid(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('-').collect();
+    if parts.len() != 5 { return false; }
+    let lens = [8, 4, 4, 4, 12];
+    parts.iter().zip(lens.iter()).all(|(p, &l)| {
+        p.len() == l && p.chars().all(|c| c.is_ascii_hexdigit())
+    })
 }
 
 // ── SQL helpers ───────────────────────────────────────────────────────────────
