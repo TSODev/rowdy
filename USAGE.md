@@ -347,14 +347,26 @@ Depuis le Data Grid, appuyez sur `Enter` pour ouvrir la vue d'édition de la lig
 
 Le type SQL brut du champ est affiché en bleu entre le badge et la valeur (`integer`, `character varying`, `boolean`, `timestamp with time zone`…). Les types longs sont tronqués à 16 caractères.
 
-### Types supportés
+### Types supportés et validation
 
-| Type | Comportement |
-|------|-------------|
-| Numériques (`INT`, `FLOAT`, `NUMERIC`…) | SQL généré sans guillemets (`42`, `3.14`) |
-| `BOOLEAN` | `Space` pour toggler ; SQL génère `TRUE`/`FALSE` |
-| `DATE`, `TIMESTAMP`, `UUID`, `JSON`… | Édition texte libre ; la base de données caste automatiquement |
-| `TEXT`, `VARCHAR`… | Édition texte standard |
+| Type | Comportement | Format attendu |
+|------|-------------|----------------|
+| `INT`, `BIGINT`, `SMALLINT` | SQL sans guillemets | entier valide |
+| `FLOAT`, `NUMERIC`, `DECIMAL` | SQL sans guillemets | nombre valide |
+| `BOOLEAN` | `Space` pour toggler ; SQL génère `TRUE`/`FALSE` | — |
+| `DATE` | Édition texte + validation | `YYYY-MM-DD` |
+| `TIME` | Édition texte + validation | `HH:MM:SS` |
+| `TIMESTAMP`, `DATETIME` | Édition texte + validation | `YYYY-MM-DD HH:MM:SS` ou ISO8601 |
+| `UUID` | Édition texte + validation | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `JSON`, `JSONB` | Édition texte + validation | JSON valide |
+| `INET`, `CIDR` | Édition texte + validation | adresse IP |
+| `TEXT`, `VARCHAR`… | Édition texte standard | — |
+
+**Validation :** à la sortie du mode édition (Esc/Enter), la valeur est validée contre le type du champ :
+- La barre d'aide affiche le format attendu en **cyan** pendant la saisie : `Format: YYYY-MM-DD`
+- Une valeur invalide s'affiche en **rouge gras** ; la barre d'aide indique l'erreur : `✗ expected YYYY-MM-DD`
+- `Ctrl+S` est bloqué tant que des champs invalides existent : `N field(s) with invalid format`
+- Les valeurs vides et `NULL` ne sont pas validées
 
 Les champs modifiés sont surlignés en **vert**. L'aperçu SQL se met à jour en temps réel et n'affiche `-- No changes` que si aucune valeur n'a été modifiée.
 

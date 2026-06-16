@@ -9,6 +9,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+#### Validation de format dans EditRecord
+- À la sortie du mode édition (Esc/Enter), la valeur est validée contre le type SQL du champ
+- Types contrôlés : `DATE` (YYYY-MM-DD), `TIME` (HH:MM:SS), `TIMESTAMP`/`DATETIME` (YYYY-MM-DD HH:MM:SS ou ISO8601), `UUID` (8-4-4-4-12 hex), `JSON`/`JSONB` (JSON parseable), `INT`/`BIGINT`, `FLOAT`/`NUMERIC`/`DECIMAL`, `INET`/`CIDR`
+- Valeur invalide affichée en **rouge gras** dans la liste des champs
+- Barre d'aide en **cyan** pendant l'édition : `Format: YYYY-MM-DD   ← →: cursor   Enter/Esc: done`
+- Barre d'aide en **rouge** en mode navigation si le champ sélectionné est invalide : `✗ expected YYYY-MM-DD`
+- `Ctrl+S` bloqué tant que des erreurs existent : `N field(s) with invalid format`
+- Les champs vides et `NULL` ne sont pas validés (valeurs optionnelles autorisées)
+
 #### Vue détail des clés Redis
 - `Enter` sur une clé Redis dans la liste ouvre son contenu dans un Data Grid read-only
 - Détection automatique du type via la commande Redis `TYPE` :

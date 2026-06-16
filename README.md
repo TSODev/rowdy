@@ -39,6 +39,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | SQL Editor — query history with `Alt+↑/↓`, persisted to `~/.config/rowdy/history.toml` | ✅ |
 | Schema introspection — PK, FK, types (all 4 SQL engines) | ✅ |
 | Inline record editing — field type display, bool toggle, live SQL preview | ✅ |
+| Format validation in Edit Record — DATE/TIME/TIMESTAMP/UUID/JSON/INET validated on exit, red highlight + format hint | ✅ |
 | Confirmation modal — `Ctrl+S` in Edit Record prompts before executing UPDATE | ✅ |
 | Error modal — save failures displayed as a prominent overlay dialog | ✅ |
 | Status bar — mode, connection indicator, DB info, row count, flash messages | ✅ |
