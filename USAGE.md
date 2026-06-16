@@ -136,7 +136,7 @@ La barre d'aide affiche en rouge : `Delete "nom"? y: delete from file   n: remov
 
 ## Vue liste des tables
 
-Après une connexion réussie, Rowdy charge automatiquement la liste des tables et vues (ou des clés pour Redis).
+Après une connexion réussie, Rowdy charge automatiquement la liste des tables et vues (ou des clés pour Redis, triées alphabétiquement).
 
 ```
  Connected: [postgres] postgres://user@localhost/my_db
@@ -152,7 +152,7 @@ Après une connexion réussie, Rowdy charge automatiquement la liste des tables 
   j/k: move   Enter: open   e: SQL editor   /: filter   q: disconnect
 ```
 
-### Badges TABLE / VIEW
+### Badges TABLE / VIEW (connecteurs SQL uniquement)
 
 | Badge | Couleur | Signification |
 |-------|---------|---------------|
@@ -160,6 +160,8 @@ Après une connexion réussie, Rowdy charge automatiquement la liste des tables 
 | `[V]` | Cyan | Vue SQL (`VIEW`) — lecture seule, édition bloquée |
 
 L'ouverture d'une vue active automatiquement le mode lecture seule : la barre de statut affiche le badge **`VIEW`** cyan. `Enter` sur une ligne n'ouvre pas l'écran d'édition.
+
+> **Redis** : les clés s'affichent sans badge, triées alphabétiquement. `Enter` ouvre la vue détail de la clé (voir ci-dessous).
 
 ### Navigation
 
@@ -563,6 +565,32 @@ Une ligne permanente est affichée en bas de l'écran depuis tous les écrans. E
 
 ---
 
+## Vue détail d'une clé Redis
+
+Depuis la liste des clés Redis, appuyez sur `Enter` pour ouvrir le contenu de la clé sélectionnée dans un Data Grid read-only.
+
+Rowdy détecte automatiquement le type Redis de la clé et adapte l'affichage :
+
+| Type Redis | Colonnes | Description |
+|------------|----------|-------------|
+| `string`   | `value`  | Valeur brute — 1 ligne |
+| `hash`     | `field` / `value` | Un champ par ligne, trié alphabétiquement par field |
+| `list`     | `index` / `value` | Éléments dans l'ordre d'insertion (0-indexé) |
+| `set`      | `member` | Membres triés alphabétiquement |
+| `zset`     | `member` / `score` | Membres par score croissant |
+
+La barre d'info affiche le nom de la clé et son TTL :
+
+```
+ session:a1b2c3d4 [TTL: 3542s]     counter:books:total [no expiry]
+```
+
+Toutes les fonctionnalités de navigation du Data Grid sont disponibles : `j/k/h/l`, resize `-/=`, panel de prévisualisation, collapse `Space`, export `E` (CSV ou JSON). `q` retourne à la liste des clés.
+
+> **Note :** la vue détail est en lecture seule — l'édition et les filtres sont désactivés.
+
+---
+
 ## Bases de données supportées
 
 | Moteur | Type | Driver | Statut |
@@ -571,5 +599,5 @@ Une ligne permanente est affichée en bas de l'écran depuis tous les écrans. E
 | SQLite | SQL | `sqlx` | ✅ Supporté |
 | libsql / Turso | SQL | `libsql` (HTTP) | ✅ Supporté |
 | MySQL / MariaDB | SQL | `sqlx` | ✅ Supporté |
-| Redis | Clé-valeur | `redis-rs` | ✅ Supporté (`KEYS *` pour lister) |
+| Redis | Clé-valeur | `redis-rs` | ✅ Supporté — liste des clés + vue détail (string/hash/list/set/zset) |
 | MongoDB | Document | — | 🔲 Prévu |

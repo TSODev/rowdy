@@ -48,7 +48,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Table list — TABLE / VIEW distinction with `[T]` / `[V]` badges; VIEW opens read-only with cyan badge | ✅ |
 | Read-only safe mode — `?readonly=true` in URL, blocks all writes, `READ-ONLY` badge in status bar | ✅ |
 | Async I/O — UI never blocks during queries | ✅ |
-| Redis key-detail view | 🔲 planned |
+| Redis key-detail view — `Enter` on a key shows its content (string/hash/list/set/zset) in a read-only grid with TTL | ✅ |
 | Schema / ERD view of FK relationships | 🔲 planned |
 | MongoDB connector | 🔲 planned |
 

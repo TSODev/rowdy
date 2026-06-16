@@ -7,6 +7,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+#### Vue détail des clés Redis
+- `Enter` sur une clé Redis dans la liste ouvre son contenu dans un Data Grid read-only
+- Détection automatique du type via la commande Redis `TYPE` :
+  - `string` → colonne `value` (1 ligne)
+  - `hash` → colonnes `field` / `value` (trié par field)
+  - `list` → colonnes `index` / `value` (ordre d'insertion)
+  - `set` → colonne `member` (trié alphabétiquement)
+  - `zset` → colonnes `member` / `score` (ordre croissant de score)
+- TTL affiché dans la barre d'info : `session:abc [TTL: 3542s]` ou `[no expiry]`
+- Toutes les fonctionnalités du Data Grid disponibles : navigation, preview panel, resize, export CSV/JSON
+- Liste des clés triée alphabétiquement et affichée sans badge `[T]` (badges réservés aux connecteurs SQL)
+- Script de seed `seed/redis.sh` — 79 clés couvrant les 5 types, thème librairie cohérent avec les seeds SQL
+
 ### Changed
 
 #### Export JSON — choix simple vs résolution FK
