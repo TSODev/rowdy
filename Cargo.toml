@@ -6,7 +6,7 @@ authors = ["Thierry Soulie <thierry.soulie@tsodev.fr>"]
 description = "A fast, modern, and rowdy TUI database management tool written in Rust."
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-keywords = ["database", "tui", "terminal", "postgres", "mysql", "sqlite", "redis"]
+keywords = ["database", "tui", "terminal", "postgres", "sqlite"]
 categories = ["development-tools", "database"]
 repository = "https://github.com/TSODev/rowdy"
 
