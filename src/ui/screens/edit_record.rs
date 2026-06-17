@@ -47,6 +47,7 @@ pub struct EditRecordScreen {
     pub is_nosql: bool,
     pub is_array: bool,
     pub is_insert: bool,
+    pub is_nested: bool, // true for sub-document editors (no _id, no direct save)
 }
 
 impl EditRecordScreen {
@@ -66,6 +67,7 @@ impl EditRecordScreen {
             is_nosql: false,
             is_array: false,
             is_insert: false,
+            is_nested: false,
         }
     }
 
@@ -162,7 +164,10 @@ impl EditRecordScreen {
                     self.status = Some(format!("{error_count} field(s) with invalid format"));
                     return EditRecordAction::None;
                 }
-                if self.is_nosql && self.is_insert {
+                if self.is_nosql && self.is_nested {
+                    self.status = Some("Esc: confirm & go back to parent".into());
+                    EditRecordAction::None
+                } else if self.is_nosql && self.is_insert {
                     match self.build_mongo_insert() {
                         Ok(doc_json) => EditRecordAction::InsertMongo { doc_json },
                         Err(msg) => {
@@ -487,6 +492,8 @@ impl EditRecordScreen {
         // ── Preview panel (SQL / document JSON / array JSON) ─────────────────
         let (preview_text, preview_title) = if screen.is_array {
             (screen.reconstruct_nested_array(), " Array Preview ")
+        } else if screen.is_nosql && screen.is_nested {
+            (screen.reconstruct_nested_json(), " Object Preview ")
         } else if screen.is_nosql && screen.is_insert {
             let content = match screen.build_mongo_insert() {
                 Ok(doc) => doc,

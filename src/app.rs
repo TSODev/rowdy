@@ -786,6 +786,7 @@ impl App {
         let mut child = EditRecordScreen::new(child_title, schema, values);
         child.is_nosql = true;
         child.is_array = is_array;
+        child.is_nested = true; // sub-editors never save directly; is_array takes priority in preview routing
         let parent = std::mem::replace(&mut self.edit_record_screen, child);
         self.edit_record_stack.push((parent, field_idx));
     }
