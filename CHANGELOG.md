@@ -5,6 +5,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+#### CRUD complet MongoDB depuis le DataGrid
+- **Insert** : touche `a` depuis le DataGrid MongoDB → `EditRecordScreen` vide (champs inférés depuis la collection courante, type `string` par défaut) → `Ctrl+S` confirme via modal et appelle `insert_one`
+- **Delete** : touche `D` depuis le DataGrid MongoDB → modal de confirmation `"Delete document with _id: …?"` → `delete_one` ; `N`/`Esc` annule
+- Après insert ou delete : rechargement automatique de la collection (même chemin que `replace_one`)
+- Help bar du DataGrid MongoDB affiche `a: insert   D: delete` (uniquement en mode non read-only)
+- Preview panel de l'écran d'insertion affiche le JSON en cours de saisie sous le titre "New Document Preview"
+- Note : si la collection est vide, `a` ne propose pas de champs — il faut au préalable insérer un document via l'éditeur MQL
+
+---
+
 ## [0.8.0] — 2026-06-17
 
 ### Added

@@ -27,6 +27,7 @@ pub enum EditRecordAction {
     Back,
     Save(String),
     SaveMongo { id: String, doc_json: String },
+    InsertMongo { doc_json: String },
     OpenNested(usize), // field_idx of an object field to drill into
 }
 
@@ -45,6 +46,7 @@ pub struct EditRecordScreen {
     pub validation_errors: Vec<Option<String>>,
     pub is_nosql: bool,
     pub is_array: bool,
+    pub is_insert: bool,
 }
 
 impl EditRecordScreen {
@@ -63,6 +65,7 @@ impl EditRecordScreen {
             validation_errors: vec![None; n],
             is_nosql: false,
             is_array: false,
+            is_insert: false,
         }
     }
 
@@ -159,7 +162,15 @@ impl EditRecordScreen {
                     self.status = Some(format!("{error_count} field(s) with invalid format"));
                     return EditRecordAction::None;
                 }
-                if self.is_nosql {
+                if self.is_nosql && self.is_insert {
+                    match self.build_mongo_insert() {
+                        Ok(doc_json) => EditRecordAction::InsertMongo { doc_json },
+                        Err(msg) => {
+                            self.status = Some(msg);
+                            EditRecordAction::None
+                        }
+                    }
+                } else if self.is_nosql {
                     match self.build_mongo_replace() {
                         Ok((id, doc_json)) => EditRecordAction::SaveMongo { id, doc_json },
                         Err(msg) => {
@@ -299,6 +310,18 @@ impl EditRecordScreen {
         }
         let doc_json = serde_json::Value::Object(map).to_string();
         Ok((id, doc_json))
+    }
+
+    pub fn build_mongo_insert(&self) -> Result<String, String> {
+        let mut map = serde_json::Map::new();
+        for (col, val) in self.schema.iter().zip(self.current_values.iter()) {
+            if val.is_empty() { continue; }
+            map.insert(col.name.clone(), mongo_field_to_json(val, &col.type_name));
+        }
+        if map.is_empty() {
+            return Err("-- Document is empty".to_string());
+        }
+        serde_json::to_string(&map).map_err(|e| e.to_string())
     }
 
     /// Reconstruct the full JSON object from the current edited values.
@@ -464,6 +487,12 @@ impl EditRecordScreen {
         // ── Preview panel (SQL / document JSON / array JSON) ─────────────────
         let (preview_text, preview_title) = if screen.is_array {
             (screen.reconstruct_nested_array(), " Array Preview ")
+        } else if screen.is_nosql && screen.is_insert {
+            let content = match screen.build_mongo_insert() {
+                Ok(doc) => doc,
+                Err(msg) => msg,
+            };
+            (content, " New Document Preview ")
         } else if screen.is_nosql {
             let content = match screen.build_mongo_replace() {
                 Ok((_, doc)) => doc,

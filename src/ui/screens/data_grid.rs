@@ -32,6 +32,8 @@ pub enum DataGridAction {
     ExportCsv,
     ExportJson,
     ExportJsonSimple,
+    InsertMongo,
+    DeleteMongo,
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -49,6 +51,7 @@ pub struct DataGridScreen {
     pub read_only: bool,
     pub prod_readonly: bool,
     pub is_view: bool,
+    pub is_nosql: bool,
     pub status: Option<String>,
     pub export_prompt: bool,
     // Filtering
@@ -78,6 +81,7 @@ impl DataGridScreen {
             read_only: false,
             prod_readonly: false,
             is_view: false,
+            is_nosql: false,
             status: Some("Loading…".into()),
             export_prompt: false,
             filters: BTreeMap::new(),
@@ -282,6 +286,13 @@ impl DataGridScreen {
                     (current + COL_RESIZE_STEP).min(80),
                 );
                 DataGridAction::None
+            }
+
+            KeyCode::Char('a') if self.is_nosql && !self.read_only && !self.prod_readonly => {
+                DataGridAction::InsertMongo
+            }
+            KeyCode::Char('D') if self.is_nosql && !self.read_only && !self.prod_readonly => {
+                DataGridAction::DeleteMongo
             }
 
             _ => DataGridAction::None,
@@ -683,10 +694,11 @@ impl DataGridScreen {
             } else {
                 "f: edit filter   d: rm col filter   F: clear all"
             };
+            let nosql_hint = if screen.is_nosql { "   a: insert   D: delete" } else { "" };
             f.render_widget(
                 Paragraph::new(format!(
-                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Enter: cell   {}   {}   E: export   q: back",
-                    collapse_label, filter_hint
+                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Enter: cell   {}   {}   E: export{}   q: back",
+                    collapse_label, filter_hint, nosql_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))
                 .style(Style::default().fg(Color::Gray)),

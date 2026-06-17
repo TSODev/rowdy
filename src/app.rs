@@ -63,6 +63,8 @@ pub enum DbEvent {
 pub enum PendingAction {
     SaveRecord(String),
     SaveMongoRecord { collection: String, id: String, doc_json: String },
+    InsertMongoRecord { collection: String, doc_json: String },
+    DeleteMongoRecord { collection: String, id: String },
 }
 
 // ── App state machine ─────────────────────────────────────────────────────────
@@ -292,6 +294,19 @@ impl App {
                             self.run_export(r, &table, None, true);
                         }
                     }
+                    DataGridAction::InsertMongo => {
+                        self.open_insert_mongo_record();
+                    }
+                    DataGridAction::DeleteMongo => {
+                        if let Some(id) = self.get_current_mongo_id() {
+                            let collection = self.data_grid_screen.table_name.clone();
+                            self.pending_action = Some(PendingAction::DeleteMongoRecord { collection, id: id.clone() });
+                            self.modal = Some(Modal::confirm(
+                                "Confirm Delete",
+                                &format!("Delete document with _id: {id}?"),
+                            ));
+                        }
+                    }
                     DataGridAction::None => {}
                 }
             }
@@ -336,6 +351,7 @@ impl App {
                         }
                     }
                     DataGridAction::LoadMore | DataGridAction::ApplyFilter => {}
+                    DataGridAction::InsertMongo | DataGridAction::DeleteMongo => {}
                     DataGridAction::None => {}
                 }
             }
@@ -369,6 +385,19 @@ impl App {
                             self.modal = Some(Modal::confirm(
                                 "Confirm Save",
                                 &format!("Replace MongoDB document?\n{preview}"),
+                            ));
+                        }
+                    }
+                    EditRecordAction::InsertMongo { doc_json } => {
+                        if !self.edit_record_stack.is_empty() {
+                            self.edit_record_screen.status = Some("Press Esc to confirm nested edit first".into());
+                        } else {
+                            let collection = self.data_grid_screen.table_name.clone();
+                            let preview: String = doc_json.chars().take(120).collect();
+                            self.pending_action = Some(PendingAction::InsertMongoRecord { collection, doc_json });
+                            self.modal = Some(Modal::confirm(
+                                "Confirm Insert",
+                                &format!("Insert new MongoDB document?\n{preview}"),
                             ));
                         }
                     }
@@ -642,6 +671,80 @@ impl App {
         }
     }
 
+    fn open_insert_mongo_record(&mut self) {
+        let result = match self.data_grid_screen.result.as_ref() {
+            Some(r) => r,
+            None => return,
+        };
+        let table_name = self.data_grid_screen.table_name.clone();
+        let schema: Vec<ColumnSchema> = result.columns.iter()
+            .filter(|col| col.name != "_id")
+            .map(|col| ColumnSchema {
+                name: col.name.clone(),
+                type_name: "string".to_string(),
+                is_pk: false,
+                is_nullable: true,
+                fk: None,
+            })
+            .collect();
+        let values: Vec<String> = vec!["".to_string(); schema.len()];
+        let mut screen = EditRecordScreen::new(table_name, schema, values);
+        screen.is_nosql = true;
+        screen.is_insert = true;
+        self.edit_record_stack.clear();
+        self.edit_record_screen = screen;
+        self.edit_origin = AppState::DataGrid;
+        self.state = AppState::EditRecord;
+    }
+
+    fn get_current_mongo_id(&self) -> Option<String> {
+        let result = self.data_grid_screen.result.as_ref()?;
+        let sel = self.data_grid_screen.table_state.selected()?;
+        let row = result.rows.get(sel)?;
+        let id_col_idx = result.columns.iter().position(|c| c.name == "_id")?;
+        Some(value_to_string(row.values.get(id_col_idx)?))
+    }
+
+    fn spawn_insert_mongo_record(&mut self, collection: String, doc_json: String) {
+        self.edit_record_screen.status = Some("Inserting…".into());
+        let tx = self.db_tx.clone();
+        match &self.active_client {
+            Some(ActiveClient::NoSql(c)) => {
+                let c = Arc::clone(c);
+                tokio::spawn(async move {
+                    let ev = match c.insert_one(&collection, &doc_json).await {
+                        Ok(_)  => DbEvent::EditSaved,
+                        Err(e) => DbEvent::EditFailed(e.to_string()),
+                    };
+                    let _ = tx.send(ev).await;
+                });
+            }
+            _ => {
+                self.edit_record_screen.set_error("Not connected to MongoDB".into());
+            }
+        }
+    }
+
+    fn spawn_delete_mongo_record(&mut self, collection: String, id: String) {
+        let tx = self.db_tx.clone();
+        match &self.active_client {
+            Some(ActiveClient::NoSql(c)) => {
+                let c = Arc::clone(c);
+                tokio::spawn(async move {
+                    let ev = match c.delete_one(&collection, &id).await {
+                        Ok(n) if n > 0 => DbEvent::EditSaved,
+                        Ok(_) => DbEvent::EditFailed("No document matched that _id".into()),
+                        Err(e) => DbEvent::EditFailed(e.to_string()),
+                    };
+                    let _ = tx.send(ev).await;
+                });
+            }
+            _ => {
+                self.data_grid_screen.status = Some("Not connected to MongoDB".into());
+            }
+        }
+    }
+
     fn open_nested_edit_record(&mut self, field_idx: usize) {
         let json = self.edit_record_screen.current_values[field_idx].clone();
         let type_name = self.edit_record_screen.schema[field_idx].type_name.clone();
@@ -762,6 +865,12 @@ impl App {
                         PendingAction::SaveRecord(sql) => self.spawn_save_record(sql),
                         PendingAction::SaveMongoRecord { collection, id, doc_json } => {
                             self.spawn_save_mongo_record(collection, id, doc_json);
+                        }
+                        PendingAction::InsertMongoRecord { collection, doc_json } => {
+                            self.spawn_insert_mongo_record(collection, doc_json);
+                        }
+                        PendingAction::DeleteMongoRecord { collection, id } => {
+                            self.spawn_delete_mongo_record(collection, id);
                         }
                     }
                 }
@@ -897,6 +1006,7 @@ impl App {
     fn spawn_load_data(&mut self, table_name: String) {
         self.data_grid_screen = DataGridScreen::new(table_name.clone());
         self.data_grid_screen.prod_readonly = self.prod_readonly;
+        self.data_grid_screen.is_nosql = matches!(self.active_client, Some(ActiveClient::NoSql(_)));
         self.fk_history.clear();
         self.state = AppState::DataGrid;
 

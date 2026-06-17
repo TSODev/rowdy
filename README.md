@@ -55,6 +55,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | ERD graph view (`r`) — star layout with box-drawing, bent arrows routed from exact FK column, navigate between boxes | ✅ |
 | MongoDB connector (`--features mongodb`) — browse collections, MQL editor, nested field navigation | ✅ |
 | MongoDB document editing — `replace_one` with confirmation, recursive nested object / array editor | ✅ |
+| MongoDB insert (`a`) and delete (`D`) from Data Grid — confirmation modal, auto-reload | ✅ |
 
 ---
 

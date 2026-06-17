@@ -228,6 +228,8 @@ src/
 - [x] Navigation imbriquée récursive dans EditRecord — `Enter` sur champ `object` → drill-in avec breadcrumb `collection › field` ; pile `edit_record_stack: Vec<(EditRecordScreen, usize)>` dans `App` ; `Esc` reconstruit le JSON et remonte ; `Ctrl+S` bloqué depuis un niveau imbriqué
 - [x] Éditeur d'arrays item par item — `Enter` sur champ `array` → liste numérotée `[0]`, `[1]`… ; `a` ajoute un item vide (entre en mode édition immédiatement) ; `D` supprime et renumérote ; items `[obj]`/`[arr]` font un drill-in récursif ; `Esc` reconstruit le JSON array et remonte ; preview "Array Preview" en temps réel ; barre d'aide dédiée
 - [x] Lisibilité UI — tous les `fg(Color::DarkGray)` remplacés par `fg(Color::Gray)` dans les fichiers UI (39 occurrences) ; texte secondaire nettement plus lisible sur fond noir ; `bg(Color::DarkGray)` inchangés
+- [x] Insert MongoDB depuis DataGrid — touche `a` ouvre `EditRecordScreen` vide (schéma inféré depuis colonnes courantes, `is_insert = true`) ; `Ctrl+S` → modal de confirmation → `insert_one` ; preview "New Document Preview" en temps réel ; rechargement automatique après insertion
+- [x] Delete MongoDB depuis DataGrid — touche `D` ouvre modal de confirmation `"Delete document with _id: …?"` ; confirmé → `delete_one` ; annulé → retour sans action ; rechargement automatique après suppression ; `a`/`D` affichés dans la help bar DataGrid en mode non read-only MongoDB
 
 ### Roadmap
 
