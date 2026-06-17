@@ -48,6 +48,7 @@ pub struct EditRecordScreen {
     pub is_array: bool,
     pub is_insert: bool,
     pub is_nested: bool, // true for sub-document editors (no _id, no direct save)
+    pub field_name_input: Option<String>, // active while adding a new field to an object
 }
 
 impl EditRecordScreen {
@@ -68,6 +69,7 @@ impl EditRecordScreen {
             is_array: false,
             is_insert: false,
             is_nested: false,
+            field_name_input: None,
         }
     }
 
@@ -79,10 +81,54 @@ impl EditRecordScreen {
     // ── Key handling ──────────────────────────────────────────────────────────
 
     pub fn handle_key(&mut self, key: KeyEvent) -> EditRecordAction {
+        // Field name input for adding a new object field takes priority
+        if self.field_name_input.is_some() {
+            return self.handle_field_name_input(key);
+        }
         match self.mode {
             EditFieldMode::Navigate => self.handle_navigate(key),
             EditFieldMode::Editing  => self.handle_edit(key),
         }
+    }
+
+    fn handle_field_name_input(&mut self, key: KeyEvent) -> EditRecordAction {
+        match key.code {
+            KeyCode::Esc => {
+                self.field_name_input = None;
+            }
+            KeyCode::Enter => {
+                let name = self.field_name_input.take().unwrap_or_default();
+                let name = name.trim().to_string();
+                if !name.is_empty() {
+                    let new_idx = self.schema.len();
+                    self.schema.push(ColumnSchema {
+                        name,
+                        type_name: "string".to_string(),
+                        is_pk: false,
+                        is_nullable: true,
+                        fk: None,
+                    });
+                    self.current_values.push(String::new());
+                    self.original_values.push(String::new());
+                    self.validation_errors.push(None);
+                    self.selected_field = new_idx;
+                    self.cursor_pos = 0;
+                    self.mode = EditFieldMode::Editing;
+                }
+            }
+            KeyCode::Backspace => {
+                if let Some(ref mut s) = self.field_name_input {
+                    s.pop();
+                }
+            }
+            KeyCode::Char(c) => {
+                if let Some(ref mut s) = self.field_name_input {
+                    s.push(c);
+                }
+            }
+            _ => {}
+        }
+        EditRecordAction::None
     }
 
     fn handle_navigate(&mut self, key: KeyEvent) -> EditRecordAction {
@@ -121,6 +167,12 @@ impl EditRecordScreen {
                         self.status = None;
                     }
                 }
+                EditRecordAction::None
+            }
+
+            // Add field (object nosql mode)
+            KeyCode::Char('a') if self.is_nosql && !self.is_array => {
+                self.field_name_input = Some(String::new());
                 EditRecordAction::None
             }
 
@@ -542,7 +594,12 @@ impl EditRecordScreen {
         );
 
         // ── Help bar ──────────────────────────────────────────────────────────
-        let (help_text, help_style) = if matches!(screen.mode, EditFieldMode::Editing) {
+        let (help_text, help_style) = if let Some(ref name) = screen.field_name_input {
+            (
+                format!(" New field name: {name}_   Enter: confirm   Esc: cancel"),
+                Style::default().fg(Color::Yellow),
+            )
+        } else if matches!(screen.mode, EditFieldMode::Editing) {
             let hint = screen.schema.get(screen.selected_field)
                 .and_then(|col| format_hint(&col.type_name))
                 .map(|h| format!(" Format: {h}   ← →: cursor   Backspace/Del   Enter/Esc: done"))
@@ -562,12 +619,13 @@ impl EditRecordScreen {
             let on_obj = screen.schema.get(screen.selected_field)
                 .map(|c| screen.is_nosql && c.type_name == "object")
                 .unwrap_or(false);
+            let add_hint = if screen.is_nosql && !screen.is_array { "   a: add field" } else { "" };
             let hint = if on_obj {
-                " j/k: field   Enter: drill-in   i: edit JSON   Ctrl+S: save   Esc: back"
+                format!(" j/k: field   Enter: drill-in   i: edit JSON   Ctrl+S: save{add_hint}   Esc: back")
             } else {
-                " j/k: field   Enter/i: edit   Space: toggle bool   Ctrl+S: save   Esc: back"
+                format!(" j/k: field   Enter/i: edit   Space: toggle bool   Ctrl+S: save{add_hint}   Esc: back")
             };
-            (hint.into(), Style::default().fg(Color::Gray))
+            (hint, Style::default().fg(Color::Gray))
         };
         f.render_widget(
             Paragraph::new(help_text.as_str())
