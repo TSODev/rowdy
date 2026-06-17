@@ -696,7 +696,13 @@ impl App {
                 }
             })
             .collect();
-        let values: Vec<String> = vec!["".to_string(); schema.len()];
+        let values: Vec<String> = schema.iter()
+            .map(|col| match col.type_name.as_str() {
+                "object" => "{}".to_string(),
+                "array"  => "[]".to_string(),
+                _        => "".to_string(),
+            })
+            .collect();
         let mut screen = EditRecordScreen::new(table_name, schema, values);
         screen.is_nosql = true;
         screen.is_insert = true;
@@ -765,11 +771,11 @@ impl App {
             json_object_to_schema_values(&json)
         };
 
-        if !is_array && schema.is_empty() {
+        if !is_array && serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&json).is_err() {
             self.edit_record_screen.status = Some("Cannot parse nested object".into());
             return;
         }
-        if is_array && serde_json::from_str::<serde_json::Value>(&json).is_err() {
+        if is_array && serde_json::from_str::<Vec<serde_json::Value>>(&json).is_err() {
             self.edit_record_screen.status = Some("Cannot parse nested array".into());
             return;
         }
