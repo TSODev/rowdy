@@ -261,8 +261,9 @@ impl App {
             AppState::DataGrid => {
                 match self.data_grid_screen.handle_key(key) {
                     DataGridAction::Back => self.state = AppState::TableList,
-                    DataGridAction::ApplyFilter => self.spawn_reload_filters(),
+                    DataGridAction::ApplyFilter | DataGridAction::ApplySort => self.spawn_reload_filters(),
                     DataGridAction::LoadMore => self.spawn_load_more(),
+                    DataGridAction::LoadAll => self.spawn_load_all(),
                     DataGridAction::EnterCell => {
                         if let Some((col, json, arr)) = nested_info_from(&self.data_grid_screen) {
                             self.open_nested_subgrid(col, json, arr);
@@ -1023,12 +1024,13 @@ impl App {
         self.data_grid_screen = DataGridScreen::new(table_name.clone());
         self.data_grid_screen.prod_readonly = self.prod_readonly;
         self.data_grid_screen.is_nosql = matches!(self.active_client, Some(ActiveClient::NoSql(_)));
+        self.data_grid_screen.sortable = matches!(self.active_client, Some(ActiveClient::Sql(_)));
         self.fk_history.clear();
         self.state = AppState::DataGrid;
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
             let empty = BTreeMap::new();
-            spawn_sql_page(Arc::clone(c), &table_name, &empty, 0, true, vec![], self.db_tx.clone());
+            spawn_sql_page(Arc::clone(c), &table_name, &empty, 0, true, vec![], None, None, self.db_tx.clone());
             spawn_sql_count(Arc::clone(c), &table_name, &empty, vec![], self.db_tx.clone());
             let tx = self.db_tx.clone();
             let client = Arc::clone(c);
@@ -1088,13 +1090,15 @@ impl App {
         if self.data_grid_screen.loading { return; }
         self.data_grid_screen.loading = true;
 
-        let table   = self.data_grid_screen.table_name.clone();
-        let filters = self.data_grid_screen.filters.clone();
-        let offset  = self.data_grid_screen.loaded_count;
-        let schema  = self.data_grid_screen.schema.clone().unwrap_or_default();
+        let table    = self.data_grid_screen.table_name.clone();
+        let filters  = self.data_grid_screen.filters.clone();
+        let offset   = self.data_grid_screen.loaded_count;
+        let schema   = self.data_grid_screen.schema.clone().unwrap_or_default();
+        let order_by = self.data_grid_screen.sort_col_name.as_ref()
+            .map(|n| (n.clone(), self.data_grid_screen.sort_asc));
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
-            spawn_sql_page(Arc::clone(c), &table, &filters, offset, false, schema, self.db_tx.clone());
+            spawn_sql_page(Arc::clone(c), &table, &filters, offset, false, schema, order_by, None, self.db_tx.clone());
         } else if let Some(ActiveClient::NoSql(c)) = &self.active_client {
             let c = Arc::clone(c);
             let tx = self.db_tx.clone();
@@ -1108,20 +1112,38 @@ impl App {
         }
     }
 
-    // Re-fetch from page 0 with the current filters (after filter add/remove)
+    // Re-fetch from page 0 with current filters + sort (after filter/sort change)
     fn spawn_reload_filters(&mut self) {
-        let table   = self.data_grid_screen.table_name.clone();
-        let filters = self.data_grid_screen.filters.clone();
-        let schema  = self.data_grid_screen.schema.clone().unwrap_or_default();
-        self.data_grid_screen.reset_data(); // keeps table_name + filters
-        // reset_data sets loading=true but doesn't spawn — we do it here
+        let table    = self.data_grid_screen.table_name.clone();
+        let filters  = self.data_grid_screen.filters.clone();
+        let schema   = self.data_grid_screen.schema.clone().unwrap_or_default();
+        let order_by = self.data_grid_screen.sort_col_name.as_ref()
+            .map(|n| (n.clone(), self.data_grid_screen.sort_asc));
+        self.data_grid_screen.reset_data(); // keeps table_name + filters + sort
         self.data_grid_screen.total_count = None;
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
-            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), self.db_tx.clone());
+            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), order_by, None, self.db_tx.clone());
             spawn_sql_count(Arc::clone(c), &table, &filters, schema, self.db_tx.clone());
         } else {
             self.data_grid_screen.set_error("Not connected to a SQL database".into());
+        }
+    }
+
+    fn spawn_load_all(&mut self) {
+        if self.data_grid_screen.loading { return; }
+        self.data_grid_screen.loading = true;
+
+        let table    = self.data_grid_screen.table_name.clone();
+        let filters  = self.data_grid_screen.filters.clone();
+        let schema   = self.data_grid_screen.schema.clone().unwrap_or_default();
+        let order_by = self.data_grid_screen.sort_col_name.as_ref()
+            .map(|n| (n.clone(), self.data_grid_screen.sort_asc));
+        let total    = self.data_grid_screen.total_count.unwrap_or(10_000) as usize;
+
+        if let Some(ActiveClient::Sql(c)) = &self.active_client {
+            // Fetch all rows in one shot (no pagination)
+            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema, order_by, Some(total.max(10_000)), self.db_tx.clone());
         }
     }
 
@@ -1354,13 +1376,15 @@ impl App {
             }
             DbEvent::EditSaved => {
                 self.state = AppState::DataGrid;
-                let table   = self.data_grid_screen.table_name.clone();
-                let filters = self.data_grid_screen.filters.clone();
-                let schema  = self.data_grid_screen.schema.clone().unwrap_or_default();
+                let table    = self.data_grid_screen.table_name.clone();
+                let filters  = self.data_grid_screen.filters.clone();
+                let schema   = self.data_grid_screen.schema.clone().unwrap_or_default();
+                let order_by = self.data_grid_screen.sort_col_name.as_ref()
+                    .map(|n| (n.clone(), self.data_grid_screen.sort_asc));
                 self.data_grid_screen.reset_data();
                 self.data_grid_screen.total_count = None;
                 if let Some(ActiveClient::Sql(c)) = &self.active_client {
-                    spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), self.db_tx.clone());
+                    spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), order_by, None, self.db_tx.clone());
                     spawn_sql_count(Arc::clone(c), &table, &filters, schema, self.db_tx.clone());
                 } else if let Some(ActiveClient::NoSql(c)) = &self.active_client {
                     let c = Arc::clone(c);
@@ -1671,9 +1695,21 @@ fn build_where(filters: &BTreeMap<String, String>, schema: &[ColumnSchema]) -> S
     format!(" WHERE {}", clauses.join(" AND "))
 }
 
-fn build_data_query(table: &str, filters: &BTreeMap<String, String>, offset: usize, schema: &[ColumnSchema]) -> String {
+fn build_data_query(
+    table: &str,
+    filters: &BTreeMap<String, String>,
+    offset: usize,
+    schema: &[ColumnSchema],
+    order_by: Option<(&str, bool)>,
+    limit: Option<usize>,
+) -> String {
     let wh = build_where(filters, schema);
-    format!("SELECT * FROM \"{table}\"{wh} LIMIT {PAGE_SIZE} OFFSET {offset}")
+    let ob = order_by.map_or(String::new(), |(col, asc)| {
+        let safe = col.replace('"', "");
+        format!(" ORDER BY \"{}\" {}", safe, if asc { "ASC" } else { "DESC" })
+    });
+    let lim = limit.unwrap_or(PAGE_SIZE);
+    format!("SELECT * FROM \"{table}\"{wh}{ob} LIMIT {lim} OFFSET {offset}")
 }
 
 fn build_count_query(table: &str, filters: &BTreeMap<String, String>, schema: &[ColumnSchema]) -> String {
@@ -1715,9 +1751,12 @@ fn spawn_sql_page(
     offset: usize,
     initial: bool,
     schema: Vec<ColumnSchema>,
+    order_by: Option<(String, bool)>,
+    limit: Option<usize>,
     tx: mpsc::Sender<DbEvent>,
 ) {
-    let query = build_data_query(table, filters, offset, &schema);
+    let ob_ref = order_by.as_ref().map(|(c, a)| (c.as_str(), *a));
+    let query = build_data_query(table, filters, offset, &schema, ob_ref, limit);
     tokio::spawn(async move {
         let ev = match client.fetch_all(&query).await {
             Ok(r)  => if initial { DbEvent::DataLoaded(r) } else { DbEvent::DataPageLoaded(r) },

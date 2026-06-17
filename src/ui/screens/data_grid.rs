@@ -27,7 +27,9 @@ pub enum DataGridAction {
     None,
     Back,
     ApplyFilter,
+    ApplySort,
     LoadMore,
+    LoadAll,
     EnterCell,
     ExportCsv,
     ExportJson,
@@ -57,6 +59,10 @@ pub struct DataGridScreen {
     // Filtering
     pub filters: BTreeMap<String, String>,
     pub filter_input: Option<FilterInput>,
+    // Sorting
+    pub sort_col_name: Option<String>,
+    pub sort_asc: bool,
+    pub sortable: bool,
     // Pagination
     pub loaded_count: usize,
     pub total_count: Option<u64>,
@@ -86,6 +92,9 @@ impl DataGridScreen {
             export_prompt: false,
             filters: BTreeMap::new(),
             filter_input: None,
+            sort_col_name: None,
+            sort_asc: true,
+            sortable: false,
             loaded_count: 0,
             total_count: None,
             has_more: true,
@@ -286,6 +295,28 @@ impl DataGridScreen {
                     (current + COL_RESIZE_STEP).min(80),
                 );
                 DataGridAction::None
+            }
+
+            // Sort: cycle None → ASC → DESC → None on selected column
+            KeyCode::Char('s') if self.sortable => {
+                if let Some(col_name) = self.selected_col_name() {
+                    if self.sort_col_name.as_deref() == Some(col_name.as_str()) {
+                        if self.sort_asc {
+                            self.sort_asc = false; // ASC → DESC
+                        } else {
+                            self.sort_col_name = None; // DESC → no sort
+                        }
+                    } else {
+                        self.sort_col_name = Some(col_name); // new column → ASC
+                        self.sort_asc = true;
+                    }
+                }
+                DataGridAction::ApplySort
+            }
+
+            // Load all remaining rows at once
+            KeyCode::Char('A') if self.sortable && self.has_more && !self.loading => {
+                DataGridAction::LoadAll
             }
 
             KeyCode::Char('a') if self.is_nosql && !self.read_only && !self.prod_readonly => {
@@ -507,14 +538,22 @@ impl DataGridScreen {
                     .map(|&i| {
                         let col_name = &result.columns[i].name;
                         let is_filtered = screen.filters.contains_key(col_name);
+                        let is_sorted = screen.sort_col_name.as_deref() == Some(col_name.as_str());
+                        let sort_indicator = if is_sorted {
+                            if screen.sort_asc { " ▲" } else { " ▼" }
+                        } else {
+                            ""
+                        };
                         let name = if screen.collapsed_cols.contains(&i) {
                             "…".to_string()
                         } else {
-                            truncate(col_name, screen.effective_col_width(i) as usize)
+                            let full = format!("{}{}", col_name, sort_indicator);
+                            truncate(&full, screen.effective_col_width(i) as usize)
                         };
                         // Selected + filtered → yellow underlined
                         // Selected only       → yellow underlined
                         // Filtered only       → cyan bold
+                        // Sorted              → green bold (if not selected)
                         // Normal              → bold
                         let style = if i == screen.selected_col {
                             let base = Style::default()
@@ -523,6 +562,8 @@ impl DataGridScreen {
                             if is_filtered { base.bg(Color::DarkGray) } else { base }
                         } else if is_filtered {
                             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                        } else if is_sorted {
+                            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
                         } else {
                             Style::default().add_modifier(Modifier::BOLD)
                         };
@@ -695,10 +736,16 @@ impl DataGridScreen {
                 "f: edit filter   d: rm col filter   F: clear all"
             };
             let nosql_hint = if screen.is_nosql { "   a: insert   D: delete" } else { "" };
+            let sort_hint = if screen.sortable {
+                let load_all = if screen.has_more { "   A: load all" } else { "" };
+                format!("   s: sort{}", load_all)
+            } else {
+                String::new()
+            };
             f.render_widget(
                 Paragraph::new(format!(
-                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Enter: cell   {}   {}   E: export{}   q: back",
-                    collapse_label, filter_hint, nosql_hint
+                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Enter: cell   {}   {}{}   E: export{}   q: back",
+                    collapse_label, filter_hint, sort_hint, nosql_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))
                 .style(Style::default().fg(Color::Gray)),
