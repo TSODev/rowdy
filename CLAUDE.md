@@ -137,14 +137,21 @@ url = "/path/to/local/analytics.db"
 ```
 src/
 ├── main.rs                        # bootstrap tokio + TUI
-├── app.rs                         # machine à états + event loop (50 ms tick)
-├── config.rs                      # chargement ~/.config/rowdy/config.toml
+├── app.rs                         # machine à états + event loop (50 ms tick) [~1514 lignes]
+├── config.rs                      # chargement ~/.config/rowdy/config.toml + redact_url + strip_readonly_param
+├── export.rs                      # export CSV / JSON (avec résolution FK récursive)
+├── history.rs                     # QueryHistory persisté dans ~/.config/rowdy/history.toml
 ├── events/
 │   ├── app_event.rs               # AppEvent enum
 │   └── handler.rs                 # dispatch clavier (stub)
 ├── db/
 │   ├── error.rs                   # DbError (thiserror)
-│   ├── types.rs                   # Column, Row, Value, DbQueryResult
+│   ├── types.rs                   # Column, Row, Value, DbQueryResult, KvKeyDetail, TableObject
+│   ├── query_builder.rs           # build_data_query, build_where, build_fk_query, build_count_query,
+│   │                              #   parse_count, is_select_query, split_sql_statements
+│   ├── converters.rs              # kv_detail_to_result, json_to_result, json_val_to_value,
+│   │                              #   json_value_type_and_str, json_object/array_to_schema_values,
+│   │                              #   mongo_type_name, value_to_string
 │   ├── traits/
 │   │   ├── sql_client.rs          # trait SqlClient
 │   │   ├── kv_client.rs           # trait KvClient
@@ -163,10 +170,12 @@ src/
     │   ├── connection.rs          # ✅ implémenté
     │   ├── table_list.rs          # ✅ implémenté
     │   ├── data_grid.rs           # ✅ implémenté
-    │   └── sql_editor.rs          # ✅ implémenté
+    │   ├── sql_editor.rs          # ✅ implémenté (autocomplétion + SQL_KEYWORDS)
+    │   ├── edit_record.rs         # ✅ implémenté
+    │   └── erd_graph.rs           # ✅ implémenté
     └── components/
-        ├── status_bar.rs          # 🔲 stub
-        └── modal.rs               # 🔲 stub
+        ├── status_bar.rs          # ✅ implémenté
+        └── modal.rs               # ✅ implémenté
 ```
 
 ## Avancement
@@ -232,6 +241,7 @@ src/
 - [x] Delete MongoDB depuis DataGrid — touche `D` ouvre modal `"Delete document with _id: …?"` ; confirmé → `delete_one` ; rechargement automatique ; `a`/`D` dans la help bar DataGrid (mode non read-only MongoDB uniquement)
 - [x] Édition inline JSON sur champs `[obj]` — `Enter` = drill-in (comportement existant) ; `i` = édition du JSON brut directement dans le champ texte ; help bar adaptée dynamiquement selon le type du champ courant
 - [x] Fix sous-éditeurs MongoDB (`is_nested`) — preview "Object Preview" via `reconstruct_nested_json()` au lieu de `build_mongo_replace()` (qui échouait "No _id field") ; `Ctrl+S` dans un sous-éditeur → `"Esc: confirm & go back to parent"`
+- [x] Refactoring `app.rs` (étape 1) — extraction des fonctions utilitaires vers des modules dédiés : `db/query_builder.rs` (8 fonctions SQL pures : build_where, build_data_query, build_count_query, build_fk_query, build_fk_count_query, parse_count, is_select_query, split_sql_statements), `db/converters.rs` (8 fonctions JSON/Value/KV : kv_detail_to_result, json_to_result, json_val_to_value, json_value_type_and_str, json_object/array_to_schema_values, mongo_type_name, value_to_string), `config.rs` (redact_url, strip_readonly_param) ; `app.rs` réduit de 1897 → 1514 lignes ; spawn_sql_page/spawn_sql_count et nested_info_from restent dans app.rs (dépendent de DbEvent/DataGridScreen)
 
 ### Roadmap
 
@@ -250,7 +260,7 @@ src/
 - [ ] **Coloration syntaxique SQL** — _(bloqué : tui-textarea 0.5 ne supporte pas le highlighting multi-couleur natif ; à revoir lors d'un upgrade de tui-textarea ou ratatui)_
 - [x] **Tri par colonne dans DataGrid** — touche `s` sur colonne courante → ORDER BY ASC/DESC/reset (cycle) ; indicateur `▲`/`▼` en vert dans l'en-tête ; ORDER BY injecté dans `build_data_query` (paramètre `order_by: Option<(&str, bool)>`) et propagé à `spawn_reload_filters`, `spawn_load_more`, `spawn_load_all`, `EditSaved` ; `sortable: bool` activé uniquement sur le DataGrid principal SQL ; la colonne sélectionnée est conservée après rechargement (`set_result()` ne remet plus `selected_col` à 0 — les nouveaux tableaux partent à 0 via `DataGridScreen::new()`)
 - [x] **Load All dans DataGrid** — touche `A` (`sortable && has_more`) → `spawn_load_all()` : requête sans LIMIT (`limit = total_count.max(10_000)`) remplaçant toutes les pages ; résultat via `DbEvent::DataLoaded` ; aide bar affiche `A: load all` dynamiquement
-- [x] **Autocomplétion SQL (Tab)** — `Tab` déclenche un popup flottant de suggestions si le préfixe courant (≥ 2 chars) matche des noms de tables ou colonnes ; navigation `↑/↓`/`Tab`, `Enter` insère (supprime le préfixe + insère la complétion via `editor.input()`), `Esc` ferme ; tout autre caractère met à jour le popup en temps réel ou le ferme si plus de match ; items alimentés par `DbEvent::AllSchemasLoaded` → `sql_editor_screen.set_completions()` (tables + toutes colonnes, triés, dédupliqués) ; popup clamped dans la zone de l'éditeur, s'affiche au-dessus si pas de place en dessous ; badge `N/total` dans le titre du popup ; `widget::Clear` pour effacer le fond avant rendu
+- [x] **Autocomplétion SQL (Tab)** — `Tab` déclenche un popup flottant de suggestions si le préfixe courant (≥ 2 chars) matche des noms de tables/colonnes ou des mots-clés SQL ; navigation `↑/↓`/`Tab`, `Enter` insère (supprime le préfixe + insère la complétion via `editor.input()`), `Esc` ferme ; tout autre caractère met à jour le popup en temps réel ou le ferme si plus de match ; items schema alimentés par `DbEvent::AllSchemasLoaded` → `set_completions()` (tables + toutes colonnes, triés, dédupliqués) ; constante `SQL_KEYWORDS` (80 entrées : DML, DDL, clauses, agrégats, fonctions fenêtrées, types) dans `sql_editor.rs` ; schema items prioritaires (max 7), keywords en complément (max 10 total) ; matching case-insensitive, keywords retournés en MAJUSCULES ; popup clamped dans la zone de l'éditeur, s'affiche au-dessus si pas de place en dessous ; badge `N/total` dans le titre ; `widget::Clear` pour effacer le fond
 - [ ] **Reconnexion automatique** — détection de `DbError::ConnectionLost` dans `handle_db_event` ; retry async avec back-off exponentiel (3 tentatives) ; badge `[RECONNECTING…]` en status bar
 - [ ] **Connecteur DuckDB** — trait `SqlClient` via `duckdb-rs` ; feature-gated `--features duckdb` ; URL `duckdb://path/to/file.db` ou `duckdb://:memory:` ; analytique local (Parquet, CSV, JSON)
 - [ ] **Onglets multiples** — `Vec<Tab { name, active_client, state, screens }>` dans `App` ; `Ctrl+T` nouvelle connexion, `Ctrl+W` fermer, `Alt+1..9` / `[`/`]` naviguer ; tab bar en haut de l'écran
