@@ -7,7 +7,7 @@ use tokio::{
     sync::mpsc,
     time::{timeout, Duration},
 };
-use crate::config::{Config, ConnectionProfile, redact_url, strip_readonly_param};
+use crate::config::{Config, ConnectionProfile, redact_url, strip_readonly_param, resolve_credential};
 use crate::export;
 use crate::history::QueryHistory;
 use crate::db::{
@@ -195,8 +195,8 @@ impl App {
             AppState::Connection => {
                 match self.connection_screen.handle_key(key) {
                     ConnectionAction::Quit => self.should_quit = true,
-                    ConnectionAction::Connect { url, db_type, pre_connect, post_disconnect } => {
-                        self.spawn_connect(url, db_type, pre_connect, post_disconnect);
+                    ConnectionAction::Connect { url, db_type, pre_connect, post_disconnect, profile_name } => {
+                        self.spawn_connect(url, db_type, pre_connect, post_disconnect, profile_name);
                     }
                     ConnectionAction::DeleteProfile { idx, persist } => {
                         if idx < self.connection_screen.profiles.len() {
@@ -208,7 +208,7 @@ impl App {
                                 self.connection_screen.list_state.select(Some(idx.min(len - 1)));
                             }
                             if persist {
-                                match Config::delete_profile(&profile.url) {
+                                match Config::delete_profile(&profile.name, &profile.url) {
                                     Ok(()) => {
                                         self.connection_screen.status =
                                             Some(format!("Deleted \"{}\"", profile.name));
@@ -916,8 +916,19 @@ impl App {
 
     // ── Async connection ──────────────────────────────────────────────────────
 
-    fn spawn_connect(&mut self, url: String, db_type: String, pre_connect: Option<String>, post_disconnect: Option<String>) {
-        let (clean_url, is_readonly) = strip_readonly_param(&url);
+    fn spawn_connect(&mut self, url: String, db_type: String, pre_connect: Option<String>, post_disconnect: Option<String>, profile_name: Option<String>) {
+        let resolved_url = if let Some(ref name) = profile_name {
+            match resolve_credential(name, &url) {
+                Ok(u) => u,
+                Err(e) => {
+                    self.connection_screen.status = Some(format!("Keyring error: {e}"));
+                    return;
+                }
+            }
+        } else {
+            url
+        };
+        let (clean_url, is_readonly) = strip_readonly_param(&resolved_url);
         self.prod_readonly = is_readonly;
         self.post_disconnect_script = post_disconnect;
 

@@ -11,8 +11,10 @@ categories = ["development-tools", "database"]
 repository = "https://github.com/TSODev/rowdy"
 
 [features]
+default = ["secure-storage"]
 mongodb = ["dep:mongodb"]
 duckdb = ["dep:duckdb"]
+secure-storage = ["dep:keyring"]
 
 [dependencies]
 # Interface graphique de terminal
@@ -43,4 +45,5 @@ clap = { version = "4", features = ["derive"] }
 libsql = { version = "0.9.30", features = ["remote"] }
 mongodb = { version = "3", optional = true }
 duckdb = { version = "1", features = ["bundled"], optional = true }
+keyring = { version = "4", optional = true }
 

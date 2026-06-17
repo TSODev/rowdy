@@ -5,6 +5,46 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+#### Chiffrement des credentials (OS keyring)
+- Les mots de passe et tokens stockés dans `~/.config/rowdy/config.toml` sont désormais chiffrés via le trousseau natif du système d'exploitation : Keychain macOS, libsecret Linux, Windows Credential Manager
+- Activé par défaut via la feature `secure-storage` (désactivable avec `--no-default-features`)
+- À l'enregistrement d'un profil (`Ctrl+S`), le secret est extrait de l'URL — mot de passe dans l'authority (`user:pass@host`) ou token en query param (`authToken=TOKEN`) — et stocké dans le keyring sous la clé `rowdy/<profile_name>`
+- L'URL dans `config.toml` reçoit le placeholder `__keyring__` à la place du secret ; le fichier de configuration ne contient plus aucun secret en clair
+- La résolution est transparente à la connexion : `spawn_connect` substitue le placeholder avant de passer l'URL au connecteur
+- Suppression d'un profil (`D`) : l'entrée keyring est nettoyée automatiquement
+- Fallback propre si le keyring est indisponible (headless Linux sans libsecret) : message d'erreur affiché en status bar, connexion annulée
+
+### Fixed
+
+#### Keyring — vérification write/read et upgrade v3 → v4
+- Bug `keyring` v3 sur macOS Sequoia : `set_password` retournait `Ok(())` sans écrire réellement dans le trousseau natif, ce qui produisait `__keyring__` dans `config.toml` sans entrée correspondante — la connexion suivante échouait avec `No matching entry found`
+- Crate `keyring` upgradée de v3.6.3 à v4 (meilleure compatibilité macOS Sequoia avec la nouvelle API `SecItem`)
+- `store_in_keyring` vérifie maintenant l'écriture par un `get_password` immédiat après `set_password` : si la relecture échoue, l'URL originale (avec le mot de passe en clair) est conservée dans `config.toml` — le placeholder `__keyring__` n'est écrit que si le secret est effectivement récupérable
+
+---
+
+## [0.8.2] — 2026-06-17
+
+### Added
+
+#### Connecteur DuckDB (`--features duckdb`)
+- Trait `SqlClient` implémenté via `duckdb-rs` 1.x (crate `duckdb` 1.10504.0, linking statique)
+- Feature-gated `--features duckdb` — non inclus par défaut (linking C++ long à compiler)
+- URL : `duckdb:///path/to/file.db` ou `duckdb://:memory:` (base en mémoire)
+- Cas d'usage : analytique local, requêtes directes sur fichiers Parquet/CSV/JSON sans ETL
+- Types complexes : `LIST`/`ARRAY` → `Value::NestedArray`, `STRUCT`/`MAP` → `Value::NestedDoc` (navigation par drill-in comme MongoDB)
+- Types temporels : `DATE32` / `TIME64` / `TIMESTAMP` formatés via chrono
+- PK détectées via `duckdb_constraints()` ; FK déclaratives détectées (voir bug connu ci-dessous)
+- `sql_literal` génère la syntaxe array native DuckDB `['a', 'b']` pour les colonnes `VARCHAR[]`
+- `spawn_blocking` autour de l'API synchrone `duckdb-rs` (pas de runtime async natif)
+- ⚠️ **Bug moteur DuckDB v1.x** : UPDATE sur colonnes de type complexe (`VARCHAR[]`, `STRUCT`) avec FK entrantes → fausse violation de contrainte ; contournement : retirer les FK du schéma de seed (voir `seed/duckdb.sql` et section Bugs connus dans CLAUDE.md)
+
+---
+
 ## [0.8.1] — 2026-06-17
 
 ### Added
@@ -527,7 +567,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/TSODev/rowdy/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/TSODev/rowdy/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/TSODev/rowdy/compare/v0.7.5...v0.8.0
 [0.7.1]: https://github.com/TSODev/rowdy/compare/v0.7.0...v0.7.1

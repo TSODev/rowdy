@@ -26,6 +26,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Saved connection profiles (`~/.config/rowdy/config.toml`) | ✅ |
 | Save new connection with `Ctrl+S` — persists to config file | ✅ |
 | Delete profile with confirmation (`D` → `y` / `n`) | ✅ |
+| Encrypted credential storage — passwords and tokens stored in the OS keychain (macOS Keychain, libsecret, Windows Credential Manager) | ✅ |
 | Vim-style keyboard navigation (`h j k l`, `/` to filter) | ✅ |
 | Table list with live filter | ✅ |
 | Data Grid — column scroll, collapse/expand, manual resize (`-`/`=`) | ✅ |
@@ -150,6 +151,18 @@ url = "duckdb:///home/user/analytics.db"
 ```
 
 Profiles appear in the left panel of the connection screen at startup.
+
+> **Credential security** — when you save a profile with `Ctrl+S`, Rowdy extracts the password or token from the URL and stores it in the OS keychain (macOS Keychain, libsecret on Linux, Windows Credential Manager). The URL written to `config.toml` uses a `__keyring__` placeholder instead of the actual secret:
+>
+> ```toml
+> # What config.toml looks like after saving — no plaintext secrets
+> [[connections]]
+> name = "Local Postgres"
+> type = "postgres"
+> url = "postgres://user:__keyring__@localhost:5432/my_db"
+> ```
+>
+> Credentials are resolved transparently at connection time. On headless Linux systems without libsecret, Rowdy falls back to storing the URL unchanged and displays a warning. The feature can be disabled at build time with `--no-default-features`.
 
 You can also add optional **pre-connect** and **post-disconnect** shell scripts per profile (useful for SSH tunnels, VPN, etc.):
 

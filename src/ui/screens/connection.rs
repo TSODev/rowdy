@@ -42,7 +42,7 @@ pub struct ConnectionScreen {
 
 pub enum ConnectionAction {
     None,
-    Connect { url: String, db_type: String, pre_connect: Option<String>, post_disconnect: Option<String> },
+    Connect { url: String, db_type: String, pre_connect: Option<String>, post_disconnect: Option<String>, profile_name: Option<String> },
     SaveProfile { name: String, url: String, db_type: String, pre_connect: Option<String>, post_disconnect: Option<String> },
     DeleteProfile { idx: usize, persist: bool },
     Quit,
@@ -151,6 +151,7 @@ impl ConnectionScreen {
                         db_type: p.db_type.clone(),
                         pre_connect: p.pre_connect.clone(),
                         post_disconnect: p.post_disconnect.clone(),
+                        profile_name: Some(p.name.clone()),
                     }
                 } else {
                     ConnectionAction::None
@@ -196,6 +197,7 @@ impl ConnectionScreen {
                     db_type: self.current_db_type().to_string(),
                     pre_connect: nonempty(self.pre_connect_input.trim()),
                     post_disconnect: nonempty(self.post_disconnect_input.trim()),
+                    profile_name: None,
                 }
             }
             KeyCode::Left | KeyCode::Right if self.focused_field == EditField::DbType => {
