@@ -58,6 +58,16 @@ url = "redis://127.0.0.1:6379"
 name = "MySQL Local"
 type = "mysql"
 url = "mysql://root:password@localhost:3306/my_db"
+
+[[connections]]
+name = "MongoDB Local"
+type = "mongodb"
+url = "mongodb://localhost:27017/mydb"
+
+[[connections]]
+name = "MongoDB Atlas"
+type = "mongodb"
+url = "mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/mydb"
 ```
 
 Les profils apparaissent dans le panneau gauche de l'écran de connexion au démarrage.
@@ -163,6 +173,7 @@ La barre d'aide affiche en rouge : `Delete "nom"? y: delete from file   n: remov
 | libsql / Turso | `libsql://your-db-org.turso.io?authToken=TOKEN` |
 | MySQL | `mysql://user:password@host:3306/dbname` |
 | Redis | `redis://host:6379` ou `redis://:password@host:6379` |
+| MongoDB | `mongodb://user:password@host:27017/dbname` (nom de DB obligatoire) |
 
 ---
 
@@ -687,6 +698,132 @@ Depuis la liste des tables, appuyez sur `r` pour ouvrir la vue ERD centrée sur 
 
 ---
 
+## MongoDB
+
+> **Feature optionnelle.** MongoDB n'est pas inclus dans le binaire par défaut pour ne pas alourdir les autres utilisateurs. Il faut compiler ou installer avec :
+> ```bash
+> cargo build --release --features mongodb
+> cargo install rowdy-db --features mongodb
+> ```
+
+### Connexion
+
+L'URL doit inclure le **nom de la base de données** dans le chemin — c'est obligatoire :
+
+```
+mongodb://user:password@host:27017/dbname
+mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/dbname
+```
+
+Rowdy vérifie la connectivité avec un ping au moment de la connexion. Les collections de la base sont ensuite chargées et affichées dans la vue liste.
+
+### Liste des collections
+
+La vue liste fonctionne exactement comme pour les connecteurs SQL : navigation `j/k`, filtre `/`, `Enter` pour ouvrir une collection dans le Data Grid. Il n'y a pas de badges `[T]`/`[V]` ni de panneau schema (MongoDB n'a pas de schéma fixe).
+
+### Data Grid MongoDB
+
+Chaque document de la collection est affiché sur une ligne. Les colonnes sont déduites de l'**union** de tous les champs des documents de la page courante. Le champ `_id` est toujours affiché en premier.
+
+Les champs imbriqués (sous-documents BSON et tableaux) sont représentés par des **badges verts** :
+
+| Badge | Signification |
+|-------|---------------|
+| `[obj]` | Sous-document BSON — objet imbriqué |
+| `[arr:N]` | Tableau BSON de N éléments |
+
+La **preview bar** affiche le JSON complet du champ sélectionné.
+
+`Enter` sur un badge `[obj]` ou `[arr]` ouvre une sous-grille de navigation (lecture seule) avec le contenu converti en tableau :
+- Objet → 1 ligne × N colonnes (une par clé)
+- Tableau d'objets → N lignes × union des clés
+- Tableau scalaire → colonnes `index` + `value`
+
+La navigation est **récursive** avec breadcrumb : `users › address › city`. `Esc` remonte d'un niveau.
+
+### Éditeur MQL (`e` depuis la liste des collections)
+
+L'éditeur SQL s'adapte au mode MongoDB sous le nom **MQL Editor**. Le titre affiche `MQL Editor │ … │ collection: nom`.
+
+| Syntaxe | Opération |
+|---------|-----------|
+| `{ "field": "value" }` | `find` avec ce filtre JSON |
+| `[{ "$match": … }, …]` | `aggregate` avec ce pipeline JSON |
+| _(vide)_ | `find` sans filtre — tous les documents |
+
+`F5` / `Ctrl+Enter` exécute. Le résultat s'affiche dans le panneau bas. `F4` l'ouvre dans un Data Grid complet.
+
+### Édition de documents (`Enter` sur une ligne)
+
+En mode normal (sans `?readonly=true`), `Enter` sur une ligne ouvre l'écran d'édition MongoDB.
+
+```
+┌─ Edit: users ──────────────────────────────────────────────────────┐
+│   _id        [PK]  string   64abc123def456789012abcd               │
+│ > name             string   Alice                                   │
+│   age              int      30                                      │
+│   address    [obj] object   {"city":"Paris","zip":"75001"}          │
+│   tags       [arr] array    ["mongodb","database"]                  │
+└────────────────────────────────────────────────────────────────────┘
+┌─ Document Preview ─────────────────────────────────────────────────┐
+│  {"name":"Alice","age":30,"address":{…},"tags":[…]}                │
+└────────────────────────────────────────────────────────────────────┘
+  j/k: field   Enter: edit / drill-in   Ctrl+S: save   Esc: back
+```
+
+- **`_id`** : badge `[PK]`, toujours non éditable
+- **Champs scalaires** (`string`, `int`, `float`, `bool`) : `Enter` ou `i` → édition inline avec curseur
+- **`[obj]`** : `Enter` → drill-in dans le sous-document (voir ci-dessous)
+- **`[arr]`** : `Enter` → éditeur d'items (voir ci-dessous)
+- **Preview** : le panneau bas affiche le JSON du document reconstruit en temps réel
+- **`Ctrl+S`** : ouvre un modal de confirmation puis exécute `replace_one` sur la collection
+
+### Navigation imbriquée récursive dans les objets
+
+`Enter` sur un champ `[obj]` ouvre un sous-écran d'édition pour ce sous-document. Le titre indique le **breadcrumb** de navigation :
+
+```
+┌─ Edit: users › address ────────────────────────────────────────────┐
+│ > city             string   Paris                                   │
+│   zip              string   75001                                   │
+│   country          string   FR                                      │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+- Les sous-objets dans l'objet imbriqué sont eux-mêmes drillables (récursif, profondeur illimitée)
+- **`Esc`** : valide les modifications du niveau courant, reconstruit le JSON et remonte au niveau parent
+- **`Ctrl+S`** depuis un niveau imbriqué affiche `"Press Esc to confirm nested edit first"` — la sauvegarde vers MongoDB n'est possible que depuis le niveau racine
+
+### Éditeur d'arrays item par item
+
+`Enter` sur un champ `[arr]` ouvre un éditeur de liste :
+
+```
+┌─ Edit: users › tags ───────────────────────────────────────────────┐
+│ > [0]   string   mongodb                                            │
+│   [1]   string   database                                           │
+│   [2]   string   nosql                                              │
+└────────────────────────────────────────────────────────────────────┘
+┌─ Array Preview ────────────────────────────────────────────────────┐
+│  ["mongodb","database","nosql"]                                     │
+└────────────────────────────────────────────────────────────────────┘
+  j/k: item   Enter: edit   a: add   D: delete   Esc: confirm & back
+```
+
+| Touche | Action |
+|--------|--------|
+| `j` / `k` | Item suivant / précédent |
+| `Enter` | Éditer l'item sélectionné (inline pour scalaire, drill-in pour `[obj]`/`[arr]`) |
+| `a` | Ajouter un item vide en fin de liste — entre immédiatement en mode édition |
+| `D` | Supprimer l'item sélectionné et renuméroter les suivants |
+| `Esc` | Valider les modifications, reconstruire le JSON array et remonter au niveau parent |
+
+Le **preview panel** affiche le JSON array reconstruit en temps réel. Les items de type objet (`[obj]`) ou tableau imbriqué (`[arr]`) sont eux-mêmes drillables récursivement.
+
+> **Note :** les items ajoutés avec `a` sont créés avec le type `string`. Si vous saisissez un entier, il sera sérialisé comme chaîne JSON (`"42"`) — pour forcer un type numérique, éditez directement le JSON du champ parent en inline.
+
+---
+
 ## Bases de données supportées
 
 | Moteur | Type | Driver | Statut |
@@ -696,4 +833,4 @@ Depuis la liste des tables, appuyez sur `r` pour ouvrir la vue ERD centrée sur 
 | libsql / Turso | SQL | `libsql` (HTTP) | ✅ Supporté |
 | MySQL / MariaDB | SQL | `sqlx` | ✅ Supporté |
 | Redis | Clé-valeur | `redis-rs` | ✅ Supporté — liste des clés + vue détail (string/hash/list/set/zset) |
-| MongoDB | Document | — | 🔲 Prévu |
+| MongoDB | Document | `mongodb` 3 | ✅ Supporté (`--features mongodb`) — browse, MQL, édition documents + nested |
