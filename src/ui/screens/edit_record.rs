@@ -217,6 +217,13 @@ impl EditRecordScreen {
                     let val = &self.current_values[self.selected_field];
                     self.validation_errors[self.selected_field] = validate_field(&col.type_name, val);
                 }
+                // In array editors, infer the JSON type from the typed value
+                if self.is_array {
+                    let val = self.current_values[self.selected_field].clone();
+                    if let Some(col) = self.schema.get_mut(self.selected_field) {
+                        col.type_name = infer_json_type(&val);
+                    }
+                }
                 self.mode = EditFieldMode::Navigate;
             }
             KeyCode::Left => {
@@ -666,6 +673,22 @@ fn is_bool_type(type_name: &str) -> bool {
 
 fn is_truthy(val: &str) -> bool {
     matches!(val.to_lowercase().as_str(), "true" | "t" | "1" | "yes" | "on")
+}
+
+fn infer_json_type(val: &str) -> String {
+    if val.is_empty() || val == "NULL" {
+        return "string".to_string();
+    }
+    if val.eq_ignore_ascii_case("true") || val.eq_ignore_ascii_case("false") {
+        return "bool".to_string();
+    }
+    if val.parse::<i64>().is_ok() {
+        return "int".to_string();
+    }
+    if val.parse::<f64>().is_ok() {
+        return "float".to_string();
+    }
+    "string".to_string()
 }
 
 fn mongo_field_to_json(val: &str, type_name: &str) -> serde_json::Value {
