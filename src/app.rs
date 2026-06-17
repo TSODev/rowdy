@@ -677,14 +677,23 @@ impl App {
             None => return,
         };
         let table_name = self.data_grid_screen.table_name.clone();
+        // Use first row to infer field types (object/array/int/float/bool/string)
+        let first_row = result.rows.first();
         let schema: Vec<ColumnSchema> = result.columns.iter()
-            .filter(|col| col.name != "_id")
-            .map(|col| ColumnSchema {
-                name: col.name.clone(),
-                type_name: "string".to_string(),
-                is_pk: false,
-                is_nullable: true,
-                fk: None,
+            .enumerate()
+            .filter(|(_, col)| col.name != "_id")
+            .map(|(i, col)| {
+                let type_name = first_row
+                    .and_then(|r| r.values.get(i))
+                    .map(mongo_type_name)
+                    .unwrap_or_else(|| "string".to_string());
+                ColumnSchema {
+                    name: col.name.clone(),
+                    type_name,
+                    is_pk: false,
+                    is_nullable: true,
+                    fk: None,
+                }
             })
             .collect();
         let values: Vec<String> = vec!["".to_string(); schema.len()];
