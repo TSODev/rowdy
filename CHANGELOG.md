@@ -9,6 +9,38 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+#### Édition de documents MongoDB
+- `insert_one`, `replace_one`, `delete_one` ajoutés au trait `NoSqlClient` et implémentés dans `MongoDbConnector`
+- Helper `id_to_bson()` : reconstruit le bon type BSON pour le filtre `_id` (ObjectId 24-char hex ou string)
+- `Enter` sur une ligne MongoDB ouvre un `EditRecordScreen` en mode `is_nosql` — schéma synthétique construit à la volée depuis les colonnes du résultat + types inférés (`string`, `int`, `float`, `bool`, `object`, `array`)
+- Le champ `_id` est affiché avec le badge `[PK]` et non éditable
+- Badges `[obj]` vert et `[arr]` vert dans l'éditeur pour les champs imbriqués (cohérence avec le DataGrid)
+- `Ctrl+S` reconstruit le JSON du document (sans `_id`), ouvre un modal de confirmation, puis appelle `replace_one`
+- Après sauvegarde : rechargement automatique de la collection via `find` + `count`
+- Les grilles MongoDB ne sont plus `read_only` par défaut — le flag suit uniquement `prod_readonly` (URL `?readonly=true`)
+
+#### Navigation imbriquée récursive dans EditRecord (objets)
+- `Enter` sur un champ `[obj]` ouvre un sous-`EditRecord` pour le sous-document
+- Le titre devient un breadcrumb : `users › address`, `users › address › city`
+- `Esc` reconstruit le JSON de l'objet modifié et l'écrit dans le champ parent
+- Pile `edit_record_stack: Vec<(EditRecordScreen, usize)>` dans `App` — profondeur illimitée
+- `Ctrl+S` depuis un niveau imbriqué affiche `"Press Esc to confirm nested edit first"` — sauvegarde uniquement possible depuis la racine
+
+#### Éditeur d'arrays item par item
+- `Enter` sur un champ `[arr]` ouvre un éditeur liste numérotée `[0]`, `[1]`…
+- `a` : ajoute un item vide en fin de liste et entre immédiatement en mode édition
+- `D` : supprime l'item sélectionné et renumérote tous les suivants
+- Les items scalaires s'éditent en inline (curseur), les items `[obj]`/`[arr]` font un drill-in récursif
+- `Esc` reconstruit le JSON array et remonte dans le niveau parent
+- Preview panel affiche le JSON array reconstruit en temps réel
+- Barre d'aide dédiée : `j/k: item   Enter: edit   a: add   D: delete   Esc: confirm & back`
+
+### Changed
+
+#### Lisibilité du texte grisé dans l'UI
+- Tous les `fg(Color::DarkGray)` remplacés par `fg(Color::Gray)` dans l'ensemble des fichiers UI — le texte secondaire (champs PK, valeurs NULL, preview SQL, barres d'aide) est nettement plus lisible sur fond noir
+- Les `bg(Color::DarkGray)` (highlight d'édition, status bar) sont inchangés
+
 #### Connecteur MongoDB (feature optionnelle)
 - Nouveau trait `NoSqlClient` (`list_collections`, `find`, `aggregate`, `count`) dans `src/db/traits/nosql_client.rs`
 - `MongoDbConnector` via `mongodb` 3 dans `src/db/connectors/mongodb.rs`, compilé uniquement avec `--features mongodb` ; dépendance absente par défaut pour ne pas pénaliser les autres utilisateurs

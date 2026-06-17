@@ -53,7 +53,8 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | Redis key-detail view — `Enter` on a key shows its content (string/hash/list/set/zset) in a read-only grid with TTL | ✅ |
 | Schema panel in table list — columns with PK/FK badges, outgoing and incoming FK relations, auto-loaded on connect | ✅ |
 | ERD graph view (`r`) — star layout with box-drawing, bent arrows routed from exact FK column, navigate between boxes | ✅ |
-| MongoDB connector | 🔲 planned |
+| MongoDB connector (`--features mongodb`) — browse collections, MQL editor, nested field navigation | ✅ |
+| MongoDB document editing — `replace_one` with confirmation, recursive nested object / array editor | ✅ |
 
 ---
 
@@ -184,13 +185,22 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Next / previous field |
-| `Enter` / `i` | Edit the selected field |
+| `Enter` / `i` | Edit selected field — or drill into nested `[obj]` / `[arr]` (MongoDB) |
 | `Space` | Toggle boolean field (`true` ↔ `false`) |
 | `←` / `→` | Move cursor within field |
 | `Home` / `End` | Jump to start / end of field |
 | `Backspace` / `Del` | Delete character |
-| `Ctrl+S` | Save changes — opens confirmation modal before executing UPDATE |
-| `Esc` / `q` | Back to Data Grid without saving |
+| `Ctrl+S` | Save changes — confirmation modal before UPDATE (SQL) or `replace_one` (MongoDB) |
+| `Esc` / `q` | Back to Data Grid without saving — or confirm nested edit and go up one level (MongoDB) |
+
+**MongoDB nested editor** — when drilling into `[obj]` or `[arr]` fields, the title shows the breadcrumb (`collection › field › subfield`). Press `Esc` at any nested level to confirm that level's edits and return to the parent. `Ctrl+S` is only available at the root level.
+
+**Array editor** — additional keys when editing an array field:
+
+| Key | Action |
+|-----|--------|
+| `a` | Add new item at end (enters edit mode immediately) |
+| `D` | Delete selected item and renumber remaining items |
 
 ### ERD graph view (`r`)
 
@@ -230,6 +240,14 @@ The ERD view displays a **star layout**: the selected table in the center (yello
 | libsql / Turso | SQL | `libsql` (remote HTTP) | `libsql://host?authToken=TOKEN` |
 | MySQL / MariaDB | SQL | `sqlx` | `mysql://user:pass@host:3306/db` |
 | Redis | Key-value | `redis-rs` (async multiplexed) | `redis://host:6379` |
+| MongoDB | Document | `mongodb` 3 (feature-gated) | `mongodb://user:pass@host:27017/dbname` |
+
+MongoDB requires building with the optional feature flag:
+
+```bash
+cargo build --release --features mongodb
+cargo install rowdy-db --features mongodb
+```
 
 ---
 

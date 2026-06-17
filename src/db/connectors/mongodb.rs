@@ -140,9 +140,54 @@ impl NoSqlClient for MongoDbConnector {
             .await
             .map_err(|e| DbError::QueryFailed(e.to_string()))
     }
+
+    async fn insert_one(&self, collection: &str, doc_json: &str) -> Result<String, DbError> {
+        let db = self.get_db()?;
+        let coll = db.collection::<Document>(collection);
+        let doc = parse_filter(doc_json)?;
+        let result = coll
+            .insert_one(doc)
+            .await
+            .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+        Ok(result.inserted_id.to_string())
+    }
+
+    async fn replace_one(&self, collection: &str, id: &str, doc_json: &str) -> Result<u64, DbError> {
+        let db = self.get_db()?;
+        let coll = db.collection::<Document>(collection);
+        let filter = bson::doc! { "_id": id_to_bson(id) };
+        let mut replacement = parse_filter(doc_json)?;
+        replacement.remove("_id");
+        let result = coll
+            .replace_one(filter, replacement)
+            .await
+            .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+        Ok(result.matched_count)
+    }
+
+    async fn delete_one(&self, collection: &str, id: &str) -> Result<u64, DbError> {
+        let db = self.get_db()?;
+        let coll = db.collection::<Document>(collection);
+        let filter = bson::doc! { "_id": id_to_bson(id) };
+        let result = coll
+            .delete_one(filter)
+            .await
+            .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+        Ok(result.deleted_count)
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Reconstruct the correct BSON _id type from its string representation.
+/// A 24-char hex string is treated as ObjectId; anything else as a plain string.
+fn id_to_bson(id: &str) -> Bson {
+    if let Ok(oid) = bson::oid::ObjectId::parse_str(id) {
+        Bson::ObjectId(oid)
+    } else {
+        Bson::String(id.to_string())
+    }
+}
 
 fn parse_filter(filter: &str) -> Result<Document, DbError> {
     let s = filter.trim();

@@ -411,7 +411,7 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
         screen.url_input.clone()
     };
     let url_focused = active(&EditField::Url) || is_saving;
-    let url_style = if url_focused { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) };
+    let url_style = if url_focused { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::Gray) };
     let url_block = Block::default()
         .title(" URL ")
         .borders(Borders::ALL)
@@ -425,7 +425,7 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
         screen.pre_connect_input.clone()
     };
     let pre_focused = active(&EditField::PreConnect);
-    let pre_style = if pre_focused { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) };
+    let pre_style = if pre_focused { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::Gray) };
     let pre_block = Block::default()
         .title(" Pre-connect script (optional) ")
         .borders(Borders::ALL)
@@ -439,7 +439,7 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
         screen.post_disconnect_input.clone()
     };
     let post_focused = active(&EditField::PostDisconnect);
-    let post_style = if post_focused { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) };
+    let post_style = if post_focused { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::Gray) };
     let post_block = Block::default()
         .title(" Post-disconnect script (optional) ")
         .borders(Borders::ALL)
@@ -452,11 +452,11 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
     } else {
         screen.name_input.clone()
     };
-    let name_style = if is_saving { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) };
+    let name_style = if is_saving { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::Gray) };
     let name_block = Block::default()
         .title(" Save as (name) ")
         .borders(Borders::ALL)
-        .border_style(if is_saving { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::DarkGray) });
+        .border_style(if is_saving { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::Gray) });
     f.render_widget(Paragraph::new(name_display).block(name_block).style(name_style), inner[4]);
 
     // Cursor positioning
@@ -484,7 +484,7 @@ fn draw_new_connection(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect)
     let hint_style = if screen.status.is_some() {
         Style::default().fg(Color::Red)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(Color::Gray)
     };
     f.render_widget(
         Paragraph::new(hint_text).style(hint_style).wrap(Wrap { trim: false }),
@@ -520,7 +520,7 @@ fn draw_help(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect) {
     let style = if matches!(screen.input_mode, InputMode::ConfirmDelete) {
         Style::default().fg(Color::Red)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(Color::Gray)
     };
     f.render_widget(
         Paragraph::new(text)

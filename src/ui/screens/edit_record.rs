@@ -26,6 +26,8 @@ pub enum EditRecordAction {
     None,
     Back,
     Save(String),
+    SaveMongo { id: String, doc_json: String },
+    OpenNested(usize), // field_idx of an object field to drill into
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -41,6 +43,8 @@ pub struct EditRecordScreen {
     pub scroll_offset: usize,
     pub status: Option<String>,
     pub validation_errors: Vec<Option<String>>,
+    pub is_nosql: bool,
+    pub is_array: bool,
 }
 
 impl EditRecordScreen {
@@ -57,6 +61,8 @@ impl EditRecordScreen {
             scroll_offset: 0,
             status: None,
             validation_errors: vec![None; n],
+            is_nosql: false,
+            is_array: false,
         }
     }
 
@@ -90,10 +96,48 @@ impl EditRecordScreen {
             KeyCode::Enter | KeyCode::Char('i') => {
                 if let Some(col) = self.schema.get(self.selected_field) {
                     if !col.is_pk {
+                        if self.is_nosql && (col.type_name == "object" || col.type_name == "array") {
+                            return EditRecordAction::OpenNested(self.selected_field);
+                        }
                         self.cursor_pos = self.current_values[self.selected_field].chars().count();
                         self.mode = EditFieldMode::Editing;
                         self.status = None;
                     }
+                }
+                EditRecordAction::None
+            }
+
+            // Add item (array mode only)
+            KeyCode::Char('a') if self.is_array => {
+                let new_idx = self.schema.len();
+                self.schema.push(ColumnSchema {
+                    name: format!("[{new_idx}]"),
+                    type_name: "string".into(),
+                    is_pk: false,
+                    is_nullable: true,
+                    fk: None,
+                });
+                self.current_values.push(String::new());
+                self.original_values.push(String::new());
+                self.validation_errors.push(None);
+                self.selected_field = new_idx;
+                self.cursor_pos = 0;
+                self.mode = EditFieldMode::Editing;
+                EditRecordAction::None
+            }
+
+            // Delete item (array mode only)
+            KeyCode::Char('D') if self.is_array && !self.schema.is_empty() => {
+                let idx = self.selected_field;
+                self.schema.remove(idx);
+                self.current_values.remove(idx);
+                self.original_values.remove(idx);
+                self.validation_errors.remove(idx);
+                for (i, col) in self.schema.iter_mut().enumerate() {
+                    col.name = format!("[{i}]");
+                }
+                if self.selected_field >= self.schema.len() && self.selected_field > 0 {
+                    self.selected_field -= 1;
                 }
                 EditRecordAction::None
             }
@@ -115,12 +159,22 @@ impl EditRecordScreen {
                     self.status = Some(format!("{error_count} field(s) with invalid format"));
                     return EditRecordAction::None;
                 }
-                let sql = self.build_update_sql();
-                if sql.starts_with("-- ") {
-                    self.status = Some(sql);
-                    EditRecordAction::None
+                if self.is_nosql {
+                    match self.build_mongo_replace() {
+                        Ok((id, doc_json)) => EditRecordAction::SaveMongo { id, doc_json },
+                        Err(msg) => {
+                            self.status = Some(msg);
+                            EditRecordAction::None
+                        }
+                    }
                 } else {
-                    EditRecordAction::Save(sql)
+                    let sql = self.build_update_sql();
+                    if sql.starts_with("-- ") {
+                        self.status = Some(sql);
+                        EditRecordAction::None
+                    } else {
+                        EditRecordAction::Save(sql)
+                    }
                 }
             }
 
@@ -223,6 +277,49 @@ impl EditRecordScreen {
         )
     }
 
+    /// Build the replacement document JSON and return (id_string, doc_json).
+    /// The _id field is excluded from the replacement body (MongoDB forbids updating it).
+    pub fn build_mongo_replace(&self) -> Result<(String, String), String> {
+        let id_idx = self.schema.iter().position(|c| c.is_pk || c.name == "_id")
+            .ok_or_else(|| "-- No _id field: cannot replace document".to_string())?;
+        let id = self.original_values[id_idx].clone();
+
+        let no_changes = self.schema.iter().zip(self.current_values.iter()).zip(self.original_values.iter())
+            .filter(|((col, _), _)| !col.is_pk && col.name != "_id")
+            .all(|((_, cur), orig)| cur == orig);
+        if no_changes {
+            return Err("-- No changes".to_string());
+        }
+
+        let mut map = serde_json::Map::new();
+        for (i, col) in self.schema.iter().enumerate() {
+            if col.is_pk || col.name == "_id" { continue; }
+            let json_val = mongo_field_to_json(&self.current_values[i], &col.type_name);
+            map.insert(col.name.clone(), json_val);
+        }
+        let doc_json = serde_json::Value::Object(map).to_string();
+        Ok((id, doc_json))
+    }
+
+    /// Reconstruct the full JSON object from the current edited values.
+    /// Called when popping a nested level back to the parent field.
+    pub fn reconstruct_nested_json(&self) -> String {
+        let mut map = serde_json::Map::new();
+        for (col, val) in self.schema.iter().zip(self.current_values.iter()) {
+            map.insert(col.name.clone(), mongo_field_to_json(val, &col.type_name));
+        }
+        serde_json::Value::Object(map).to_string()
+    }
+
+    /// Reconstruct a JSON array from the current edited items.
+    pub fn reconstruct_nested_array(&self) -> String {
+        let arr: Vec<serde_json::Value> = self.schema.iter()
+            .zip(self.current_values.iter())
+            .map(|(col, val)| mongo_field_to_json(val, &col.type_name))
+            .collect();
+        serde_json::Value::Array(arr).to_string()
+    }
+
     // ── Draw ──────────────────────────────────────────────────────────────────
 
     pub fn draw(f: &mut Frame<'_>, screen: &mut EditRecordScreen, area: Rect) {
@@ -274,6 +371,10 @@ impl EditRecordScreen {
                     format!("[→{:<width$}]", t, width = BADGE_W - 3),
                     Style::default().fg(Color::Magenta),
                 )
+            } else if col.type_name == "object" {
+                (format!("{:<BADGE_W$}", "[obj]"), Style::default().fg(Color::Green))
+            } else if col.type_name == "array" {
+                (format!("{:<BADGE_W$}", "[arr]"), Style::default().fg(Color::Green))
             } else {
                 (
                     format!("{:<BADGE_W$}", ""),
@@ -289,7 +390,7 @@ impl EditRecordScreen {
             };
 
             let name_style = if col.is_pk {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(Color::Gray)
             } else if is_sel {
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             } else if changed {
@@ -299,7 +400,7 @@ impl EditRecordScreen {
             };
 
             let val_style = if col.is_pk {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(Color::Gray)
             } else if has_error && !is_editing {
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
             } else if is_editing {
@@ -307,7 +408,7 @@ impl EditRecordScreen {
             } else if is_sel {
                 Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
             } else if cur_val == "NULL" {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(Color::Gray)
             } else if changed {
                 Style::default().fg(Color::Green)
             } else {
@@ -360,17 +461,27 @@ impl EditRecordScreen {
             }
         }
 
-        // ── SQL preview ───────────────────────────────────────────────────────
-        let sql = screen.build_update_sql();
-        let sql_style = if sql.starts_with("-- ") {
-            Style::default().fg(Color::DarkGray)
+        // ── Preview panel (SQL / document JSON / array JSON) ─────────────────
+        let (preview_text, preview_title) = if screen.is_array {
+            (screen.reconstruct_nested_array(), " Array Preview ")
+        } else if screen.is_nosql {
+            let content = match screen.build_mongo_replace() {
+                Ok((_, doc)) => doc,
+                Err(msg) => msg,
+            };
+            (content, " Document Preview ")
+        } else {
+            (screen.build_update_sql(), " SQL Preview ")
+        };
+        let preview_style = if preview_text.starts_with("-- ") {
+            Style::default().fg(Color::Gray)
         } else {
             Style::default().fg(Color::Green)
         };
         f.render_widget(
-            Paragraph::new(sql.as_str())
-                .block(Block::default().borders(Borders::ALL).title(" SQL Preview "))
-                .style(sql_style)
+            Paragraph::new(preview_text.as_str())
+                .block(Block::default().borders(Borders::ALL).title(preview_title))
+                .style(preview_style)
                 .wrap(Wrap { trim: false }),
             chunks[1],
         );
@@ -387,10 +498,15 @@ impl EditRecordScreen {
             .and_then(|e| e.as_ref())
         {
             (format!(" ✗ {err}"), Style::default().fg(Color::Red))
+        } else if screen.is_array {
+            (
+                " j/k: item   Enter: edit   a: add   D: delete   Esc: confirm & back".into(),
+                Style::default().fg(Color::Gray),
+            )
         } else {
             (
                 " j/k: field   Enter/i: edit   Space: toggle bool   Ctrl+S: save   Esc: back".into(),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::Gray),
             )
         };
         f.render_widget(
@@ -431,7 +547,7 @@ fn validate_field(type_name: &str, value: &str) -> Option<String> {
         if !is_valid_uuid(value) {
             return Some("expected xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx".into());
         }
-    } else if tn.contains("JSON") {
+    } else if tn.contains("JSON") || tn == "OBJECT" || tn == "ARRAY" {
         if serde_json::from_str::<serde_json::Value>(value).is_err() {
             return Some("invalid JSON".into());
         }
@@ -468,8 +584,10 @@ fn format_hint(type_name: &str) -> Option<&'static str> {
         Some("YYYY-MM-DD HH:MM:SS")
     } else if tn.contains("UUID") {
         Some("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-    } else if tn.contains("JSON") {
-        Some("valid JSON")
+    } else if tn.contains("JSON") || tn == "OBJECT" {
+        Some("valid JSON object { }")
+    } else if tn == "ARRAY" {
+        Some("valid JSON array [ ]")
     } else if tn.contains("INET") || tn.contains("CIDR") {
         Some("IP address  e.g. 192.168.1.1")
     } else {
@@ -495,6 +613,28 @@ fn is_bool_type(type_name: &str) -> bool {
 
 fn is_truthy(val: &str) -> bool {
     matches!(val.to_lowercase().as_str(), "true" | "t" | "1" | "yes" | "on")
+}
+
+fn mongo_field_to_json(val: &str, type_name: &str) -> serde_json::Value {
+    if val == "NULL" {
+        return serde_json::Value::Null;
+    }
+    match type_name {
+        "object" | "array" => {
+            serde_json::from_str(val).unwrap_or(serde_json::Value::String(val.to_string()))
+        }
+        "int" => val.parse::<i64>()
+            .ok()
+            .map(serde_json::Value::from)
+            .unwrap_or(serde_json::Value::String(val.to_string())),
+        "float" => val.parse::<f64>()
+            .ok()
+            .and_then(serde_json::Number::from_f64)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::String(val.to_string())),
+        "bool" => serde_json::Value::Bool(is_truthy(val)),
+        _ => serde_json::Value::String(val.to_string()),
+    }
 }
 
 fn sql_literal(val: &str, type_name: &str) -> String {

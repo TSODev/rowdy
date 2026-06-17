@@ -53,7 +53,7 @@ impl SqlEditorScreen {
         let mut editor = TextArea::default();
         editor.set_cursor_line_style(Style::default());
         editor.set_placeholder_text("-- Write your SQL here…");
-        editor.set_placeholder_style(Style::default().fg(Color::DarkGray));
+        editor.set_placeholder_style(Style::default().fg(Color::Gray));
         Self {
             editor,
             result: None,
@@ -112,7 +112,7 @@ impl SqlEditorScreen {
         let mut ta = TextArea::from(lines);
         ta.set_cursor_line_style(Style::default());
         ta.set_placeholder_text("-- Write your SQL here…");
-        ta.set_placeholder_style(Style::default().fg(Color::DarkGray));
+        ta.set_placeholder_style(Style::default().fg(Color::Gray));
         self.editor = ta;
     }
 
@@ -260,7 +260,7 @@ fn draw_editor(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
     let border_style = if focused {
         Style::default().fg(Color::Yellow)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(Color::Gray)
     };
     let status_label = if screen.running { " ⏳ " } else { "" };
     let title = if let Some(ref coll) = screen.nosql_collection {
@@ -287,7 +287,7 @@ fn draw_results(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
     let border_style = if focused {
         Style::default().fg(Color::Yellow)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(Color::Gray)
     };
 
     match &screen.result {
@@ -305,7 +305,7 @@ fn draw_results(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
                             .borders(Borders::ALL)
                             .border_style(border_style),
                     )
-                    .style(Style::default().fg(Color::DarkGray)),
+                    .style(Style::default().fg(Color::Gray)),
                 area,
             );
         }
@@ -440,7 +440,7 @@ fn draw_help(f: &mut Frame<'_>, screen: &SqlEditorScreen, area: Rect) {
     f.render_widget(
         Paragraph::new(text)
             .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::DarkGray)),
+            .style(Style::default().fg(Color::Gray)),
         area,
     );
 }

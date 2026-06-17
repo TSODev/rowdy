@@ -213,7 +213,7 @@ impl TableListScreen {
         let help_style = if screen.filter_mode {
             Style::default().fg(Color::Yellow)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(Color::Gray)
         };
 
         f.render_widget(
@@ -238,9 +238,9 @@ impl TableListScreen {
         };
 
         let items: Vec<ListItem> = if let Some(ref msg) = screen.status {
-            vec![ListItem::new(msg.as_str()).style(Style::default().fg(Color::DarkGray))]
+            vec![ListItem::new(msg.as_str()).style(Style::default().fg(Color::Gray))]
         } else if filtered_items.is_empty() {
-            vec![ListItem::new("No match").style(Style::default().fg(Color::DarkGray))]
+            vec![ListItem::new("No match").style(Style::default().fg(Color::Gray))]
         } else if screen.is_kv {
             filtered_items.iter().map(|(name, _)| ListItem::new(name.clone())).collect()
         } else {
@@ -252,7 +252,7 @@ impl TableListScreen {
                     ]))
                 } else {
                     ListItem::new(Line::from(vec![
-                        Span::styled("[T] ", Style::default().fg(Color::DarkGray)),
+                        Span::styled("[T] ", Style::default().fg(Color::Gray)),
                         Span::raw(name.clone()),
                     ]))
                 }
@@ -272,7 +272,7 @@ impl TableListScreen {
             f.render_widget(
                 Paragraph::new("Select a table")
                     .block(Block::default().title(" Schema ").borders(Borders::ALL))
-                    .style(Style::default().fg(Color::DarkGray)),
+                    .style(Style::default().fg(Color::Gray)),
                 area,
             );
             return;
@@ -282,7 +282,7 @@ impl TableListScreen {
             f.render_widget(
                 Paragraph::new("Loading schema…")
                     .block(Block::default().title(format!(" {} ", table_name)).borders(Borders::ALL))
-                    .style(Style::default().fg(Color::DarkGray)),
+                    .style(Style::default().fg(Color::Gray)),
                 area,
             );
             return;
@@ -294,7 +294,7 @@ impl TableListScreen {
                 f.render_widget(
                     Paragraph::new("Schema not available")
                         .block(Block::default().title(format!(" {} ", table_name)).borders(Borders::ALL))
-                        .style(Style::default().fg(Color::DarkGray)),
+                        .style(Style::default().fg(Color::Gray)),
                     area,
                 );
                 return;
@@ -325,7 +325,7 @@ impl TableListScreen {
             );
             let type_span = Span::styled(
                 col.type_name.to_lowercase(),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::Gray),
             );
 
             let mut row_spans = vec![Span::raw("  "), badge, name_span, type_span];
@@ -356,7 +356,7 @@ impl TableListScreen {
                 lines.push(Line::from(vec![
                     Span::raw("  "),
                     Span::styled(col_name.to_string(), Style::default().fg(Color::White)),
-                    Span::styled("  ──►  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("  ──►  ", Style::default().fg(Color::Gray)),
                     Span::styled(
                         format!("{}.{}", fk.table, fk.column),
                         Style::default().fg(Color::Magenta),
@@ -395,7 +395,7 @@ impl TableListScreen {
                         format!("{}.{}", from_table, from_col),
                         Style::default().fg(Color::Magenta),
                     ),
-                    Span::styled("  ──►  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("  ──►  ", Style::default().fg(Color::Gray)),
                     Span::styled(
                         format!("{}.{}", table_name, to_col),
                         Style::default().fg(Color::White),

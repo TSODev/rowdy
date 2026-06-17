@@ -473,7 +473,7 @@ impl DataGridScreen {
                 f.render_widget(
                     Paragraph::new(msg)
                         .block(Block::default().borders(Borders::ALL))
-                        .style(Style::default().fg(Color::DarkGray)),
+                        .style(Style::default().fg(Color::Gray)),
                     chunks[1],
                 );
             }
@@ -481,7 +481,7 @@ impl DataGridScreen {
                 f.render_widget(
                     Paragraph::new("Table is empty (or no rows match the current filters)")
                         .block(Block::default().borders(Borders::ALL))
-                        .style(Style::default().fg(Color::DarkGray)),
+                        .style(Style::default().fg(Color::Gray)),
                     chunks[1],
                 );
             }
@@ -578,7 +578,7 @@ impl DataGridScreen {
                                         .bg(Color::Yellow)
                                         .add_modifier(Modifier::BOLD)
                                 } else if matches!(val, Value::Null) {
-                                    Style::default().fg(Color::DarkGray)
+                                    Style::default().fg(Color::Gray)
                                 } else {
                                     Style::default()
                                 };
@@ -654,7 +654,7 @@ impl DataGridScreen {
                     " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Space: collapse   Enter: explore   E: export   q: back"
                 )
                 .block(Block::default().borders(Borders::ALL))
-                .style(Style::default().fg(Color::DarkGray)),
+                .style(Style::default().fg(Color::Gray)),
                 chunks[3],
             );
         } else if screen.prod_readonly {
@@ -669,7 +669,7 @@ impl DataGridScreen {
                     filter_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))
-                .style(Style::default().fg(Color::DarkGray)),
+                .style(Style::default().fg(Color::Gray)),
                 chunks[3],
             );
         } else {
@@ -689,7 +689,7 @@ impl DataGridScreen {
                     collapse_label, filter_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))
-                .style(Style::default().fg(Color::DarkGray)),
+                .style(Style::default().fg(Color::Gray)),
                 chunks[3],
             );
         }

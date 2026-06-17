@@ -221,7 +221,7 @@ impl ErdGraphScreen {
             sel_name
         );
         f.render_widget(
-            Paragraph::new(help).style(Style::default().fg(Color::DarkGray).bg(Color::Reset)),
+            Paragraph::new(help).style(Style::default().fg(Color::Gray).bg(Color::Reset)),
             Rect { x: area.x, y: area.y + canvas_h as u16, width: area.width, height: 1 },
         );
     }
@@ -250,7 +250,7 @@ fn adj_style(selected: bool) -> Style {
     if selected {
         Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(Color::Gray)
     }
 }
 
@@ -401,7 +401,7 @@ fn draw_box(
         } else if col.fk.is_some() {
             ("[FK]", Style::default().fg(Color::Magenta))
         } else {
-            ("    ", Style::default().fg(Color::DarkGray))
+            ("    ", Style::default().fg(Color::Gray))
         };
         cv.put_str(x + 1, row, badge, badge_s);
         cv.put(x + 5, row, ' ', Style::default());
@@ -410,12 +410,12 @@ fn draw_box(
         let type_w    = type_raw.chars().count();
         let name_w    = inner.saturating_sub(6 + type_w + 1);
         cv.put_str(x + 6,                  row, &trunc(&col.name, name_w), Style::default().fg(Color::White));
-        cv.put_str(x + w - 1 - type_w, row, &type_raw,                    Style::default().fg(Color::DarkGray));
+        cv.put_str(x + w - 1 - type_w, row, &type_raw,                    Style::default().fg(Color::Gray));
     }
 
     if has_more {
         let more = format!("+{} more", cols.len() - max_cols);
-        cv.put_str(x + 1, y + 3 + shown, &trunc(&more, inner), Style::default().fg(Color::DarkGray));
+        cv.put_str(x + 1, y + 3 + shown, &trunc(&more, inner), Style::default().fg(Color::Gray));
     }
 }
 

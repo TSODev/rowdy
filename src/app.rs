@@ -61,7 +61,8 @@ pub enum DbEvent {
 // ── Pending modal action ──────────────────────────────────────────────────────
 
 pub enum PendingAction {
-    SaveRecord(String), // SQL to execute on confirm
+    SaveRecord(String),
+    SaveMongoRecord { collection: String, id: String, doc_json: String },
 }
 
 // ── App state machine ─────────────────────────────────────────────────────────
@@ -90,6 +91,7 @@ pub struct App {
     fk_history: Vec<DataGridScreen>,         // previous FK levels (navigation stack)
     pub sql_result_grid_screen: DataGridScreen, // read-only grid for SQL Editor results
     pub edit_record_screen: EditRecordScreen,
+    edit_record_stack: Vec<(EditRecordScreen, usize)>, // nested object editing stack
     pub erd_graph_screen: ErdGraphScreen,
     pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
@@ -121,6 +123,7 @@ impl App {
             fk_history: Vec::new(),
             sql_result_grid_screen: DataGridScreen::new(String::new()),
             edit_record_screen: EditRecordScreen::new(String::new(), vec![], vec![]),
+            edit_record_stack: Vec::new(),
             erd_graph_screen: ErdGraphScreen::new(String::new(), std::collections::HashMap::new()),
             sql_editor_screen: SqlEditorScreen::new(String::new()),
             active_client: None,
@@ -338,7 +341,16 @@ impl App {
             }
             AppState::EditRecord => {
                 match self.edit_record_screen.handle_key(key) {
-                    EditRecordAction::Back => self.state = self.edit_origin.clone(),
+                    EditRecordAction::Back => {
+                        if !self.edit_record_stack.is_empty() {
+                            self.pop_nested_edit_record();
+                        } else {
+                            self.state = self.edit_origin.clone();
+                        }
+                    }
+                    EditRecordAction::OpenNested(field_idx) => {
+                        self.open_nested_edit_record(field_idx);
+                    }
                     EditRecordAction::Save(sql) => {
                         let preview: String = sql.chars().take(120).collect();
                         self.pending_action = Some(PendingAction::SaveRecord(sql));
@@ -346,6 +358,19 @@ impl App {
                             "Confirm Save",
                             &format!("Execute this statement?\n{preview}"),
                         ));
+                    }
+                    EditRecordAction::SaveMongo { id, doc_json } => {
+                        if !self.edit_record_stack.is_empty() {
+                            self.edit_record_screen.status = Some("Press Esc to confirm nested edit first".into());
+                        } else {
+                            let collection = self.data_grid_screen.table_name.clone();
+                            let preview: String = doc_json.chars().take(120).collect();
+                            self.pending_action = Some(PendingAction::SaveMongoRecord { collection, id, doc_json });
+                            self.modal = Some(Modal::confirm(
+                                "Confirm Save",
+                                &format!("Replace MongoDB document?\n{preview}"),
+                            ));
+                        }
                     }
                     EditRecordAction::None => {}
                 }
@@ -531,6 +556,33 @@ impl App {
             Some(r) => r,
             None => return,
         };
+        let sel_row = self.data_grid_screen.table_state.selected().unwrap_or(0);
+        let row = match result.rows.get(sel_row) {
+            Some(r) => r,
+            None => return,
+        };
+        let table_name = self.data_grid_screen.table_name.clone();
+
+        if matches!(self.active_client, Some(ActiveClient::NoSql(_))) {
+            self.edit_record_stack.clear();
+            let schema: Vec<ColumnSchema> = result.columns.iter().zip(row.values.iter())
+                .map(|(col, val)| ColumnSchema {
+                    name: col.name.clone(),
+                    type_name: mongo_type_name(val),
+                    is_pk: col.name == "_id",
+                    is_nullable: true,
+                    fk: None,
+                })
+                .collect();
+            let values: Vec<String> = row.values.iter().map(value_to_string).collect();
+            let mut screen = EditRecordScreen::new(table_name, schema, values);
+            screen.is_nosql = true;
+            self.edit_record_screen = screen;
+            self.edit_origin = AppState::DataGrid;
+            self.state = AppState::EditRecord;
+            return;
+        }
+
         let schema = match self.data_grid_screen.schema.as_ref() {
             Some(s) => s.clone(),
             None => {
@@ -538,12 +590,6 @@ impl App {
                 return;
             }
         };
-        let sel_row = self.data_grid_screen.table_state.selected().unwrap_or(0);
-        let row = match result.rows.get(sel_row) {
-            Some(r) => r,
-            None => return,
-        };
-        let table_name = self.data_grid_screen.table_name.clone();
         let values: Vec<String> = schema.iter().map(|col| {
             result.columns.iter().position(|c| c.name == col.name)
                 .and_then(|i| row.values.get(i))
@@ -572,6 +618,70 @@ impl App {
             _ => {
                 self.edit_record_screen.set_error("Not connected to a SQL database".into());
             }
+        }
+    }
+
+    fn spawn_save_mongo_record(&mut self, collection: String, id: String, doc_json: String) {
+        self.edit_record_screen.status = Some("Saving…".into());
+        let tx = self.db_tx.clone();
+        match &self.active_client {
+            Some(ActiveClient::NoSql(c)) => {
+                let c = Arc::clone(c);
+                tokio::spawn(async move {
+                    let ev = match c.replace_one(&collection, &id, &doc_json).await {
+                        Ok(n) if n > 0 => DbEvent::EditSaved,
+                        Ok(_) => DbEvent::EditFailed("No document matched that _id".into()),
+                        Err(e) => DbEvent::EditFailed(e.to_string()),
+                    };
+                    let _ = tx.send(ev).await;
+                });
+            }
+            _ => {
+                self.edit_record_screen.set_error("Not connected to MongoDB".into());
+            }
+        }
+    }
+
+    fn open_nested_edit_record(&mut self, field_idx: usize) {
+        let json = self.edit_record_screen.current_values[field_idx].clone();
+        let type_name = self.edit_record_screen.schema[field_idx].type_name.clone();
+        let is_array = type_name == "array";
+
+        let (schema, values) = if is_array {
+            json_array_to_schema_values(&json)
+        } else {
+            json_object_to_schema_values(&json)
+        };
+
+        if !is_array && schema.is_empty() {
+            self.edit_record_screen.status = Some("Cannot parse nested object".into());
+            return;
+        }
+        if is_array && serde_json::from_str::<serde_json::Value>(&json).is_err() {
+            self.edit_record_screen.status = Some("Cannot parse nested array".into());
+            return;
+        }
+
+        let field_name = self.edit_record_screen.schema[field_idx].name.clone();
+        let parent_title = self.edit_record_screen.table_name.clone();
+        let child_title = format!("{parent_title} › {field_name}");
+        let mut child = EditRecordScreen::new(child_title, schema, values);
+        child.is_nosql = true;
+        child.is_array = is_array;
+        let parent = std::mem::replace(&mut self.edit_record_screen, child);
+        self.edit_record_stack.push((parent, field_idx));
+    }
+
+    fn pop_nested_edit_record(&mut self) {
+        if let Some((mut parent, field_idx)) = self.edit_record_stack.pop() {
+            let child_json = if self.edit_record_screen.is_array {
+                self.edit_record_screen.reconstruct_nested_array()
+            } else {
+                self.edit_record_screen.reconstruct_nested_json()
+            };
+            parent.current_values[field_idx] = child_json;
+            parent.validation_errors[field_idx] = None;
+            self.edit_record_screen = parent;
         }
     }
 
@@ -650,6 +760,9 @@ impl App {
                 if let Some(action) = self.pending_action.take() {
                     match action {
                         PendingAction::SaveRecord(sql) => self.spawn_save_record(sql),
+                        PendingAction::SaveMongoRecord { collection, id, doc_json } => {
+                            self.spawn_save_mongo_record(collection, id, doc_json);
+                        }
                     }
                 }
             }
@@ -805,7 +918,7 @@ impl App {
         } else if let Some(ActiveClient::NoSql(c)) = &self.active_client {
             let c = Arc::clone(c);
             let tx = self.db_tx.clone();
-            self.data_grid_screen.read_only = true;
+            self.data_grid_screen.read_only = self.prod_readonly;
             tokio::spawn(async move {
                 let count_ev = match c.count(&table_name, "{}").await {
                     Ok(n)  => DbEvent::DataCountLoaded(n),
@@ -1123,6 +1236,21 @@ impl App {
                 if let Some(ActiveClient::Sql(c)) = &self.active_client {
                     spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), self.db_tx.clone());
                     spawn_sql_count(Arc::clone(c), &table, &filters, schema, self.db_tx.clone());
+                } else if let Some(ActiveClient::NoSql(c)) = &self.active_client {
+                    let c = Arc::clone(c);
+                    let tx = self.db_tx.clone();
+                    tokio::spawn(async move {
+                        let count_ev = match c.count(&table, "{}").await {
+                            Ok(n)  => DbEvent::DataCountLoaded(n),
+                            Err(_) => DbEvent::DataCountLoaded(0),
+                        };
+                        let page_ev = match c.find(&table, "{}", PAGE_SIZE as u64, 0).await {
+                            Ok(r)  => DbEvent::DataPageLoaded(r),
+                            Err(e) => DbEvent::DataLoadFailed(e.to_string()),
+                        };
+                        let _ = tx.send(count_ev).await;
+                        let _ = tx.send(page_ev).await;
+                    });
                 }
             }
             DbEvent::EditFailed(msg) => {
@@ -1204,6 +1332,64 @@ fn kv_detail_to_result(detail: KvKeyDetail) -> DbQueryResult {
 }
 
 // ── Value display helpers ─────────────────────────────────────────────────────
+
+fn json_value_type_and_str(v: &serde_json::Value) -> (String, String) {
+    match v {
+        serde_json::Value::Bool(b)   => ("bool".into(), b.to_string()),
+        serde_json::Value::Number(n) => {
+            if n.is_f64() {
+                ("float".into(), n.to_string())
+            } else {
+                ("int".into(), n.to_string())
+            }
+        }
+        serde_json::Value::String(s) => ("string".into(), s.clone()),
+        serde_json::Value::Null      => ("string".into(), "NULL".into()),
+        serde_json::Value::Object(_) => ("object".into(), v.to_string()),
+        serde_json::Value::Array(_)  => ("array".into(), v.to_string()),
+    }
+}
+
+fn json_object_to_schema_values(json: &str) -> (Vec<ColumnSchema>, Vec<String>) {
+    let obj = match serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json) {
+        Ok(o) => o,
+        Err(_) => return (vec![], vec![]),
+    };
+    let mut schema = vec![];
+    let mut values = vec![];
+    for (key, val) in &obj {
+        let (type_name, str_val) = json_value_type_and_str(val);
+        schema.push(ColumnSchema { name: key.clone(), type_name, is_pk: false, is_nullable: true, fk: None });
+        values.push(str_val);
+    }
+    (schema, values)
+}
+
+fn json_array_to_schema_values(json: &str) -> (Vec<ColumnSchema>, Vec<String>) {
+    let arr = match serde_json::from_str::<Vec<serde_json::Value>>(json) {
+        Ok(a) => a,
+        Err(_) => return (vec![], vec![]),
+    };
+    let mut schema = vec![];
+    let mut values = vec![];
+    for (i, val) in arr.iter().enumerate() {
+        let (type_name, str_val) = json_value_type_and_str(val);
+        schema.push(ColumnSchema { name: format!("[{i}]"), type_name, is_pk: false, is_nullable: true, fk: None });
+        values.push(str_val);
+    }
+    (schema, values)
+}
+
+fn mongo_type_name(v: &Value) -> String {
+    match v {
+        Value::Bool(_)        => "bool",
+        Value::Int(_)         => "int",
+        Value::Float(_)       => "float",
+        Value::NestedDoc(_)   => "object",
+        Value::NestedArray(_) => "array",
+        _                     => "string",
+    }.to_string()
+}
 
 fn value_to_string(v: &Value) -> String {
     match v {

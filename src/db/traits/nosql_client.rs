@@ -11,4 +11,8 @@ pub trait NoSqlClient: Send + Sync {
     async fn find(&self, collection: &str, filter: &str, limit: u64, offset: u64) -> Result<DbQueryResult, DbError>;
     async fn aggregate(&self, collection: &str, pipeline: &str) -> Result<DbQueryResult, DbError>;
     async fn count(&self, collection: &str, filter: &str) -> Result<u64, DbError>;
+    // Write operations
+    async fn insert_one(&self, collection: &str, doc_json: &str) -> Result<String, DbError>;
+    async fn replace_one(&self, collection: &str, id: &str, doc_json: &str) -> Result<u64, DbError>;
+    async fn delete_one(&self, collection: &str, id: &str) -> Result<u64, DbError>;
 }

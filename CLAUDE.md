@@ -72,6 +72,10 @@ pub trait NoSqlClient: Send + Sync {
     async fn find(&self, collection: &str, filter: &str, limit: u64, offset: u64) -> Result<DbQueryResult, DbError>;
     async fn aggregate(&self, collection: &str, pipeline: &str) -> Result<DbQueryResult, DbError>;
     async fn count(&self, collection: &str, filter: &str) -> Result<u64, DbError>;
+    // Write operations
+    async fn insert_one(&self, collection: &str, doc_json: &str) -> Result<String, DbError>;
+    async fn replace_one(&self, collection: &str, id: &str, doc_json: &str) -> Result<u64, DbError>;
+    async fn delete_one(&self, collection: &str, id: &str) -> Result<u64, DbError>;
 }
 ```
 
@@ -220,6 +224,10 @@ src/
 - [x] Connecteur MongoDB (`--features mongodb`) — trait `NoSqlClient` (`list_collections`, `find`, `aggregate`, `count`) ; `MongoDbConnector` via `mongodb` 3 (feature-gated, non inclus par défaut) ; `connect_nosql()` factory avec message d'erreur clair si feature absent ; `"mongodb"` ajouté au sélecteur de type dans l'écran de connexion ; URL `mongodb://host:27017/dbname` (nom de DB requis dans le path)
 - [x] Intégration MongoDB dans App — `ActiveClient::NoSql` + `DbEvent::NoSqlConnected` ; `spawn_load_tables` → `list_collections()` ; `spawn_load_data` → `find("{}", PAGE_SIZE, 0)` + `count` parallèle, grille read-only ; `spawn_load_more` → `find` paginé ; MQL editor (F5) : `[` en tête = `aggregate`, sinon `find` avec le texte comme filtre ; titre "MQL Editor │ … │ collection: nom" et placeholder MQL
 - [x] Navigation champs imbriqués MongoDB — `Value::NestedDoc(json)` et `Value::NestedArray(json)` dans l'enum `Value` ; badges verts `[obj]` / `[arr:N]` dans le DataGrid (priorité sur badge FK magenta) ; preview bar affiche le JSON réel ; `Enter` sur badge (même en read-only) ouvre une sous-grille `FkGrid` avec le contenu converti en `DbQueryResult` (`json_to_result` : objet → 1 ligne × N cols, tableau d'objets → N lignes, scalaires → index+value) ; navigation récursive avec breadcrumb `collection › address › orders` via `display_name` ; `fk_history` / Esc remonte d'un niveau
+- [x] Édition de documents MongoDB — `insert_one` / `replace_one` / `delete_one` sur `NoSqlClient` + `MongoDbConnector` ; helper `id_to_bson()` reconstruit l'`ObjectId` BSON depuis la string hex ; `Enter` sur une ligne ouvre `EditRecordScreen` en mode `is_nosql` avec schéma synthétique inféré depuis les colonnes + valeurs ; `_id` badge `[PK]` non éditable ; `Ctrl+S` → modal de confirmation → `replace_one` ; rechargement automatique de la collection après save ; MongoDB n'est plus `read_only` par défaut (suit `prod_readonly`)
+- [x] Navigation imbriquée récursive dans EditRecord — `Enter` sur champ `object` → drill-in avec breadcrumb `collection › field` ; pile `edit_record_stack: Vec<(EditRecordScreen, usize)>` dans `App` ; `Esc` reconstruit le JSON et remonte ; `Ctrl+S` bloqué depuis un niveau imbriqué
+- [x] Éditeur d'arrays item par item — `Enter` sur champ `array` → liste numérotée `[0]`, `[1]`… ; `a` ajoute un item vide (entre en mode édition immédiatement) ; `D` supprime et renumérote ; items `[obj]`/`[arr]` font un drill-in récursif ; `Esc` reconstruit le JSON array et remonte ; preview "Array Preview" en temps réel ; barre d'aide dédiée
+- [x] Lisibilité UI — tous les `fg(Color::DarkGray)` remplacés par `fg(Color::Gray)` dans les fichiers UI (39 occurrences) ; texte secondaire nettement plus lisible sur fond noir ; `bg(Color::DarkGray)` inchangés
 
 ### Roadmap
 
@@ -260,3 +268,5 @@ cargo clippy       # linter
 - `DataGridScreen.table_name` = nom SQL brut ; `display_name: Option<String>` = label affiché (ex. `books [id=1]` pour FkGrid, `users › address` pour nested MongoDB)
 - `Value::NestedDoc(json)` / `Value::NestedArray(json)` — variants produits par le connecteur MongoDB pour les sous-documents/tableaux BSON ; rendus comme badges verts dans le DataGrid ; `Enter` ouvre `json_to_result()` sans async
 - `connect_nosql()` — factory dans `connectors/mod.rs`, toujours compilée ; retourne une erreur lisible si le feature `mongodb` n'est pas activé à la compilation
+- `edit_record_stack: Vec<(EditRecordScreen, usize)>` — pile de navigation imbriquée dans `App` ; chaque entrée = (écran parent, index du champ imbriqué) ; `open_nested_edit_record(field_idx)` push, `pop_nested_edit_record()` pop + applique JSON reconstruit ; `reconstruct_nested_json()` pour les objets, `reconstruct_nested_array()` pour les tableaux
+- `EditRecordScreen.is_nosql / is_array` — flags activés pour l'édition MongoDB : `is_nosql` route vers `build_mongo_replace()` + `SaveMongo` action ; `is_array` active les touches `a`/`D` + preview "Array Preview" + barre d'aide dédiée
