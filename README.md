@@ -18,47 +18,65 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 
 ## ✨ Features
 
-| Feature | Status |
-|---------|--------|
-| SQLite, PostgreSQL, MySQL/MariaDB connectors | ✅ |
-| libsql / Turso connector (remote SQLite via libsql protocol) | ✅ |
-| Redis connector (key listing) | ✅ |
-| Saved connection profiles (`~/.config/rowdy/config.toml`) | ✅ |
-| Save new connection with `Ctrl+S` — persists to config file | ✅ |
-| Delete profile with confirmation (`D` → `y` / `n`) | ✅ |
-| Encrypted credential storage — passwords and tokens stored in the OS keychain (macOS Keychain, libsecret, Windows Credential Manager) | ✅ |
-| Vim-style keyboard navigation (`h j k l`, `/` to filter) | ✅ |
-| Table list with live filter | ✅ |
-| Data Grid — column scroll, collapse/expand, manual resize (`-`/`=`) | ✅ |
-| Data Grid — cell preview panel (full value, no truncation) | ✅ |
-| Data Grid — infinite scroll pagination (200 rows/page + COUNT) | ✅ |
-| Data Grid — cumulative column filters (`f` / `d` / `F`) | ✅ |
-| Data Grid — type-aware filters (bool → `= TRUE/FALSE`, numeric → `= n`) | ✅ |
-| Data Grid — cell cursor (row × column highlight) | ✅ |
-| Data Grid — FK badges + expandable sub-grid (recursive navigation) | ✅ |
-| SQL Editor — multi-line, F5 to execute, F4 opens result in full grid | ✅ |
-| SQL Editor — query history with `Alt+↑/↓`, persisted to `~/.config/rowdy/history.toml` | ✅ |
-| Schema introspection — PK, FK, types (all 4 SQL engines) | ✅ |
-| Inline record editing — field type display, bool toggle, live SQL preview | ✅ |
-| Format validation in Edit Record — DATE/TIME/TIMESTAMP/UUID/JSON/INET validated on exit, red highlight + format hint | ✅ |
-| Confirmation modal — `Ctrl+S` in Edit Record prompts before executing UPDATE | ✅ |
-| Error modal — save failures displayed as a prominent overlay dialog | ✅ |
-| Status bar — mode, connection indicator, DB info, row count, flash messages | ✅ |
-| URL redaction — passwords and tokens masked in UI (`user:***@host`, `authToken=***`) | ✅ |
-| Export CSV / JSON — `E` key in any data grid, file saved to `~/rowdy_<table>_<ts>.csv/json` | ✅ |
-| Export JSON simple (`j`) or with recursive FK resolution (`J`) — nested `__ref` objects up to 3 levels deep, cycle detection | ✅ |
-| Table list — TABLE / VIEW distinction with `[T]` / `[V]` badges; VIEW opens read-only with cyan badge | ✅ |
-| Read-only safe mode — `?readonly=true` in URL, blocks all writes, `READ-ONLY` badge in status bar | ✅ |
-| Pre-connect / post-disconnect hooks per profile — run shell scripts before connecting and after disconnecting (SSH tunnels, VPN…) | ✅ |
-| Async I/O — UI never blocks during queries | ✅ |
-| Redis key-detail view — `Enter` on a key shows its content (string/hash/list/set/zset) in a read-only grid with TTL | ✅ |
-| Schema panel in table list — columns with PK/FK badges, outgoing and incoming FK relations, auto-loaded on connect | ✅ |
-| ERD graph view (`r`) — star layout with box-drawing, bent arrows routed from exact FK column, navigate between boxes | ✅ |
-| MongoDB connector (`--features mongodb`) — browse collections, MQL editor, nested field navigation | ✅ |
-| MongoDB document editing — `replace_one` with confirmation, recursive nested object / array editor | ✅ |
-| MongoDB insert (`a`) and delete (`D`) from Data Grid — confirmation modal, auto-reload | ✅ |
-| MongoDB object fields — `Enter` drills in, `i` edits raw JSON inline | ✅ |
-| DuckDB connector (`--features duckdb`) — embedded OLAP engine, Parquet/CSV/JSON queries, LIST and STRUCT types | ✅ |
+### Connectors
+
+| Engine | Type | Feature flag | URL format |
+|--------|------|-------------|------------|
+| PostgreSQL | SQL | _(built-in)_ | `postgres://user:pass@host:5432/db` |
+| SQLite | SQL | _(built-in)_ | `sqlite:///path/to/file.db` |
+| MySQL / MariaDB | SQL | _(built-in)_ | `mysql://user:pass@host:3306/db` |
+| libsql / Turso | SQL | _(built-in)_ | `libsql://host?authToken=TOKEN` |
+| Redis | Key-value | _(built-in)_ | `redis://host:6379` |
+| MongoDB | Document | `--features mongodb` | `mongodb://user:pass@host:27017/db` |
+| DuckDB | OLAP | `--features duckdb` | `duckdb:///path/to/file.db` |
+
+### Connections & profiles
+
+- **Saved profiles** — `~/.config/rowdy/config.toml` ; add with `Ctrl+S`, edit with `e`, delete with `D`
+- **Encrypted credentials** — passwords and tokens stored in the OS keychain (macOS Keychain, libsecret, Windows Credential Manager) ; `__keyring__` placeholder in config file, resolved transparently at connect time
+- **Pre/post-connect hooks** — optional shell scripts per profile for SSH tunnels, VPN, proxies
+- **Read-only mode** — append `?readonly=true` to any URL ; red `READ-ONLY` badge ; all writes blocked, filters and export still work
+- **URL redaction** — passwords and tokens masked in the UI everywhere (`user:***@host`, `authToken=***`)
+
+### Data Grid
+
+- **Infinite scroll pagination** — 200 rows/page, next page loads on `j` at last row, parallel `COUNT(*)`
+- **Cumulative column filters** — `f` to filter, `d` to remove, `F` to clear all ; type-aware (`= TRUE/FALSE` for booleans, `= n` for numerics)
+- **Sort by column** — `s` cycles ASC / DESC / reset ; `▲`/`▼` indicator in header
+- **FK navigation** — magenta badge on FK cells ; `Enter` opens a recursive sub-grid ; breadcrumb in info bar
+- **Nested field navigation** (MongoDB) — green `[obj]` / `[arr:N]` badges ; `Enter` drills into sub-grids recursively
+- **Column resize** — `-`/`=` in steps of 5 (min 4, max 80) ; `Space` collapse/expand ; cell cursor highlight
+- **Preview panel** — full value of selected cell displayed below the grid, no truncation
+- **Load all** — `A` fetches all rows in a single query (replaces paged data)
+- **TABLE / VIEW distinction** — `[T]` / `[V]` badges ; VIEW opens automatically read-only
+- **Redis key-detail view** — `Enter` on a key shows string / hash / list / set / zset content with TTL
+
+### SQL Editor
+
+- **Multi-line editor** — `tui-textarea` ; `F5` / `Ctrl+Enter` to execute ; `Ctrl+Q` to exit
+- **Multi-statement execution** — splits on `;`, executes sequentially, per-statement error report
+- **SQL autocomplete** — `Tab` triggers a floating popup with tables, columns and 80 SQL keywords ; case-insensitive matching
+- **Query history** — `Alt+↑/↓` to browse ; persisted in `~/.config/rowdy/history.toml` (200 entries, deduped)
+- **F4** — opens the current SELECT result in a full read-only Data Grid
+
+### Record editing
+
+- **Edit Record** — field-by-field editor with full cursor, `[PK]` / `[→FK]` badges, live SQL preview, bool toggle with `Space`
+- **Format validation** — DATE / TIME / TIMESTAMP / UUID / JSON / INET / CIDR validated on exit ; red highlight + format hint ; `Ctrl+S` blocked while errors remain
+- **Confirmation modal** — shows the UPDATE statement before executing ; error modal on failure
+- **MongoDB CRUD** — `Enter` opens Edit Record for `replace_one` ; `a` inserts ; `D` deletes ; drill into nested `[obj]`/`[arr]` fields (`Enter` = sub-editor, `i` = raw JSON edit)
+
+### Schema & ERD
+
+- **Schema introspection** — PK, FK, column types on all SQL connectors (PostgreSQL `pg_catalog`, MySQL `information_schema`, SQLite/Turso `PRAGMA`)
+- **Schema panel** — right-hand panel in the table list showing columns with PK/FK badges and outgoing/incoming FK relations, loaded at connect time
+- **ERD graph view** — `r` from the table list ; star layout with the selected table at center ; bent ASCII arrows routed from the exact FK column ; `j/k` to navigate boxes
+
+### Export
+
+- **CSV** — `E` → `c` ; RFC 4180, quoted fields, empty for NULL ; saved to `~/rowdy_<table>_<timestamp>.csv`
+- **JSON simple** — `E` → `j` ; array of typed objects
+- **JSON + FK resolution** — `E` → `J` ; embeds referenced rows as `<col>__ref` objects, recursive up to 3 levels, cycle detection
 
 ---
 
@@ -288,32 +306,8 @@ The ERD view displays a **star layout**: the selected table in the center (yello
 
 ---
 
-## 🗄️ Supported databases
+## 🦆 DuckDB notes
 
-| Engine | Type | Driver | Feature flag | URL format |
-|--------|------|--------|--------------|------------|
-| PostgreSQL | SQL | `sqlx` (native TLS) | _(built-in)_ | `postgres://user:pass@host:5432/db` |
-| SQLite | SQL | `sqlx` | _(built-in)_ | `sqlite:///path/to/file.db` |
-| libsql / Turso | SQL | `libsql` (remote HTTP) | _(built-in)_ | `libsql://host?authToken=TOKEN` |
-| MySQL / MariaDB | SQL | `sqlx` | _(built-in)_ | `mysql://user:pass@host:3306/db` |
-| Redis | Key-value | `redis-rs` (async multiplexed) | _(built-in)_ | `redis://host:6379` |
-| MongoDB | Document | `mongodb` 3 | `--features mongodb` | `mongodb://user:pass@host:27017/dbname` |
-| DuckDB | OLAP / SQL | `duckdb` 1 (bundled C++) | `--features duckdb` | `duckdb:///path/to/file.db` or `duckdb://:memory:` |
-
-Optional connectors require building with the corresponding feature flag:
-
-```bash
-# MongoDB only
-cargo build --release --features mongodb
-
-# DuckDB only (first build is slow — statically compiles DuckDB C++)
-cargo build --release --features duckdb
-
-# Both
-cargo build --release --features mongodb,duckdb
-```
-
-**DuckDB notes:**
 - Supports local `.db` files and in-memory databases (`duckdb://:memory:`)
 - Native support for Parquet, CSV, and JSON files via SQL (`SELECT * FROM 'data.parquet'`)
 - Complex types (`VARCHAR[]`, `STRUCT`) are displayed as expandable nested views in the Data Grid
