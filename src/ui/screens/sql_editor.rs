@@ -8,6 +8,46 @@ use ratatui::{
 use tui_textarea::{Input, Key, TextArea};
 use crate::db::types::{DbQueryResult, Value};
 
+// ── SQL keywords for autocomplete ────────────────────────────────────────────
+
+const SQL_KEYWORDS: &[&str] = &[
+    // DML
+    "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "IN", "EXISTS", "BETWEEN", "LIKE", "ILIKE",
+    "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "RETURNING", "MERGE", "UPSERT",
+    // Clauses
+    "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS", "NATURAL", "ON", "USING",
+    "GROUP", "ORDER", "BY", "HAVING", "LIMIT", "OFFSET", "FETCH", "NEXT", "ROWS", "ONLY",
+    "UNION", "INTERSECT", "EXCEPT", "ALL", "DISTINCT",
+    "AS", "WITH", "RECURSIVE",
+    // DDL
+    "CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME", "TABLE", "INDEX", "VIEW", "SCHEMA",
+    "DATABASE", "SEQUENCE", "TRIGGER", "PROCEDURE", "FUNCTION",
+    "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "UNIQUE", "DEFAULT", "CHECK", "CONSTRAINT",
+    "NOT NULL", "NULL", "ASC", "DESC", "NULLS", "FIRST", "LAST",
+    // Conditions / flow
+    "CASE", "WHEN", "THEN", "ELSE", "END", "IF",
+    "IS", "NULL", "TRUE", "FALSE",
+    // Aggregates & functions
+    "COUNT", "SUM", "AVG", "MIN", "MAX",
+    "COALESCE", "NULLIF", "IFNULL", "NVL",
+    "CAST", "CONVERT", "EXTRACT",
+    "NOW", "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME",
+    "CONCAT", "LENGTH", "LOWER", "UPPER", "TRIM", "SUBSTRING", "REPLACE",
+    "ABS", "ROUND", "FLOOR", "CEIL",
+    // Window functions
+    "OVER", "PARTITION", "ROW_NUMBER", "RANK", "DENSE_RANK", "LAG", "LEAD",
+    "FIRST_VALUE", "LAST_VALUE", "NTILE",
+    // Transactions
+    "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "TRANSACTION",
+    // Meta
+    "EXPLAIN", "ANALYZE", "SHOW", "DESCRIBE", "PRAGMA",
+    // Types
+    "INT", "INTEGER", "BIGINT", "SMALLINT", "FLOAT", "DOUBLE", "REAL",
+    "DECIMAL", "NUMERIC", "CHAR", "VARCHAR", "TEXT", "BLOB",
+    "BOOLEAN", "BOOL", "DATE", "TIME", "TIMESTAMP", "INTERVAL",
+    "UUID", "JSON", "JSONB", "ARRAY", "SERIAL", "BYTEA",
+];
+
 // ── Focus ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
@@ -274,11 +314,25 @@ impl SqlEditorScreen {
     fn filter_completions(&self, prefix: &str) -> Vec<String> {
         if prefix.len() < 2 { return vec![]; }
         let lower = prefix.to_lowercase();
-        self.completion_items.iter()
+
+        // Schema items (tables + columns) have priority
+        let schema: Vec<String> = self.completion_items.iter()
             .filter(|s| s.to_lowercase().starts_with(&lower))
-            .take(10)
+            .take(7)
             .cloned()
-            .collect()
+            .collect();
+
+        // Fill remaining slots with SQL keywords (case-insensitive match, returned uppercase)
+        let remaining = 10usize.saturating_sub(schema.len());
+        let keywords: Vec<String> = SQL_KEYWORDS.iter()
+            .filter(|k| k.to_lowercase().starts_with(&lower) && !schema.contains(&k.to_string()))
+            .take(remaining)
+            .map(|k| k.to_string())
+            .collect();
+
+        let mut result = schema;
+        result.extend(keywords);
+        result
     }
 
     fn refresh_autocomplete(&mut self) {
