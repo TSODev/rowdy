@@ -102,15 +102,16 @@ impl DataGridScreen {
         }
     }
 
-    // Initial/replacement load (resets everything)
+    // Initial/replacement load (resets row position; preserves col position for sort/filter reloads)
     pub fn set_result(&mut self, result: DbQueryResult) {
         let count = result.rows.len();
         self.has_more = count == PAGE_SIZE;
         self.loaded_count = count;
         self.status = None;
         self.loading = false;
-        self.selected_col = 0;
-        self.col_offset = 0;
+        // selected_col and col_offset are intentionally NOT reset here:
+        // new tables start with a fresh DataGridScreen (col=0 from new()),
+        // while sort/filter reloads must stay on the same column.
         self.collapsed_cols.clear();
         self.col_widths.clear();
         self.table_state = TableState::default();
