@@ -352,6 +352,7 @@ impl App {
                         }
                     }
                     DataGridAction::LoadMore | DataGridAction::ApplyFilter => {}
+                    DataGridAction::ApplySort | DataGridAction::LoadAll => {}
                     DataGridAction::InsertMongo | DataGridAction::DeleteMongo => {}
                     DataGridAction::None => {}
                 }
