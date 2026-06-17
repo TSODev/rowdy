@@ -1421,6 +1421,16 @@ impl App {
                 self.data_grid_screen.has_more = false;
             }
             DbEvent::AllSchemasLoaded(schemas) => {
+                // Build SQL editor completion list: table names + all column names
+                let mut items: Vec<String> = schemas.keys().cloned().collect();
+                for cols in schemas.values() {
+                    for col in cols {
+                        items.push(col.name.clone());
+                    }
+                }
+                items.sort();
+                items.dedup();
+                self.sql_editor_screen.set_completions(items);
                 self.table_list_screen.set_all_schemas(schemas);
             }
             DbEvent::ExportDone(path) => {

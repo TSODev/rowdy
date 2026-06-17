@@ -2,7 +2,7 @@ use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Paragraph, Row as RatRow, Table, TableState},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row as RatRow, Table, TableState},
     Frame,
 };
 use tui_textarea::{Input, Key, TextArea};
@@ -35,6 +35,14 @@ pub enum SqlEditorAction {
     HistoryNext,
 }
 
+// ── Autocomplete ──────────────────────────────────────────────────────────────
+
+struct AutocompletePopup {
+    suggestions: Vec<String>,
+    selected: usize,
+    prefix: String,
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 pub struct SqlEditorScreen {
@@ -46,6 +54,9 @@ pub struct SqlEditorScreen {
     pub running: bool,
     pub db_info: String,
     pub nosql_collection: Option<String>,
+    // Autocomplete
+    completion_items: Vec<String>,
+    autocomplete: Option<AutocompletePopup>,
 }
 
 impl SqlEditorScreen {
@@ -63,7 +74,13 @@ impl SqlEditorScreen {
             running: false,
             db_info,
             nosql_collection: None,
+            completion_items: Vec::new(),
+            autocomplete: None,
         }
+    }
+
+    pub fn set_completions(&mut self, items: Vec<String>) {
+        self.completion_items = items;
     }
 
     pub fn set_nosql_collection(&mut self, collection: Option<String>) {
@@ -120,6 +137,48 @@ impl SqlEditorScreen {
         let input = Input::from(key);
         match self.focus {
             EditorFocus::Editor => {
+                // ── Autocomplete popup active ─────────────────────────────────
+                if self.autocomplete.is_some() {
+                    match input {
+                        Input { key: Key::Esc, .. } => {
+                            self.autocomplete = None;
+                        }
+                        Input { key: Key::Up, .. } => {
+                            if let Some(ref mut ac) = self.autocomplete {
+                                if ac.selected > 0 { ac.selected -= 1; }
+                            }
+                        }
+                        Input { key: Key::Down, .. } | Input { key: Key::Tab, .. } => {
+                            if let Some(ref mut ac) = self.autocomplete {
+                                if ac.selected + 1 < ac.suggestions.len() {
+                                    ac.selected += 1;
+                                }
+                            }
+                        }
+                        Input { key: Key::Enter, .. } => {
+                            if let Some(ac) = self.autocomplete.take() {
+                                let completion = ac.suggestions[ac.selected].clone();
+                                // Delete the typed prefix
+                                for _ in 0..ac.prefix.chars().count() {
+                                    self.editor.input(Input { key: Key::Backspace, ctrl: false, alt: false, shift: false });
+                                }
+                                // Insert the completion
+                                for c in completion.chars() {
+                                    self.editor.input(Input { key: Key::Char(c), ctrl: false, alt: false, shift: false });
+                                }
+                            }
+                        }
+                        // Any other key closes popup and passes through normally
+                        _ => {
+                            self.autocomplete = None;
+                            self.editor.input(input);
+                            self.refresh_autocomplete();
+                        }
+                    }
+                    return SqlEditorAction::None;
+                }
+
+                // ── Normal editor mode ────────────────────────────────────────
                 match input {
                     // Execute: F5 or Ctrl+Enter
                     Input { key: Key::F(5), .. }
@@ -140,9 +199,17 @@ impl SqlEditorScreen {
                             return SqlEditorAction::OpenGrid(r.clone());
                         }
                     }
-                    // Switch focus to results (only when results exist)
+                    // Tab: autocomplete or switch focus to results
                     Input { key: Key::Tab, .. } => {
-                        if self.result.is_some() {
+                        let prefix = self.word_at_cursor();
+                        let suggestions = self.filter_completions(&prefix);
+                        if !suggestions.is_empty() {
+                            self.autocomplete = Some(AutocompletePopup {
+                                suggestions,
+                                selected: 0,
+                                prefix,
+                            });
+                        } else if self.result.is_some() {
                             self.focus = EditorFocus::Results;
                         }
                     }
@@ -153,9 +220,10 @@ impl SqlEditorScreen {
                     Input { key: Key::Down, alt: true, .. } => {
                         return SqlEditorAction::HistoryNext;
                     }
-                    // Pass everything else to the textarea
+                    // Regular input — pass to textarea, then refresh autocomplete
                     _ => {
                         self.editor.input(input);
+                        self.refresh_autocomplete();
                     }
                 }
             }
@@ -187,6 +255,43 @@ impl SqlEditorScreen {
             }
         }
         SqlEditorAction::None
+    }
+
+    // ── Autocomplete helpers ──────────────────────────────────────────────────
+
+    fn word_at_cursor(&self) -> String {
+        let lines = self.editor.lines();
+        let (row, col) = self.editor.cursor();
+        if row >= lines.len() { return String::new(); }
+        let chars: Vec<char> = lines[row].chars().collect();
+        let mut start = col;
+        while start > 0 && (chars[start - 1].is_alphanumeric() || chars[start - 1] == '_') {
+            start -= 1;
+        }
+        chars[start..col].iter().collect()
+    }
+
+    fn filter_completions(&self, prefix: &str) -> Vec<String> {
+        if prefix.len() < 2 { return vec![]; }
+        let lower = prefix.to_lowercase();
+        self.completion_items.iter()
+            .filter(|s| s.to_lowercase().starts_with(&lower))
+            .take(10)
+            .cloned()
+            .collect()
+    }
+
+    fn refresh_autocomplete(&mut self) {
+        if self.autocomplete.is_none() { return; }
+        let prefix = self.word_at_cursor();
+        let suggestions = self.filter_completions(&prefix);
+        if suggestions.is_empty() {
+            self.autocomplete = None;
+        } else if let Some(ref mut ac) = self.autocomplete {
+            ac.selected = ac.selected.min(suggestions.len().saturating_sub(1));
+            ac.prefix = prefix;
+            ac.suggestions = suggestions;
+        }
     }
 
     fn result_row_count(&self) -> usize {
@@ -278,6 +383,58 @@ fn draw_editor(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
         Style::default().bg(Color::DarkGray).fg(Color::White),
     );
     f.render_widget(&screen.editor, area);
+
+    // ── Autocomplete popup ────────────────────────────────────────────────────
+    if let Some(ref ac) = screen.autocomplete {
+        let (cursor_row, cursor_col) = screen.editor.cursor();
+        // Position just below the cursor (inside the editor border)
+        let origin_x = area.x + 1 + cursor_col.saturating_sub(ac.prefix.len()) as u16;
+        let origin_y = area.y + 1 + cursor_row as u16 + 1; // +1 = line below cursor
+
+        let max_visible = 8usize;
+        let visible_count = ac.suggestions.len().min(max_visible);
+        let popup_w = (ac.suggestions.iter().map(|s| s.len()).max().unwrap_or(8) as u16 + 4)
+            .min(area.width.saturating_sub(2));
+        let popup_h = visible_count as u16 + 2; // border top + bottom
+
+        // Clamp to stay inside the terminal area
+        let popup_x = origin_x.min(area.x + area.width.saturating_sub(popup_w));
+        let popup_y = if origin_y + popup_h > area.y + area.height {
+            // Not enough space below — show above cursor instead
+            (area.y + 1 + cursor_row as u16).saturating_sub(popup_h)
+        } else {
+            origin_y
+        };
+
+        let popup_area = Rect::new(popup_x, popup_y, popup_w, popup_h);
+        f.render_widget(Clear, popup_area);
+
+        let scroll_offset = ac.selected.saturating_sub(max_visible - 1);
+        let rows: Vec<RatRow> = ac.suggestions.iter().enumerate()
+            .skip(scroll_offset)
+            .take(max_visible)
+            .map(|(i, s)| {
+                let style = if i == ac.selected {
+                    Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+                RatRow::new(vec![Cell::from(format!(" {s} ")).style(style)])
+            })
+            .collect();
+
+        let hint = format!(" {}/{} ", ac.selected + 1, ac.suggestions.len());
+        f.render_widget(
+            Table::new(rows, vec![Constraint::Fill(1)])
+                .block(
+                    Block::default()
+                        .title(hint)
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Cyan)),
+                ),
+            popup_area,
+        );
+    }
 }
 
 // ── Results pane ──────────────────────────────────────────────────────────────
