@@ -98,12 +98,24 @@ impl EditRecordScreen {
                 EditRecordAction::None
             }
 
-            KeyCode::Enter | KeyCode::Char('i') => {
+            KeyCode::Enter => {
                 if let Some(col) = self.schema.get(self.selected_field) {
                     if !col.is_pk {
                         if self.is_nosql && (col.type_name == "object" || col.type_name == "array") {
                             return EditRecordAction::OpenNested(self.selected_field);
                         }
+                        self.cursor_pos = self.current_values[self.selected_field].chars().count();
+                        self.mode = EditFieldMode::Editing;
+                        self.status = None;
+                    }
+                }
+                EditRecordAction::None
+            }
+
+            // 'i' on object fields → edit raw JSON string directly instead of drilling in
+            KeyCode::Char('i') => {
+                if let Some(col) = self.schema.get(self.selected_field) {
+                    if !col.is_pk {
                         self.cursor_pos = self.current_values[self.selected_field].chars().count();
                         self.mode = EditFieldMode::Editing;
                         self.status = None;
@@ -540,10 +552,15 @@ impl EditRecordScreen {
                 Style::default().fg(Color::Gray),
             )
         } else {
-            (
-                " j/k: field   Enter/i: edit   Space: toggle bool   Ctrl+S: save   Esc: back".into(),
-                Style::default().fg(Color::Gray),
-            )
+            let on_obj = screen.schema.get(screen.selected_field)
+                .map(|c| screen.is_nosql && c.type_name == "object")
+                .unwrap_or(false);
+            let hint = if on_obj {
+                " j/k: field   Enter: drill-in   i: edit JSON   Ctrl+S: save   Esc: back"
+            } else {
+                " j/k: field   Enter/i: edit   Space: toggle bool   Ctrl+S: save   Esc: back"
+            };
+            (hint.into(), Style::default().fg(Color::Gray))
         };
         f.render_widget(
             Paragraph::new(help_text.as_str())
