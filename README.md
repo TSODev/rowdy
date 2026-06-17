@@ -71,10 +71,23 @@ cargo build --release
 ./target/release/rowdy-db
 ```
 
+With MongoDB support:
+
+```bash
+cargo build --release --features mongodb
+./target/release/rowdy-db
+```
+
 ### Install from crates.io
 
 ```bash
 cargo install rowdy-db
+```
+
+With MongoDB support:
+
+```bash
+cargo install rowdy-db --features mongodb
 ```
 
 ---
