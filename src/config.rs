@@ -66,3 +66,68 @@ fn config_path() -> PathBuf {
         .join("rowdy")
         .join("config.toml")
 }
+
+// ── URL utilities ─────────────────────────────────────────────────────────────
+
+/// Mask `user:password@` and sensitive query parameters in a URL for display.
+pub fn redact_url(url: &str) -> String {
+    let mut result = url.to_string();
+
+    if let Some(at_pos) = result.find('@') {
+        if let Some(scheme_end) = result.find("://") {
+            let authority_start = scheme_end + 3;
+            if authority_start < at_pos {
+                let authority = &result[authority_start..at_pos];
+                if let Some(colon_pos) = authority.find(':') {
+                    let abs_colon = authority_start + colon_pos;
+                    result.replace_range(abs_colon + 1..at_pos, "***");
+                }
+            }
+        }
+    }
+
+    let sensitive = ["authtoken", "token", "password", "pwd", "secret", "key", "auth"];
+    if let Some(q_pos) = result.find('?') {
+        let base = result[..q_pos + 1].to_string();
+        let query = result[q_pos + 1..].to_string();
+        let masked: Vec<String> = query.split('&').map(|pair| {
+            if let Some(eq) = pair.find('=') {
+                let k = pair[..eq].to_ascii_lowercase();
+                if sensitive.iter().any(|s| k == *s) {
+                    return format!("{}=***", &pair[..eq]);
+                }
+            }
+            pair.to_string()
+        }).collect();
+        result = format!("{}{}", base, masked.join("&"));
+    }
+
+    result
+}
+
+/// Strip `?readonly=true` from a URL and return `(clean_url, was_readonly)`.
+pub fn strip_readonly_param(url: &str) -> (String, bool) {
+    let Some(q_pos) = url.find('?') else {
+        return (url.to_string(), false);
+    };
+    let base = &url[..q_pos];
+    let query = url[q_pos + 1..].replace('?', "&");
+    let mut readonly = false;
+    let remaining: Vec<&str> = query.split('&').filter(|pair| {
+        if let Some(eq) = pair.find('=') {
+            if pair[..eq].to_ascii_lowercase() == "readonly"
+                && pair[eq + 1..].to_ascii_lowercase() == "true"
+            {
+                readonly = true;
+                return false;
+            }
+        }
+        true
+    }).collect();
+    let new_url = if remaining.is_empty() {
+        base.to_string()
+    } else {
+        format!("{}?{}", base, remaining.join("&"))
+    };
+    (new_url, readonly)
+}
