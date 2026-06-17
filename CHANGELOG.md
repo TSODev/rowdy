@@ -10,12 +10,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 #### CRUD complet MongoDB depuis le DataGrid
-- **Insert** : touche `a` depuis le DataGrid MongoDB → `EditRecordScreen` vide (champs inférés depuis la collection courante, type `string` par défaut) → `Ctrl+S` confirme via modal et appelle `insert_one`
+- **Insert** : touche `a` depuis le DataGrid MongoDB → `EditRecordScreen` avec les champs de la collection (types inférés depuis la première ligne existante) → `Ctrl+S` confirme via modal et appelle `insert_one`
 - **Delete** : touche `D` depuis le DataGrid MongoDB → modal de confirmation `"Delete document with _id: …?"` → `delete_one` ; `N`/`Esc` annule
 - Après insert ou delete : rechargement automatique de la collection (même chemin que `replace_one`)
 - Help bar du DataGrid MongoDB affiche `a: insert   D: delete` (uniquement en mode non read-only)
-- Preview panel de l'écran d'insertion affiche le JSON en cours de saisie sous le titre "New Document Preview"
-- Note : si la collection est vide, `a` ne propose pas de champs — il faut au préalable insérer un document via l'éditeur MQL
+- Preview panel "New Document Preview" affiche le JSON en cours de saisie en temps réel
+- Note : si la collection est vide, `a` ne propose pas de champs — insérer d'abord via l'éditeur MQL
+
+#### Édition inline JSON pour les champs `[obj]`
+- Touche `i` sur un champ `[obj]` dans EditRecord → édition du JSON brut directement dans le champ texte (ex. `{"city":"Paris","zip":"75001"}`)
+- Touche `Enter` sur `[obj]` → drill-in dans le sous-éditeur (comportement précédent)
+- La help bar adapte son message selon la touche : `Enter: drill-in   i: edit JSON` quand le curseur est sur un champ objet
+
+### Fixed
+
+- Champs `[obj]`/`[arr]` dans l'écran d'insertion initialisés à `{}`/`[]` (au lieu de `""`) pour permettre le drill-in immédiat
+- Types des champs inférés depuis la première ligne de la collection lors d'un insert (objet, tableau, int, float, bool, string) — évite de sérialiser `{"city":"Paris"}` comme une string JSON
+- Sous-éditeurs d'objets (`is_nested`) : preview utilise maintenant `reconstruct_nested_json()` "Object Preview" au lieu de `build_mongo_replace()` qui échouait avec "No _id field"
+- `Ctrl+S` dans un sous-éditeur (objet ou array) affiche désormais `"Esc: confirm & go back to parent"` au lieu de tenter une sauvegarde MongoDB sans `_id`
 
 ---
 

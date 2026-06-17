@@ -56,6 +56,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | MongoDB connector (`--features mongodb`) — browse collections, MQL editor, nested field navigation | ✅ |
 | MongoDB document editing — `replace_one` with confirmation, recursive nested object / array editor | ✅ |
 | MongoDB insert (`a`) and delete (`D`) from Data Grid — confirmation modal, auto-reload | ✅ |
+| MongoDB object fields — `Enter` drills in, `i` edits raw JSON inline | ✅ |
 
 ---
 
@@ -186,7 +187,8 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Next / previous field |
-| `Enter` / `i` | Edit selected field — or drill into nested `[obj]` / `[arr]` (MongoDB) |
+| `Enter` | Edit selected field — or drill into nested `[obj]` / `[arr]` (MongoDB) |
+| `i` | Edit selected field inline — on `[obj]` fields (MongoDB): edit raw JSON string instead of drilling in |
 | `Space` | Toggle boolean field (`true` ↔ `false`) |
 | `←` / `→` | Move cursor within field |
 | `Home` / `End` | Jump to start / end of field |
@@ -195,6 +197,8 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | `Esc` / `q` | Back to Data Grid without saving — or confirm nested edit and go up one level (MongoDB) |
 
 **MongoDB nested editor** — when drilling into `[obj]` or `[arr]` fields, the title shows the breadcrumb (`collection › field › subfield`). Press `Esc` at any nested level to confirm that level's edits and return to the parent. `Ctrl+S` is only available at the root level.
+
+For `[obj]` fields specifically: `Enter` drills into the sub-editor; `i` edits the raw JSON string directly (useful when inserting a new document or when you prefer to type the JSON manually).
 
 **Array editor** — additional keys when editing an array field:
 

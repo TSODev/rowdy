@@ -100,8 +100,10 @@ Il reste uniquement le warning externe `sqlx-postgres v0.7.4 future-incompat` (d
 ## MongoDB
 
 - 🟡 **Nouveaux items d'array créés avec type `string`** — quand on ajoute un item via `a`, il est créé avec `type_name = "string"`. Si l'utilisateur saisit un entier ou un float, la valeur sera sérialisée en JSON comme une chaîne (`"42"`) au lieu d'un nombre (`42`). Contournement futur : détecter automatiquement le type à la sortie de l'édition (parse int → float → string).
-- ✅ **`insert_one` depuis l'UI** — touche `a` depuis le DataGrid MongoDB ouvre un `EditRecordScreen` vide ; `Ctrl+S` confirme l'insertion.
-- ✅ **`delete_one` depuis l'UI** — touche `D` depuis le DataGrid MongoDB affiche une confirmation modale avant suppression.
-- 🟡 **Tous les champs de l'écran d'insertion sont de type `string`** — lors d'un `insert_one`, le schéma est inféré depuis les colonnes de la collection courante avec `type_name = "string"`. Si la collection est vide, les champs ne sont pas proposés. Contournement : insérer au moins un document via l'éditeur MQL (F5), puis utiliser `a` pour les suivants.
+- ✅ **`insert_one` depuis l'UI** — touche `a` depuis le DataGrid MongoDB ; types inférés depuis la première ligne (object/array/int/float/bool/string) ; `Ctrl+S` confirme via modal.
+- ✅ **`delete_one` depuis l'UI** — touche `D` depuis le DataGrid MongoDB ; modal de confirmation ; rechargement automatique.
+- ✅ **Champs `[obj]`/`[arr]` éditables en mode insert** — initialisés à `{}`/`[]` pour permettre le drill-in ; `i` sur `[obj]` ouvre l'édition JSON brute.
+- ✅ **Preview "No _id field" dans les sous-éditeurs** — corrigé via le flag `is_nested` ; les sous-éditeurs utilisent `reconstruct_nested_json()`.
+- 🟡 **Collection vide : pas de champs proposés lors d'un insert** — le schéma est inféré depuis la première ligne existante. Si la collection est vide, `a` ouvre un écran sans champs. Contournement : insérer un premier document via l'éditeur MQL (F5), puis utiliser `a` pour les suivants.
 - 🟡 **Validation de type limitée dans EditRecord MongoDB** — les champs `object`/`array` sont validés comme JSON, mais les champs `string`/`int`/`float` ne font pas l'objet d'une validation de format (pas de schéma MongoDB côté serveur). Saisir `"abc"` dans un champ `int` est accepté et sera sérialisé en string dans le document.
 - ⚪ **`ObjectId` affiché comme string hex** — l'`_id` ObjectId est converti en string à l'affichage (`bson_to_value`). La reconstruction `id_to_bson()` re-parse correctement les 24-char hex, mais les `_id` personnalisés (entiers, UUID strings) sont traités comme des strings BSON — ce qui est correct dans la majorité des cas.
