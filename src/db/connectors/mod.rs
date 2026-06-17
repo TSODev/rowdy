@@ -5,6 +5,8 @@ pub mod sqlite;
 pub mod turso;
 #[cfg(feature = "mongodb")]
 pub mod mongodb;
+#[cfg(feature = "duckdb")]
+pub mod duckdb;
 
 use crate::db::error::DbError;
 use crate::db::traits::{KvClient, NoSqlClient, SqlClient};
@@ -31,6 +33,18 @@ pub async fn connect_sql(db_type: &str, url: &str) -> Result<Box<dyn SqlClient>,
             let mut c = turso::TursoClient::new();
             c.connect(url).await?;
             Ok(Box::new(c))
+        }
+        "duckdb" => {
+            #[cfg(feature = "duckdb")]
+            {
+                let mut c = duckdb::DuckDbConnector::new();
+                c.connect(url).await?;
+                return Ok(Box::new(c));
+            }
+            #[cfg(not(feature = "duckdb"))]
+            Err(DbError::Unsupported(
+                "DuckDB support not compiled in — reinstall with --features duckdb".to_string(),
+            ))
         }
         other => Err(DbError::Unsupported(format!("Unknown SQL driver: {other}"))),
     }

@@ -57,6 +57,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 | MongoDB document editing — `replace_one` with confirmation, recursive nested object / array editor | ✅ |
 | MongoDB insert (`a`) and delete (`D`) from Data Grid — confirmation modal, auto-reload | ✅ |
 | MongoDB object fields — `Enter` drills in, `i` edits raw JSON inline | ✅ |
+| DuckDB connector (`--features duckdb`) — embedded OLAP engine, Parquet/CSV/JSON queries, LIST and STRUCT types | ✅ |
 
 ---
 
@@ -78,6 +79,20 @@ cargo build --release --features mongodb
 ./target/release/rowdy-db
 ```
 
+With DuckDB support (statically links DuckDB C++ — first build takes a few minutes):
+
+```bash
+cargo build --release --features duckdb
+./target/release/rowdy-db
+```
+
+With all optional connectors:
+
+```bash
+cargo build --release --features mongodb,duckdb
+./target/release/rowdy-db
+```
+
 ### Install from crates.io
 
 ```bash
@@ -88,6 +103,12 @@ With MongoDB support:
 
 ```bash
 cargo install rowdy-db --features mongodb
+```
+
+With DuckDB support:
+
+```bash
+cargo install rowdy-db --features duckdb
 ```
 
 ---
@@ -121,6 +142,11 @@ url = "redis://127.0.0.1:6379"
 name = "MySQL Local"
 type = "mysql"
 url = "mysql://root:password@localhost:3306/my_db"
+
+[[connections]]
+name = "Analytics DuckDB"
+type = "duckdb"
+url = "duckdb:///home/user/analytics.db"
 ```
 
 Profiles appear in the left panel of the connection screen at startup.
@@ -251,21 +277,34 @@ The ERD view displays a **star layout**: the selected table in the center (yello
 
 ## 🗄️ Supported databases
 
-| Engine | Type | Driver | URL format |
-|--------|------|--------|------------|
-| PostgreSQL | SQL | `sqlx` (native TLS) | `postgres://user:pass@host:5432/db` |
-| SQLite | SQL | `sqlx` | `sqlite:///path/to/file.db` |
-| libsql / Turso | SQL | `libsql` (remote HTTP) | `libsql://host?authToken=TOKEN` |
-| MySQL / MariaDB | SQL | `sqlx` | `mysql://user:pass@host:3306/db` |
-| Redis | Key-value | `redis-rs` (async multiplexed) | `redis://host:6379` |
-| MongoDB | Document | `mongodb` 3 (feature-gated) | `mongodb://user:pass@host:27017/dbname` |
+| Engine | Type | Driver | Feature flag | URL format |
+|--------|------|--------|--------------|------------|
+| PostgreSQL | SQL | `sqlx` (native TLS) | _(built-in)_ | `postgres://user:pass@host:5432/db` |
+| SQLite | SQL | `sqlx` | _(built-in)_ | `sqlite:///path/to/file.db` |
+| libsql / Turso | SQL | `libsql` (remote HTTP) | _(built-in)_ | `libsql://host?authToken=TOKEN` |
+| MySQL / MariaDB | SQL | `sqlx` | _(built-in)_ | `mysql://user:pass@host:3306/db` |
+| Redis | Key-value | `redis-rs` (async multiplexed) | _(built-in)_ | `redis://host:6379` |
+| MongoDB | Document | `mongodb` 3 | `--features mongodb` | `mongodb://user:pass@host:27017/dbname` |
+| DuckDB | OLAP / SQL | `duckdb` 1 (bundled C++) | `--features duckdb` | `duckdb:///path/to/file.db` or `duckdb://:memory:` |
 
-MongoDB requires building with the optional feature flag:
+Optional connectors require building with the corresponding feature flag:
 
 ```bash
+# MongoDB only
 cargo build --release --features mongodb
-cargo install rowdy-db --features mongodb
+
+# DuckDB only (first build is slow — statically compiles DuckDB C++)
+cargo build --release --features duckdb
+
+# Both
+cargo build --release --features mongodb,duckdb
 ```
+
+**DuckDB notes:**
+- Supports local `.db` files and in-memory databases (`duckdb://:memory:`)
+- Native support for Parquet, CSV, and JSON files via SQL (`SELECT * FROM 'data.parquet'`)
+- Complex types (`VARCHAR[]`, `STRUCT`) are displayed as expandable nested views in the Data Grid
+- Due to a DuckDB v1.x engine limitation, UPDATE on complex-type columns (`VARCHAR[]`, `STRUCT`) may fail with a FK constraint error when the table has child rows — use the SQL Editor as a workaround in that case
 
 ---
 

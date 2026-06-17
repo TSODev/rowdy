@@ -262,7 +262,7 @@ src/
 - [x] **Load All dans DataGrid** — touche `A` (`sortable && has_more`) → `spawn_load_all()` : requête sans LIMIT (`limit = total_count.max(10_000)`) remplaçant toutes les pages ; résultat via `DbEvent::DataLoaded` ; aide bar affiche `A: load all` dynamiquement
 - [x] **Autocomplétion SQL (Tab)** — `Tab` déclenche un popup flottant de suggestions si le préfixe courant (≥ 2 chars) matche des noms de tables/colonnes ou des mots-clés SQL ; navigation `↑/↓`/`Tab`, `Enter` insère (supprime le préfixe + insère la complétion via `editor.input()`), `Esc` ferme ; tout autre caractère met à jour le popup en temps réel ou le ferme si plus de match ; items schema alimentés par `DbEvent::AllSchemasLoaded` → `set_completions()` (tables + toutes colonnes, triés, dédupliqués) ; constante `SQL_KEYWORDS` (80 entrées : DML, DDL, clauses, agrégats, fonctions fenêtrées, types) dans `sql_editor.rs` ; schema items prioritaires (max 7), keywords en complément (max 10 total) ; matching case-insensitive, keywords retournés en MAJUSCULES ; popup clamped dans la zone de l'éditeur, s'affiche au-dessus si pas de place en dessous ; badge `N/total` dans le titre ; `widget::Clear` pour effacer le fond
 - [ ] **Reconnexion automatique** — détection de `DbError::ConnectionLost` dans `handle_db_event` ; retry async avec back-off exponentiel (3 tentatives) ; badge `[RECONNECTING…]` en status bar
-- [ ] **Connecteur DuckDB** — trait `SqlClient` via `duckdb-rs` ; feature-gated `--features duckdb` ; URL `duckdb://path/to/file.db` ou `duckdb://:memory:` ; analytique local (Parquet, CSV, JSON)
+- [x] **Connecteur DuckDB** — trait `SqlClient` via `duckdb-rs` 1.x (crate 1.10504.0) ; feature-gated `--features duckdb` ; URL `duckdb://path/to/file.db` ou `duckdb://:memory:` ; analytique local (Parquet, CSV, JSON) ; `spawn_blocking` autour de l'API synchrone ; types : LIST/ARRAY → `NestedArray`, STRUCT/MAP → `NestedDoc`, DATE32/TIME64/TIMESTAMP formatés via chrono ; PK via `duckdb_constraints()` ; FK déclaratives détectées ; `sql_literal` génère syntaxe array native `['a','b']` pour `VARCHAR[]` ; ⚠️ bug DuckDB : UPDATE de types complexes sur table parente FK échoue (voir section Bugs connus) — seed sans FK pour contourner
 - [ ] **Onglets multiples** — `Vec<Tab { name, active_client, state, screens }>` dans `App` ; `Ctrl+T` nouvelle connexion, `Ctrl+W` fermer, `Alt+1..9` / `[`/`]` naviguer ; tab bar en haut de l'écran
 - [ ] **Snippets SQL** — `~/.config/rowdy/snippets.toml` ; `Ctrl+P` dans SQL editor ouvre palette ; saisie nom filtrée, `Enter` insère, `Ctrl+S` sauvegarde sélection courante comme snippet
 - [ ] **Recherche globale dans DataGrid** — `Ctrl+F` ouvre prompt de recherche plein texte ; parcourt toutes les colonnes de la ligne courante et des suivantes ; highlight de la correspondance ; `n`/`N` suivant/précédent
@@ -270,6 +270,43 @@ src/
 - [x] **Export JSON avec résolution FK récursive** — `export_json_with_fk()` dans `src/export.rs` ; pour chaque colonne FK, récupère la ligne référencée et l'embarque en `<col>__ref` ; récursif jusqu'à 3 niveaux (paramètre `max_depth`), détection de cycles via `HashSet<(table.col=val)>`, cache des schémas per-table ; colonnes JSON/JSONB inlinées directement ; fallback sync pour SQL result grid (pas de schéma) ; le résultat revient via `DbEvent::ExportDone/ExportFailed` (canal mpsc existant).
 - [x] **Affichage NUMERIC/DECIMAL/REAL** — `format_decimal()` dans `db/types.rs` (PostgreSQL NUMERIC + MySQL DECIMAL via BigDecimal) et `format_float()` dans `data_grid.rs` (libsql REAL + FLOAT4/FLOAT8) : suppression des zéros trailing, minimum 2 décimales conservées (`10.6900` → `10.69`, `12.9000` → `12.90`, `1.0000` → `1.00`)
 - [x] **Export JSON — choix simple vs FK** — prompt d'export étendu : `j` = JSON simple (synchrone, sans FK), `J` = JSON avec résolution FK récursive (comportement précédent) ; `DataGridAction::ExportJsonSimple` ajouté ; depuis SQL Result Grid `j` et `J` sont équivalents (pas de schéma).
+
+## Bugs connus / Limitations moteur
+
+### DuckDB — FK violation sur UPDATE de types complexes (VARCHAR[], STRUCT)
+
+**Symptôme** : `UPDATE "table" SET "col_array" = [...] WHERE "id" = N` échoue avec
+`Constraint Error: Violates foreign key constraint because key "fk_col: N" is still referenced…`
+même lorsque la PK n'est pas modifiée.
+
+**Cause** : DuckDB v1.x traite l'UPDATE de colonnes de type complexe (`VARCHAR[]`, `STRUCT`, `MAP`)
+comme un DELETE + INSERT en interne (stockage OLAP en colonnes). Lors du DELETE virtuel, le moteur
+vérifie les contraintes FK entrantes et lève une violation si des lignes enfants existent — même si
+la PK de la ligne parente n'a pas changé. Les scalaires (`INTEGER`, `VARCHAR`, `DECIMAL`, etc.)
+sont mis à jour en place et ne déclenchent pas ce bug.
+
+**Contournements testés — aucun ne fonctionne dans duckdb-rs 1.10504.0** :
+- `PRAGMA foreign_keys = false` — ignoré ou non supporté
+- `SET enable_foreign_keys = false` — paramètre inconnu du moteur
+- `FOREIGN KEY ... NOT ENFORCED` — syntaxe rejetée par le parser
+
+**Solution appliquée dans le seed `seed/duckdb.sql`** : FK retirées des `CREATE TABLE`.
+Les relations sont documentées par convention de nommage (`author_id → authors.id`)
+et des commentaires inline. La navigation FK Rowdy (badges magenta, sous-grilles)
+n'est donc pas disponible sur les tables DuckDB du seed.
+
+**Impact sur le connecteur** (`src/db/connectors/duckdb.rs`) :
+- `get_schema()` cherche toujours les FK via `duckdb_constraints()` — fonctionnel si
+  l'utilisateur définit ses propres FK dans son schéma (ex. bases sans types complexes).
+- `execute()` tente deux retries (`SET enable_foreign_keys` puis `PRAGMA`) avant de
+  propager l'erreur FK avec un message explicatif.
+- `sql_literal()` dans `edit_record.rs` génère la syntaxe native `['a', 'b']` pour les
+  types `VARCHAR[]`/`ARRAY` afin d'éviter le cast implicite string→array, mais cela ne
+  suffit pas à contourner le bug DuckDB.
+
+**À surveiller** : le bug est lié à l'implémentation du stockage OLAP columnar de DuckDB.
+Tester à nouveau lors d'une mise à jour majeure de la crate `duckdb` (≥ 2.x ou version
+avec support `NOT ENFORCED`).
 
 ## Commandes utiles
 

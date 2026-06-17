@@ -779,6 +779,22 @@ fn sql_literal(val: &str, type_name: &str) -> String {
     if is_bool_type(type_name) {
         return if is_truthy(val) { "TRUE".to_string() } else { "FALSE".to_string() };
     }
+    // DuckDB array types (VARCHAR[], INTEGER[], etc.) — generate native array literal
+    // so DuckDB can update in-place without the DELETE+INSERT path that triggers FK checks.
+    if tn.ends_with("[]") || tn.ends_with(" ARRAY") {
+        if let Ok(arr) = serde_json::from_str::<serde_json::Value>(val) {
+            if let Some(items) = arr.as_array() {
+                let parts: Vec<String> = items.iter().map(|v| match v {
+                    serde_json::Value::Null => "NULL".to_string(),
+                    serde_json::Value::Bool(b) => if *b { "true".to_string() } else { "false".to_string() },
+                    serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                    other => format!("'{}'", other.to_string().replace('\'', "''")),
+                }).collect();
+                return format!("[{}]", parts.join(", "));
+            }
+        }
+    }
     let is_num = tn.contains("INT") || tn.contains("FLOAT") || tn.contains("REAL")
         || tn.contains("NUMERIC") || tn.contains("DECIMAL") || tn.contains("DOUBLE")
         || tn.contains("NUMBER");

@@ -12,6 +12,7 @@ repository = "https://github.com/TSODev/rowdy"
 
 [features]
 mongodb = ["dep:mongodb"]
+duckdb = ["dep:duckdb"]
 
 [dependencies]
 # Interface graphique de terminal
@@ -41,4 +42,5 @@ tui-textarea = "0.5"
 clap = { version = "4", features = ["derive"] }
 libsql = { version = "0.9.30", features = ["remote"] }
 mongodb = { version = "3", optional = true }
+duckdb = { version = "1", features = ["bundled"], optional = true }
 
