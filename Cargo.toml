@@ -1,6 +1,6 @@
 [package]
 name = "rowdy-db"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2024"
 authors = ["Thierry Soulie <thierry.soulie@tsodev.fr>"]
 description = "A fast, modern, and rowdy TUI database management tool written in Rust."
