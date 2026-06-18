@@ -120,7 +120,7 @@ impl SqlClient for PostgresConnector {
 
     async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {
         let pool = self.pool()?;
-        let safe = table.replace('\'', "").replace('"', "");
+        let safe = table.replace(['\'', '"'], "");
         // Correlated subqueries avoid JOIN fan-out and the array_position()
         // type-resolution edge-cases that silently broke the previous query.
         let query = format!(

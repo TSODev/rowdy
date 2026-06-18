@@ -204,8 +204,6 @@ impl TableListScreen {
             let filter_display = format!("/{}", screen.filter);
             f.set_cursor(help_area.x + 1 + filter_display.len() as u16, help_area.y + 1);
             filter_display
-        } else if screen.is_kv {
-            " j/k: move   Enter: open   e: SQL editor   r: ERD   /: filter   Ctrl+T: new tab   [/]: tabs   q: disconnect ".into()
         } else {
             " j/k: move   Enter: open   e: SQL editor   r: ERD   /: filter   Ctrl+T: new tab   [/]: tabs   q: disconnect ".into()
         };

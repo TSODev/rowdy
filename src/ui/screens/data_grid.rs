@@ -253,11 +253,10 @@ impl DataGridScreen {
             }
             // Remove filter on selected column
             KeyCode::Char('d') if !self.read_only => {
-                if let Some(name) = self.selected_col_name() {
-                    if self.filters.remove(&name).is_some() {
+                if let Some(name) = self.selected_col_name()
+                    && self.filters.remove(&name).is_some() {
                         return DataGridAction::ApplyFilter;
                     }
-                }
                 DataGridAction::None
             }
             // Clear all filters

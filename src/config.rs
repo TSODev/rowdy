@@ -104,8 +104,8 @@ fn extract_query_token(url: &str) -> Option<(String, String)> {
     let query = &url[q_pos + 1..];
     let mut credential: Option<String> = None;
     let sanitized_params: Vec<String> = query.split('&').map(|pair| {
-        if credential.is_none() {
-            if let Some(eq) = pair.find('=') {
+        if credential.is_none()
+            && let Some(eq) = pair.find('=') {
                 let k = pair[..eq].to_ascii_lowercase();
                 let v = &pair[eq + 1..];
                 if sensitive.iter().any(|s| k == *s) && v != KEYRING_PLACEHOLDER {
@@ -113,7 +113,6 @@ fn extract_query_token(url: &str) -> Option<(String, String)> {
                     return format!("{}={}", &pair[..eq], KEYRING_PLACEHOLDER);
                 }
             }
-        }
         pair.to_string()
     }).collect();
     let cred = credential?;
@@ -184,8 +183,8 @@ pub fn delete_credential(profile_name: &str) {
 pub fn redact_url(url: &str) -> String {
     let mut result = url.to_string();
 
-    if let Some(at_pos) = result.find('@') {
-        if let Some(scheme_end) = result.find("://") {
+    if let Some(at_pos) = result.find('@')
+        && let Some(scheme_end) = result.find("://") {
             let authority_start = scheme_end + 3;
             if authority_start < at_pos {
                 let authority = &result[authority_start..at_pos];
@@ -195,7 +194,6 @@ pub fn redact_url(url: &str) -> String {
                 }
             }
         }
-    }
 
     let sensitive = ["authtoken", "token", "password", "pwd", "secret", "key", "auth"];
     if let Some(q_pos) = result.find('?') {
@@ -225,14 +223,13 @@ pub fn strip_readonly_param(url: &str) -> (String, bool) {
     let query = url[q_pos + 1..].replace('?', "&");
     let mut readonly = false;
     let remaining: Vec<&str> = query.split('&').filter(|pair| {
-        if let Some(eq) = pair.find('=') {
-            if pair[..eq].to_ascii_lowercase() == "readonly"
-                && pair[eq + 1..].to_ascii_lowercase() == "true"
+        if let Some(eq) = pair.find('=')
+            && pair[..eq].eq_ignore_ascii_case("readonly")
+                && pair[eq + 1..].eq_ignore_ascii_case("true")
             {
                 readonly = true;
                 return false;
             }
-        }
         true
     }).collect();
     let new_url = if remaining.is_empty() {

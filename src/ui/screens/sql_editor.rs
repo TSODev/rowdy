@@ -184,16 +184,14 @@ impl SqlEditorScreen {
                             self.autocomplete = None;
                         }
                         Input { key: Key::Up, .. } => {
-                            if let Some(ref mut ac) = self.autocomplete {
-                                if ac.selected > 0 { ac.selected -= 1; }
-                            }
+                            if let Some(ref mut ac) = self.autocomplete
+                                && ac.selected > 0 { ac.selected -= 1; }
                         }
                         Input { key: Key::Down, .. } | Input { key: Key::Tab, .. } => {
-                            if let Some(ref mut ac) = self.autocomplete {
-                                if ac.selected + 1 < ac.suggestions.len() {
+                            if let Some(ref mut ac) = self.autocomplete
+                                && ac.selected + 1 < ac.suggestions.len() {
                                     ac.selected += 1;
                                 }
-                            }
                         }
                         Input { key: Key::Enter, .. } => {
                             if let Some(ac) = self.autocomplete.take() {

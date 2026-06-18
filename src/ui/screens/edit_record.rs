@@ -145,8 +145,8 @@ impl EditRecordScreen {
             }
 
             KeyCode::Enter => {
-                if let Some(col) = self.schema.get(self.selected_field) {
-                    if !col.is_pk {
+                if let Some(col) = self.schema.get(self.selected_field)
+                    && !col.is_pk {
                         if self.is_nosql && (col.type_name == "object" || col.type_name == "array") {
                             return EditRecordAction::OpenNested(self.selected_field);
                         }
@@ -154,19 +154,17 @@ impl EditRecordScreen {
                         self.mode = EditFieldMode::Editing;
                         self.status = None;
                     }
-                }
                 EditRecordAction::None
             }
 
             // 'i' on object fields → edit raw JSON string directly instead of drilling in
             KeyCode::Char('i') => {
-                if let Some(col) = self.schema.get(self.selected_field) {
-                    if !col.is_pk {
+                if let Some(col) = self.schema.get(self.selected_field)
+                    && !col.is_pk {
                         self.cursor_pos = self.current_values[self.selected_field].chars().count();
                         self.mode = EditFieldMode::Editing;
                         self.status = None;
                     }
-                }
                 EditRecordAction::None
             }
 
@@ -213,12 +211,11 @@ impl EditRecordScreen {
 
             // Toggle boolean with Space
             KeyCode::Char(' ') => {
-                if let Some(col) = self.schema.get(self.selected_field) {
-                    if !col.is_pk && is_bool_type(&col.type_name) {
+                if let Some(col) = self.schema.get(self.selected_field)
+                    && !col.is_pk && is_bool_type(&col.type_name) {
                         let val = &mut self.current_values[self.selected_field];
                         *val = if is_truthy(val) { "false".to_string() } else { "true".to_string() };
                     }
-                }
                 EditRecordAction::None
             }
 
@@ -682,7 +679,7 @@ fn validate_field(type_name: &str, value: &str) -> Option<String> {
             return Some("expected number".into());
         }
     } else if tn.contains("INET") || tn.contains("CIDR") {
-        let host = value.splitn(2, '/').next().unwrap_or(value);
+        let host = value.split('/').next().unwrap_or(value);
         if host.parse::<std::net::IpAddr>().is_err() {
             return Some("expected IP address".into());
         }
@@ -781,9 +778,9 @@ fn sql_literal(val: &str, type_name: &str) -> String {
     }
     // DuckDB array types (VARCHAR[], INTEGER[], etc.) — generate native array literal
     // so DuckDB can update in-place without the DELETE+INSERT path that triggers FK checks.
-    if tn.ends_with("[]") || tn.ends_with(" ARRAY") {
-        if let Ok(arr) = serde_json::from_str::<serde_json::Value>(val) {
-            if let Some(items) = arr.as_array() {
+    if (tn.ends_with("[]") || tn.ends_with(" ARRAY"))
+        && let Ok(arr) = serde_json::from_str::<serde_json::Value>(val)
+            && let Some(items) = arr.as_array() {
                 let parts: Vec<String> = items.iter().map(|v| match v {
                     serde_json::Value::Null => "NULL".to_string(),
                     serde_json::Value::Bool(b) => if *b { "true".to_string() } else { "false".to_string() },
@@ -793,8 +790,6 @@ fn sql_literal(val: &str, type_name: &str) -> String {
                 }).collect();
                 return format!("[{}]", parts.join(", "));
             }
-        }
-    }
     let is_num = tn.contains("INT") || tn.contains("FLOAT") || tn.contains("REAL")
         || tn.contains("NUMERIC") || tn.contains("DECIMAL") || tn.contains("DOUBLE")
         || tn.contains("NUMBER");

@@ -49,18 +49,17 @@ impl ErdGraphScreen {
 
         if let Some(cols) = schemas.get(center) {
             for col in cols {
-                if let Some(ref fk) = col.fk {
-                    if !outgoing.contains(&fk.table) && fk.table != center {
+                if let Some(ref fk) = col.fk
+                    && !outgoing.contains(&fk.table) && fk.table != center {
                         outgoing.push(fk.table.clone());
                     }
-                }
             }
         }
 
         for (table, cols) in schemas {
             if table == center { continue; }
             let refs_center = cols.iter().any(|c| {
-                c.fk.as_ref().map_or(false, |fk| fk.table == center)
+                c.fk.as_ref().is_some_and(|fk| fk.table == center)
             });
             if refs_center && !incoming.contains(table) {
                 incoming.push(table.clone());
@@ -119,8 +118,8 @@ impl ErdGraphScreen {
         };
 
         let total_gap  = w.saturating_sub(n_cols * 20); // min 20 per box
-        let gap        = (total_gap / (n_cols.max(1))).max(MIN_GAP).min(16);
-        let box_w      = ((w.saturating_sub(gap * (n_cols - 1).max(0))) / n_cols).max(20);
+        let gap        = (total_gap / (n_cols.max(1))).clamp(MIN_GAP, 16);
+        let box_w      = ((w.saturating_sub(gap * (n_cols - 1))) / n_cols).max(20);
 
         let (left_x, center_x, right_x) = match (has_left, has_right) {
             (true,  true)  => (0usize, box_w + gap, 2 * (box_w + gap)),
@@ -177,7 +176,7 @@ impl ErdGraphScreen {
             let dst_x  = center_x;                               // center left border (arrow head here)
             // Find the column row in center box that this table references
             let dst_y  = center_cols.iter().take(MAX_COLS_CENTER).position(|c| {
-                cols.iter().any(|lc| lc.fk.as_ref().map_or(false, |fk| fk.table == screen.center && fk.column == c.name))
+                cols.iter().any(|lc| lc.fk.as_ref().is_some_and(|fk| fk.table == screen.center && fk.column == c.name))
             }).map(|p| center_y + 3 + p).unwrap_or(center_y + center_h / 2);
 
             draw_h_arrow(&mut cv, src_x, src_y, dst_x.saturating_sub(1), dst_y, Color::Cyan);
@@ -197,7 +196,7 @@ impl ErdGraphScreen {
             // Arrow: center right edge → right box left edge, from FK column row
             let src_x = center_x + box_w;
             let src_y = center_cols.iter().take(MAX_COLS_CENTER).position(|c| {
-                c.fk.as_ref().map_or(false, |fk| fk.table == *table)
+                c.fk.as_ref().is_some_and(|fk| fk.table == *table)
             }).map(|p| center_y + 3 + p).unwrap_or(center_y + center_h / 2);
             let dst_x = right_x;
             let dst_y = by + bh / 2;
@@ -369,6 +368,7 @@ impl Canvas {
 
 // ── Box and arrow drawing ─────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn draw_box(
     cv: &mut Canvas,
     x: usize,
@@ -448,5 +448,5 @@ fn draw_h_arrow(cv: &mut Canvas, x1: usize, y1: usize, x2: usize, y2: usize, col
     }
 
     // Second horizontal segment on row y2
-    if x_mid + 1 <= x2 { cv.hline(x_mid + 1, x2, y2, '─', s); }
+    if x_mid < x2 { cv.hline(x_mid + 1, x2, y2, '─', s); }
 }

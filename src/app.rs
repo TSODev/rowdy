@@ -75,6 +75,7 @@ pub enum DbEvent {
 
 // ── Pending modal action ──────────────────────────────────────────────────────
 
+#[allow(clippy::enum_variant_names)]
 pub enum PendingAction {
     SaveRecord(String),
     SaveMongoRecord { collection: String, id: String, doc_json: String },
@@ -1653,6 +1654,7 @@ impl App {
 
 // ── Async spawn helpers ───────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_sql_page(
     client: Arc<dyn SqlClient>,
     table: &str,

@@ -121,7 +121,7 @@ impl SqlClient for MySqlConnector {
 
     async fn get_schema(&self, table: &str) -> Result<Vec<ColumnSchema>, DbError> {
         let pool = self.pool()?;
-        let safe = table.replace('\'', "").replace('\\', "");
+        let safe = table.replace(['\'', '\\'], "");
         let query = format!(
             "SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE, c.COLUMN_KEY, \
              kcu.REFERENCED_TABLE_NAME AS FK_TABLE, kcu.REFERENCED_COLUMN_NAME AS FK_COLUMN \

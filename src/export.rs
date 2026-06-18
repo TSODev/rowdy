@@ -39,7 +39,7 @@ pub fn export_json(result: &DbQueryResult, table_name: &str) -> Result<PathBuf, 
         rows.push(serde_json::Value::Object(obj));
     }
     let out = serde_json::to_string_pretty(&serde_json::Value::Array(rows))
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(std::io::Error::other)?;
     write_file(&path, out)
 }
 
@@ -74,7 +74,7 @@ pub async fn export_json_with_fk(
     }
 
     let out = serde_json::to_string_pretty(&serde_json::Value::Array(rows))
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(std::io::Error::other)?;
     write_file(&path, out)
 }
 
@@ -180,11 +180,10 @@ fn value_to_jsvalue(v: &Value) -> serde_json::Value {
         }
         Value::Text(s) => {
             // Inline already-serialized JSON blobs (JSONB columns, etc.)
-            if (s.starts_with('{') || s.starts_with('[')) && s.len() < 65536 {
-                if let Ok(v) = serde_json::from_str(s) {
+            if (s.starts_with('{') || s.starts_with('[')) && s.len() < 65536
+                && let Ok(v) = serde_json::from_str(s) {
                     return v;
                 }
-            }
             serde_json::Value::String(s.clone())
         }
         Value::Bytes(b) => {

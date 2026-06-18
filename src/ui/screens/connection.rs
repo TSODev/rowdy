@@ -135,13 +135,12 @@ impl ConnectionScreen {
                 ConnectionAction::None
             }
             KeyCode::Char('D') | KeyCode::Delete => {
-                if let Some(i) = self.list_state.selected() {
-                    if i < self.profiles.len() {
+                if let Some(i) = self.list_state.selected()
+                    && i < self.profiles.len() {
                         self.pending_delete = Some(i);
                         self.input_mode = InputMode::ConfirmDelete;
                         self.status = None;
                     }
-                }
                 ConnectionAction::None
             }
             KeyCode::Enter => {
@@ -162,8 +161,8 @@ impl ConnectionScreen {
     }
 
     fn handle_editing(&mut self, key: KeyEvent) -> ConnectionAction {
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
-            if key.code == KeyCode::Char('s') {
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && key.code == KeyCode::Char('s') {
                 if self.url_input.is_empty() {
                     self.status = Some("Enter a URL first".into());
                 } else {
@@ -172,7 +171,6 @@ impl ConnectionScreen {
                 }
                 return ConnectionAction::None;
             }
-        }
         match key.code {
             KeyCode::Esc => {
                 self.input_mode = InputMode::Normal;

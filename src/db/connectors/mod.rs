@@ -71,7 +71,7 @@ pub async fn connect_nosql(db_type: &str, url: &str) -> Result<Box<dyn NoSqlClie
             {
                 let mut c = mongodb::MongoDbConnector::new();
                 c.connect(url).await?;
-                return Ok(Box::new(c));
+                Ok(Box::new(c))
             }
             #[cfg(not(feature = "mongodb"))]
             Err(DbError::Unsupported(
