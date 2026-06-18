@@ -808,6 +808,18 @@ impl Tab {
     fn open_sql_editor(&mut self) {
         let db_info = self.table_list_screen.db_info.clone();
         self.sql_editor_screen = SqlEditorScreen::new(db_info);
+
+        // Restore completions from already-loaded schemas
+        if !self.table_list_screen.all_schemas.is_empty() {
+            let mut items: Vec<String> = self.table_list_screen.all_schemas.keys().cloned().collect();
+            for cols in self.table_list_screen.all_schemas.values() {
+                for col in cols { items.push(col.name.clone()); }
+            }
+            items.sort();
+            items.dedup();
+            self.sql_editor_screen.set_completions(items);
+        }
+
         if matches!(self.active_client, Some(ActiveClient::NoSql(_))) {
             let coll = self.table_list_screen.selected_table_name();
             self.sql_editor_screen.set_nosql_collection(coll);
