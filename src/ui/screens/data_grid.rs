@@ -892,7 +892,7 @@ impl DataGridScreen {
         } else if screen.read_only {
             f.render_widget(
                 Paragraph::new(
-                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Space: collapse   Enter: explore   E: export   q: back"
+                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Space: collapse   Enter: explore   Ctrl+F: search   E: export   q: back"
                 )
                 .block(Block::default().borders(Borders::ALL))
                 .style(Style::default().fg(Color::Gray)),
@@ -906,7 +906,7 @@ impl DataGridScreen {
             };
             f.render_widget(
                 Paragraph::new(format!(
-                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   {}   E: export   q: back   [READ-ONLY]",
+                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   {}   Ctrl+F: search   E: export   q: back   [READ-ONLY]",
                     filter_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))
@@ -933,7 +933,7 @@ impl DataGridScreen {
             };
             f.render_widget(
                 Paragraph::new(format!(
-                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Enter: cell   {}   {}{}   E: export{}   q: back",
+                    " j/k: rows   h/l: cols   -/=: resize   g/G: first/last   Enter: cell   {}   {}{}   Ctrl+F: search   E: export{}   q: back",
                     collapse_label, filter_hint, sort_hint, nosql_hint
                 ))
                 .block(Block::default().borders(Borders::ALL))
