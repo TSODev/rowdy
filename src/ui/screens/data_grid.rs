@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -19,6 +19,15 @@ const COL_RESIZE_STEP: u16 = 5;
 pub struct FilterInput {
     pub col_name: String,
     pub value: String,
+}
+
+// ── Search state ──────────────────────────────────────────────────────────────
+
+pub struct SearchState {
+    pub query: String,
+    pub matches: Vec<(usize, usize)>, // (row_idx, col_idx)
+    pub current: usize,
+    pub prompt_open: bool,
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -70,6 +79,8 @@ pub struct DataGridScreen {
     pub loading: bool,
     // Preserved cursor across reloads (filter/sort/edit-save)
     preserved_row: Option<usize>,
+    // Full-text search
+    pub search: Option<SearchState>,
 }
 
 impl DataGridScreen {
@@ -102,6 +113,7 @@ impl DataGridScreen {
             has_more: true,
             loading: true,
             preserved_row: None,
+            search: None,
         }
     }
 
@@ -155,6 +167,7 @@ impl DataGridScreen {
         self.has_more = true;
         self.loading = true;
         self.filter_input = None;
+        self.search = None;
     }
 
     pub fn set_error(&mut self, msg: String) {
@@ -206,9 +219,32 @@ impl DataGridScreen {
             };
         }
 
+        // Search prompt mode
+        if self.search.as_ref().map_or(false, |s| s.prompt_open) {
+            return self.handle_search_key(key);
+        }
+
         // Normal mode
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => DataGridAction::Back,
+            KeyCode::Char('q') => DataGridAction::Back,
+            KeyCode::Esc => {
+                if self.search.is_some() {
+                    self.search = None;
+                    DataGridAction::None
+                } else {
+                    DataGridAction::Back
+                }
+            }
+
+            // Search navigation (prompt closed, matches available)
+            KeyCode::Char('n') if self.search.as_ref().map_or(false, |s| !s.matches.is_empty()) => {
+                self.search_next();
+                DataGridAction::None
+            }
+            KeyCode::Char('N') if self.search.as_ref().map_or(false, |s| !s.matches.is_empty()) => {
+                self.search_prev();
+                DataGridAction::None
+            }
 
             KeyCode::Char('j') | KeyCode::Down => {
                 let was_last = self.is_at_last_row();
@@ -249,6 +285,17 @@ impl DataGridScreen {
             }
             KeyCode::Char(' ') => {
                 self.toggle_collapse();
+                DataGridAction::None
+            }
+
+            // Open full-text search (Ctrl+F, available in all modes)
+            KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.search = Some(SearchState {
+                    query: String::new(),
+                    matches: vec![],
+                    current: 0,
+                    prompt_open: true,
+                });
                 DataGridAction::None
             }
 
@@ -447,6 +494,96 @@ impl DataGridScreen {
         }
     }
 
+    // ── Search ────────────────────────────────────────────────────────────────
+
+    fn handle_search_key(&mut self, key: KeyEvent) -> DataGridAction {
+        match key.code {
+            KeyCode::Esc => {
+                self.search = None;
+            }
+            KeyCode::Enter => {
+                if let Some(s) = self.search.as_mut() {
+                    s.prompt_open = false;
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Down => self.search_next(),
+            KeyCode::Char('N') | KeyCode::Up   => self.search_prev(),
+            KeyCode::Backspace => {
+                if let Some(s) = self.search.as_mut() { s.query.pop(); }
+                self.recompute_search();
+            }
+            KeyCode::Char(c) => {
+                if let Some(s) = self.search.as_mut() { s.query.push(c); }
+                self.recompute_search();
+            }
+            _ => {}
+        }
+        DataGridAction::None
+    }
+
+    fn recompute_search(&mut self) {
+        let query = match self.search.as_ref() {
+            Some(s) => s.query.to_lowercase(),
+            None => return,
+        };
+        let current_row = self.table_state.selected().unwrap_or(0);
+        let current_col = self.selected_col;
+
+        let matches: Vec<(usize, usize)> = if query.is_empty() {
+            vec![]
+        } else if let Some(result) = &self.result {
+            let mut m = vec![];
+            for (ri, row) in result.rows.iter().enumerate() {
+                for (ci, val) in row.values.iter().enumerate() {
+                    if value_display(val).to_lowercase().contains(&query) {
+                        m.push((ri, ci));
+                    }
+                }
+            }
+            m
+        } else {
+            vec![]
+        };
+
+        let new_current = matches.iter().position(|&(r, c)| {
+            r > current_row || (r == current_row && c >= current_col)
+        }).unwrap_or(0);
+
+        if let Some(s) = self.search.as_mut() {
+            s.matches = matches;
+            s.current = new_current;
+        }
+        self.jump_to_current_match();
+    }
+
+    fn jump_to_current_match(&mut self) {
+        let pos = self.search.as_ref()
+            .and_then(|s| s.matches.get(s.current).copied());
+        if let Some((row, col)) = pos {
+            self.table_state.select(Some(row));
+            self.selected_col = col;
+        }
+    }
+
+    fn search_next(&mut self) {
+        if let Some(s) = self.search.as_mut() {
+            if !s.matches.is_empty() {
+                s.current = (s.current + 1) % s.matches.len();
+            }
+        }
+        self.jump_to_current_match();
+    }
+
+    fn search_prev(&mut self) {
+        if let Some(s) = self.search.as_mut() {
+            if !s.matches.is_empty() {
+                let len = s.matches.len();
+                s.current = (s.current + len - 1) % len;
+            }
+        }
+        self.jump_to_current_match();
+    }
+
     // ── Draw ──────────────────────────────────────────────────────────────────
 
     pub fn draw(f: &mut Frame<'_>, screen: &mut DataGridScreen, area: Rect) {
@@ -584,6 +721,12 @@ impl DataGridScreen {
                 let sel_row = screen.table_state.selected().unwrap_or(usize::MAX);
                 let sel_col = screen.selected_col;
 
+                // Pre-compute search match set for O(1) per-cell lookup
+                let search_match_set: HashSet<(usize, usize)> = screen.search.as_ref()
+                    .filter(|s| !s.matches.is_empty())
+                    .map(|s| s.matches.iter().cloned().collect())
+                    .unwrap_or_default();
+
                 // Build column-name → FK table map from schema (if loaded)
                 let fk_map: HashMap<&str, &str> = screen.schema.as_ref()
                     .map(|s| s.iter()
@@ -625,6 +768,7 @@ impl DataGridScreen {
                                     (truncate(&s, col_width), String::new())
                                 };
 
+                                let is_search_match = search_match_set.contains(&(row_idx, col_idx));
                                 let style = if is_sel_row && col_idx == sel_col {
                                     Style::default()
                                         .fg(Color::White)
@@ -635,6 +779,8 @@ impl DataGridScreen {
                                         .fg(Color::Black)
                                         .bg(Color::Yellow)
                                         .add_modifier(Modifier::BOLD)
+                                } else if is_search_match {
+                                    Style::default().fg(Color::Black).bg(Color::Green)
                                 } else if matches!(val, Value::Null) {
                                     Style::default().fg(Color::Gray)
                                 } else {
@@ -686,7 +832,7 @@ impl DataGridScreen {
             chunks[2],
         );
 
-        // ── Help / filter bar ─────────────────────────────────────────────────
+        // ── Help / filter / search bar ────────────────────────────────────────
         if screen.export_prompt {
             f.render_widget(
                 Paragraph::new(" Export:  c = CSV   j = JSON   J = JSON+FK   Esc = cancel ")
@@ -694,6 +840,43 @@ impl DataGridScreen {
                     .style(Style::default().fg(Color::Yellow)),
                 chunks[3],
             );
+        } else if let Some(ref s) = screen.search {
+            if s.prompt_open {
+                let match_info = if s.query.is_empty() {
+                    String::new()
+                } else if s.matches.is_empty() {
+                    "  no match".to_string()
+                } else {
+                    format!("  {}/{} matches  —  n/↓: next   N/↑: prev   Enter: keep   Esc: clear",
+                        s.current + 1, s.matches.len())
+                };
+                let prompt = format!(" / {}", s.query);
+                let full = format!("{}{}", prompt, match_info);
+                let color = if !s.query.is_empty() && s.matches.is_empty() {
+                    Color::Red
+                } else {
+                    Color::Yellow
+                };
+                f.render_widget(
+                    Paragraph::new(full)
+                        .block(Block::default().borders(Borders::ALL))
+                        .style(Style::default().fg(color)),
+                    chunks[3],
+                );
+                f.set_cursor(chunks[3].x + 1 + prompt.len() as u16, chunks[3].y + 1);
+            } else {
+                // Nav mode: prompt closed, matches still highlighted
+                let info = format!(
+                    " / \"{}\"   {}/{}  —  n: next   N: prev   Esc: clear search",
+                    s.query, s.current + 1, s.matches.len()
+                );
+                f.render_widget(
+                    Paragraph::new(info)
+                        .block(Block::default().borders(Borders::ALL))
+                        .style(Style::default().fg(Color::Cyan)),
+                    chunks[3],
+                );
+            }
         } else if let Some(ref fi) = screen.filter_input {
             let prompt = format!(" Filter [{}] > {}", fi.col_name, fi.value);
             f.render_widget(
