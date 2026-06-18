@@ -16,6 +16,11 @@ jobs:
   test:
     name: Tests (SQLite + purs)
     runs-on: ubuntu-latest
+    # libsql (remote) et sqlx (sqlite) bundlent tous deux SQLite en statique.
+    # LIBSQLITE3_SYS_USE_PKG_CONFIG=1 force sqlx à linker le SQLite système
+    # au lieu de le compiler, évitant le conflit de symboles dupliqués sur Linux.
+    env:
+      LIBSQLITE3_SYS_USE_PKG_CONFIG: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -23,7 +28,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install system dependencies
-        run: sudo apt-get install -y libssl-dev pkg-config
+        run: sudo apt-get install -y libssl-dev pkg-config libsqlite3-dev
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
@@ -63,6 +68,8 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    env:
+      LIBSQLITE3_SYS_USE_PKG_CONFIG: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +79,7 @@ jobs:
           components: clippy
 
       - name: Install system dependencies
-        run: sudo apt-get install -y libssl-dev pkg-config
+        run: sudo apt-get install -y libssl-dev pkg-config libsqlite3-dev
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
