@@ -8,7 +8,9 @@ use ratatui::{
 use crate::app::{App, AppState};
 
 pub fn draw(f: &mut Frame<'_>, area: Rect, app: &App) {
-    let mode = match app.state {
+    let tab = app.tab();
+
+    let mode = match tab.state {
         AppState::Connection    => "CONNECTION",
         AppState::TableList     => "TABLES",
         AppState::DataGrid      => "DATA GRID",
@@ -19,13 +21,13 @@ pub fn draw(f: &mut Frame<'_>, area: Rect, app: &App) {
         AppState::ErdGraph      => "ERD",
     };
 
-    let (dot, dot_color) = if app.active_client.is_some() {
+    let (dot, dot_color) = if tab.active_client.is_some() {
         ("● ", Color::Green)
     } else {
         ("○ ", Color::Red)
     };
 
-    let db_info = app.connected_db_info.as_deref().unwrap_or("—");
+    let db_info = tab.connected_db_info.as_deref().unwrap_or("—");
     let db_info_display: String = if db_info.chars().count() > 45 {
         let s: String = db_info.chars().take(44).collect();
         format!("{s}…")
@@ -33,10 +35,10 @@ pub fn draw(f: &mut Frame<'_>, area: Rect, app: &App) {
         db_info.to_string()
     };
 
-    let row_count: Option<u64> = match app.state {
-        AppState::DataGrid      => app.data_grid_screen.total_count,
-        AppState::FkGrid        => app.fk_grid_screen.total_count,
-        AppState::SqlResultGrid => app.sql_result_grid_screen.total_count,
+    let row_count: Option<u64> = match tab.state {
+        AppState::DataGrid      => tab.data_grid_screen.total_count,
+        AppState::FkGrid        => tab.fk_grid_screen.total_count,
+        AppState::SqlResultGrid => tab.sql_result_grid_screen.total_count,
         _ => None,
     };
 
@@ -57,8 +59,8 @@ pub fn draw(f: &mut Frame<'_>, area: Rect, app: &App) {
         spans.push(Span::styled(format!("  [{count} rows]"), dim_style));
     }
 
-    let is_view = matches!(app.state, AppState::DataGrid) && app.data_grid_screen.is_view;
-    if app.reconnecting {
+    let is_view = matches!(tab.state, AppState::DataGrid) && tab.data_grid_screen.is_view;
+    if tab.reconnecting {
         let rc_style = Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD);
         spans.push(Span::styled("  ", bg));
         spans.push(Span::styled(" RECONNECTING… ", rc_style));
@@ -66,14 +68,14 @@ pub fn draw(f: &mut Frame<'_>, area: Rect, app: &App) {
         let view_style = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
         spans.push(Span::styled("  ", bg));
         spans.push(Span::styled(" VIEW ", view_style));
-    } else if app.prod_readonly {
+    } else if tab.prod_readonly {
         let ro_style = Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD);
         spans.push(Span::styled("  ", bg));
         spans.push(Span::styled(" READ-ONLY ", ro_style));
     }
 
     // Flash message — right-aligned, fills remaining space
-    if let Some((ref msg, is_err)) = app.status_message {
+    if let Some((ref msg, is_err)) = tab.status_message {
         let flash_style = if is_err {
             Style::default().fg(Color::Red).bg(Color::DarkGray).add_modifier(Modifier::BOLD)
         } else {

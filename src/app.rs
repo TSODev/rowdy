@@ -50,8 +50,8 @@ pub enum DbEvent {
     ConnectionFailed(String),
     Reconnected(ActiveClient),
     ReconnectFailed(String),
-    TablesLoaded(Vec<String>),       // KV stores (Redis key names)
-    TableObjectsLoaded(Vec<TableObject>), // SQL: TABLE + VIEW with kind
+    TablesLoaded(Vec<String>),
+    TableObjectsLoaded(Vec<TableObject>),
     TablesLoadFailed(String),
     DataLoaded(DbQueryResult),
     DataPageLoaded(DbQueryResult),
@@ -113,19 +113,19 @@ fn is_connection_lost(msg: &str) -> bool {
         || m.contains("eof")
 }
 
-// ── App ───────────────────────────────────────────────────────────────────────
+// ── Tab — per-connection state ────────────────────────────────────────────────
 
-pub struct App {
+pub struct Tab {
     pub state: AppState,
     pub should_quit: bool,
     pub connection_screen: ConnectionScreen,
     pub table_list_screen: TableListScreen,
     pub data_grid_screen: DataGridScreen,
-    pub fk_grid_screen: DataGridScreen,      // current FK level
-    fk_history: Vec<DataGridScreen>,         // previous FK levels (navigation stack)
-    pub sql_result_grid_screen: DataGridScreen, // read-only grid for SQL Editor results
+    pub fk_grid_screen: DataGridScreen,
+    fk_history: Vec<DataGridScreen>,
+    pub sql_result_grid_screen: DataGridScreen,
     pub edit_record_screen: EditRecordScreen,
-    edit_record_stack: Vec<(EditRecordScreen, usize)>, // nested object editing stack
+    edit_record_stack: Vec<(EditRecordScreen, usize)>,
     pub erd_graph_screen: ErdGraphScreen,
     pub sql_editor_screen: SqlEditorScreen,
     pub active_client: Option<ActiveClient>,
@@ -140,13 +140,12 @@ pub struct App {
     pub status_message: Option<(String, bool)>,
     pub status_message_ttl: u8,
     pub history: QueryHistory,
-    // State to return to after EditRecord (DataGrid or FkGrid)
     edit_origin: AppState,
     db_tx: mpsc::Sender<DbEvent>,
-    db_rx: mpsc::Receiver<DbEvent>,
+    pub(crate) db_rx: mpsc::Receiver<DbEvent>,
 }
 
-impl App {
+impl Tab {
     pub fn new() -> Self {
         let profiles = Config::load().unwrap_or_default().connections;
         let (db_tx, db_rx) = mpsc::channel(16);
@@ -181,45 +180,9 @@ impl App {
         }
     }
 
-    pub async fn run<B: Backend>(
-        &mut self,
-        terminal: &mut Terminal<B>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut events = EventStream::new();
-
-        loop {
-            while let Ok(ev) = self.db_rx.try_recv() {
-                self.handle_db_event(ev);
-            }
-
-            terminal.draw(|f| crate::ui::layout::draw(f, self))?;
-
-            if self.should_quit {
-                self.run_post_disconnect().await;
-                break;
-            }
-
-            if let Ok(Some(Ok(Event::Key(key)))) =
-                timeout(Duration::from_millis(50), events.next()).await
-            {
-                if key.code == KeyCode::Char('c')
-                    && key.modifiers.contains(KeyModifiers::CONTROL)
-                {
-                    self.should_quit = true;
-                } else if self.modal.is_some() {
-                    self.handle_modal_key(key);
-                } else {
-                    self.handle_key(key);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     // ── Key dispatch ──────────────────────────────────────────────────────────
 
-    fn handle_key(&mut self, key: crossterm::event::KeyEvent) {
+    pub fn handle_key(&mut self, key: crossterm::event::KeyEvent) {
         match self.state {
             AppState::Connection => {
                 match self.connection_screen.handle_key(key) {
@@ -276,7 +239,6 @@ impl App {
                 match self.table_list_screen.handle_key(key) {
                     TableListAction::OpenTable { name, is_view } => {
                         self.spawn_load_data(name);
-                        // spawn_load_data resets data_grid_screen; set view flags after
                         if is_view {
                             self.data_grid_screen.is_view = true;
                             self.data_grid_screen.prod_readonly = true;
@@ -353,7 +315,7 @@ impl App {
                 match self.fk_grid_screen.handle_key(key) {
                     DataGridAction::Back => {
                         if let Some(prev) = self.fk_history.pop() {
-                            self.fk_grid_screen = prev; // go up one FK level
+                            self.fk_grid_screen = prev;
                         } else {
                             self.state = AppState::DataGrid;
                         }
@@ -493,8 +455,6 @@ impl App {
 
     // ── Edit record ───────────────────────────────────────────────────────────
 
-    // Returns (ref_table, ref_col, fk_val) if selected cell is a FK, None otherwise.
-    // `from_fk` = true → look in fk_grid_screen, false → data_grid_screen.
     fn selected_fk_info(&self, from_fk: bool) -> Option<(String, String, String)> {
         let screen = if from_fk { &self.fk_grid_screen } else { &self.data_grid_screen };
         let result = screen.result.as_ref()?;
@@ -511,7 +471,6 @@ impl App {
     }
 
     fn open_fk_subgrid(&mut self, ref_table: String, ref_col: String, fk_val: String) {
-        // If already navigating FK levels, push the current level onto the history stack.
         if self.state == AppState::FkGrid {
             let prev = std::mem::replace(
                 &mut self.fk_grid_screen,
@@ -558,7 +517,6 @@ impl App {
     }
 
     fn open_nested_subgrid(&mut self, col_name: String, json: String, is_array: bool) {
-        // Capture the breadcrumb label before any move/replace
         let parent_name = if self.state == AppState::FkGrid {
             self.fk_grid_screen.display_name.clone()
                 .unwrap_or_else(|| self.fk_grid_screen.table_name.clone())
@@ -717,7 +675,6 @@ impl App {
             None => return,
         };
         let table_name = self.data_grid_screen.table_name.clone();
-        // Use first row to infer field types (object/array/int/float/bool/string)
         let first_row = result.rows.first();
         let schema: Vec<ColumnSchema> = result.columns.iter()
             .enumerate()
@@ -826,7 +783,7 @@ impl App {
         let mut child = EditRecordScreen::new(child_title, schema, values);
         child.is_nosql = true;
         child.is_array = is_array;
-        child.is_nested = true; // sub-editors never save directly; is_array takes priority in preview routing
+        child.is_nested = true;
         let parent = std::mem::replace(&mut self.edit_record_screen, child);
         self.edit_record_stack.push((parent, field_idx));
     }
@@ -910,7 +867,7 @@ impl App {
 
     // ── Modal key handler ─────────────────────────────────────────────────────
 
-    fn handle_modal_key(&mut self, key: crossterm::event::KeyEvent) {
+    pub fn handle_modal_key(&mut self, key: crossterm::event::KeyEvent) {
         use crate::ui::components::modal::ModalKind;
         let is_confirm = matches!(self.modal.as_ref().map(|m| &m.kind), Some(ModalKind::Confirm));
         match key.code {
@@ -932,7 +889,6 @@ impl App {
                 }
             }
             KeyCode::Enter if !is_confirm => {
-                // Error modal: Enter closes
                 self.modal = None;
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
@@ -1047,7 +1003,7 @@ impl App {
         });
     }
 
-    async fn run_post_disconnect(&mut self) {
+    pub async fn run_post_disconnect(&mut self) {
         if let Some(script) = self.post_disconnect_script.take() {
             let _ = tokio::process::Command::new("sh")
                 .arg("-c")
@@ -1165,7 +1121,6 @@ impl App {
         }
     }
 
-    // Load next page (infinite scroll — triggered when user reaches last row)
     fn spawn_load_more(&mut self) {
         if self.data_grid_screen.loading { return; }
         self.data_grid_screen.loading = true;
@@ -1192,14 +1147,13 @@ impl App {
         }
     }
 
-    // Re-fetch from page 0 with current filters + sort (after filter/sort change)
     fn spawn_reload_filters(&mut self) {
         let table    = self.data_grid_screen.table_name.clone();
         let filters  = self.data_grid_screen.filters.clone();
         let schema   = self.data_grid_screen.schema.clone().unwrap_or_default();
         let order_by = self.data_grid_screen.sort_col_name.as_ref()
             .map(|n| (n.clone(), self.data_grid_screen.sort_asc));
-        self.data_grid_screen.reset_data(); // keeps table_name + filters + sort
+        self.data_grid_screen.reset_data();
         self.data_grid_screen.total_count = None;
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
@@ -1222,7 +1176,6 @@ impl App {
         let total    = self.data_grid_screen.total_count.unwrap_or(10_000) as usize;
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
-            // Fetch all rows in one shot (no pagination)
             spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema, order_by, Some(total.max(10_000)), self.db_tx.clone());
         }
     }
@@ -1328,7 +1281,6 @@ impl App {
     ) {
         if as_json {
             if let (Some(s), Some(ActiveClient::Sql(c))) = (schema, &self.active_client) {
-                // Async path: FK resolution
                 let client = Arc::clone(c);
                 let tx = self.db_tx.clone();
                 let result = result.clone();
@@ -1343,7 +1295,6 @@ impl App {
                 self.status_message = Some(("JSON export with FK resolution in progress…".into(), false));
                 self.status_message_ttl = 40;
             } else {
-                // Fallback: no SQL client or no schema (e.g. SQL result grid)
                 match export::export_json(result, table_name) {
                     Ok(path) => {
                         let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
@@ -1373,7 +1324,7 @@ impl App {
 
     // ── DB event handler ──────────────────────────────────────────────────────
 
-    fn handle_db_event(&mut self, event: DbEvent) {
+    pub fn handle_db_event(&mut self, event: DbEvent) {
         match event {
             DbEvent::SqlConnected { client, url, db_type } => {
                 self.reconnect_info = Some(ReconnectInfo { url: url.clone(), db_type: db_type.clone() });
@@ -1452,9 +1403,7 @@ impl App {
             DbEvent::SchemaLoaded(schema) => {
                 self.data_grid_screen.schema = Some(schema);
             }
-            DbEvent::SchemaLoadFailed => {
-                // Non-fatal: schema is optional for viewing; edit will show a warning
-            }
+            DbEvent::SchemaLoadFailed => {}
             DbEvent::FkPageLoaded(result) => {
                 self.fk_grid_screen.set_result(result);
             }
@@ -1529,7 +1478,6 @@ impl App {
                 self.data_grid_screen.has_more = false;
             }
             DbEvent::AllSchemasLoaded(schemas) => {
-                // Build SQL editor completion list: table names + all column names
                 let mut items: Vec<String> = schemas.keys().cloned().collect();
                 for cols in schemas.values() {
                     for col in cols {
@@ -1573,9 +1521,120 @@ impl App {
             }
         }
     }
+
+    // ── Tab display name ──────────────────────────────────────────────────────
+
+    pub fn display_name(&self) -> String {
+        if let Some(ref info) = self.connected_db_info {
+            // Trim to something short: "[postgres] host/db" → "host/db"
+            let without_type = info
+                .split(']')
+                .nth(1)
+                .map(|s| s.trim())
+                .unwrap_or(info.as_str());
+            let short: String = without_type.chars().take(20).collect();
+            if short.len() < without_type.len() {
+                format!("{short}…")
+            } else {
+                short
+            }
+        } else {
+            "New connection".to_string()
+        }
+    }
 }
 
-// ── Redis key detail → DbQueryResult ─────────────────────────────────────────
+// ── App — multi-tab coordinator ───────────────────────────────────────────────
+
+pub struct App {
+    pub tabs: Vec<Tab>,
+    pub active_tab: usize,
+}
+
+impl App {
+    pub fn new() -> Self {
+        Self {
+            tabs: vec![Tab::new()],
+            active_tab: 0,
+        }
+    }
+
+    pub fn tab(&self) -> &Tab {
+        &self.tabs[self.active_tab]
+    }
+
+    pub fn tab_mut(&mut self) -> &mut Tab {
+        &mut self.tabs[self.active_tab]
+    }
+
+    fn new_tab(&mut self) {
+        self.tabs.push(Tab::new());
+        self.active_tab = self.tabs.len() - 1;
+    }
+
+    fn close_tab(&mut self) {
+        if self.tabs.len() == 1 {
+            self.tabs[0].should_quit = true;
+            return;
+        }
+        // Run post-disconnect script before closing
+        self.tabs[self.active_tab].spawn_post_disconnect();
+        self.tabs.remove(self.active_tab);
+        if self.active_tab >= self.tabs.len() {
+            self.active_tab = self.tabs.len() - 1;
+        }
+    }
+
+    pub async fn run<B: Backend>(
+        &mut self,
+        terminal: &mut Terminal<B>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut events = EventStream::new();
+
+        loop {
+            // Drain events for ALL tabs (background tabs keep their async tasks running)
+            for tab in &mut self.tabs {
+                while let Ok(ev) = tab.db_rx.try_recv() {
+                    tab.handle_db_event(ev);
+                }
+            }
+
+            terminal.draw(|f| crate::ui::layout::draw(f, self))?;
+
+            if self.tabs[self.active_tab].should_quit {
+                self.tabs[self.active_tab].run_post_disconnect().await;
+                break;
+            }
+
+            if let Ok(Some(Ok(Event::Key(key)))) =
+                timeout(Duration::from_millis(50), events.next()).await
+            {
+                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    self.tabs[self.active_tab].should_quit = true;
+                } else if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    self.new_tab();
+                } else if key.code == KeyCode::Char('w') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    self.close_tab();
+                } else if key.modifiers.contains(KeyModifiers::ALT) {
+                    if let KeyCode::Char(c) = key.code {
+                        if let Some(n) = c.to_digit(10) {
+                            let idx = (n as usize).saturating_sub(1);
+                            if idx < self.tabs.len() {
+                                self.active_tab = idx;
+                            }
+                        }
+                    }
+                } else if self.tabs[self.active_tab].modal.is_some() {
+                    self.tabs[self.active_tab].handle_modal_key(key);
+                } else {
+                    self.tabs[self.active_tab].handle_key(key);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
 
 // ── Async spawn helpers ───────────────────────────────────────────────────────
 
@@ -1601,20 +1660,6 @@ fn spawn_sql_page(
     });
 }
 
-// ── Nested document navigation ────────────────────────────────────────────────
-
-fn nested_info_from(screen: &DataGridScreen) -> Option<(String, String, bool)> {
-    let result = screen.result.as_ref()?;
-    let col_idx = screen.selected_col;
-    let col_name = result.columns.get(col_idx)?.name.clone();
-    let sel_row = screen.table_state.selected()?;
-    match result.rows.get(sel_row)?.values.get(col_idx)? {
-        Value::NestedDoc(s)   => Some((col_name, s.clone(), false)),
-        Value::NestedArray(s) => Some((col_name, s.clone(), true)),
-        _ => None,
-    }
-}
-
 fn spawn_sql_count(
     client: Arc<dyn SqlClient>,
     table: &str,
@@ -1628,4 +1673,18 @@ fn spawn_sql_count(
             let _ = tx.send(DbEvent::DataCountLoaded(parse_count(&r))).await;
         }
     });
+}
+
+// ── Nested document navigation ────────────────────────────────────────────────
+
+fn nested_info_from(screen: &DataGridScreen) -> Option<(String, String, bool)> {
+    let result = screen.result.as_ref()?;
+    let col_idx = screen.selected_col;
+    let col_name = result.columns.get(col_idx)?.name.clone();
+    let sel_row = screen.table_state.selected()?;
+    match result.rows.get(sel_row)?.values.get(col_idx)? {
+        Value::NestedDoc(s)   => Some((col_name, s.clone(), false)),
+        Value::NestedArray(s) => Some((col_name, s.clone(), true)),
+        _ => None,
+    }
 }
