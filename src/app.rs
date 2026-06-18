@@ -36,6 +36,11 @@ pub enum ActiveClient {
     NoSql(Arc<dyn NoSqlClient>),
 }
 
+struct ReconnectInfo {
+    url: String,
+    db_type: String,
+}
+
 // ── Async DB events ───────────────────────────────────────────────────────────
 
 pub enum DbEvent {
@@ -43,6 +48,8 @@ pub enum DbEvent {
     KvConnected    { client: Arc<dyn KvClient>,    url: String, db_type: String },
     NoSqlConnected { client: Arc<dyn NoSqlClient>, url: String, db_type: String },
     ConnectionFailed(String),
+    Reconnected(ActiveClient),
+    ReconnectFailed(String),
     TablesLoaded(Vec<String>),       // KV stores (Redis key names)
     TableObjectsLoaded(Vec<TableObject>), // SQL: TABLE + VIEW with kind
     TablesLoadFailed(String),
@@ -90,6 +97,22 @@ pub enum AppState {
     ErdGraph,
 }
 
+// ── Connection-loss detection ─────────────────────────────────────────────────
+
+fn is_connection_lost(msg: &str) -> bool {
+    let m = msg.to_lowercase();
+    m.contains("connection reset")
+        || m.contains("broken pipe")
+        || m.contains("connection closed")
+        || m.contains("server closed")
+        || m.contains("lost connection")
+        || m.contains("connection lost")
+        || m.contains("transport error")
+        || m.contains("network error")
+        || m.contains("connection timed out")
+        || m.contains("eof")
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 pub struct App {
@@ -109,6 +132,9 @@ pub struct App {
     pub connected_db_info: Option<String>,
     pub prod_readonly: bool,
     post_disconnect_script: Option<String>,
+    reconnect_info: Option<ReconnectInfo>,
+    reconnect_attempt: u8,
+    pub reconnecting: bool,
     pub modal: Option<Modal>,
     pending_action: Option<PendingAction>,
     pub status_message: Option<(String, bool)>,
@@ -141,6 +167,9 @@ impl App {
             connected_db_info: None,
             prod_readonly: false,
             post_disconnect_script: None,
+            reconnect_info: None,
+            reconnect_attempt: 0,
+            reconnecting: false,
             modal: None,
             pending_action: None,
             status_message: None,
@@ -988,6 +1017,36 @@ impl App {
         }
     }
 
+    fn spawn_reconnect(&mut self) {
+        let Some(ref info) = self.reconnect_info else { return; };
+        let url = info.url.clone();
+        let db_type = info.db_type.clone();
+        let attempt = self.reconnect_attempt;
+        let tx = self.db_tx.clone();
+
+        tokio::spawn(async move {
+            let delay = Duration::from_secs(1u64 << attempt.min(2)); // 1s, 2s, 4s
+            tokio::time::sleep(delay).await;
+
+            let result = if db_type == "redis" {
+                connectors::connect_kv(&db_type, &url).await
+                    .map(|c| ActiveClient::Kv(Arc::from(c)))
+            } else if db_type == "mongodb" {
+                connectors::connect_nosql(&db_type, &url).await
+                    .map(|c| ActiveClient::NoSql(Arc::from(c)))
+            } else {
+                connectors::connect_sql(&db_type, &url).await
+                    .map(|c| ActiveClient::Sql(Arc::from(c)))
+            };
+
+            let event = match result {
+                Ok(client) => DbEvent::Reconnected(client),
+                Err(e)     => DbEvent::ReconnectFailed(e.to_string()),
+            };
+            let _ = tx.send(event).await;
+        });
+    }
+
     async fn run_post_disconnect(&mut self) {
         if let Some(script) = self.post_disconnect_script.take() {
             let _ = tokio::process::Command::new("sh")
@@ -1317,6 +1376,9 @@ impl App {
     fn handle_db_event(&mut self, event: DbEvent) {
         match event {
             DbEvent::SqlConnected { client, url, db_type } => {
+                self.reconnect_info = Some(ReconnectInfo { url: url.clone(), db_type: db_type.clone() });
+                self.reconnect_attempt = 0;
+                self.reconnecting = false;
                 self.active_client = Some(ActiveClient::Sql(client));
                 let safe_url = redact_url(&url);
                 self.connected_db_info = Some(format!("[{db_type}] {safe_url}"));
@@ -1327,6 +1389,9 @@ impl App {
                 self.spawn_load_tables();
             }
             DbEvent::KvConnected { client, url, db_type } => {
+                self.reconnect_info = Some(ReconnectInfo { url: url.clone(), db_type: db_type.clone() });
+                self.reconnect_attempt = 0;
+                self.reconnecting = false;
                 self.active_client = Some(ActiveClient::Kv(client));
                 let safe_url = redact_url(&url);
                 self.connected_db_info = Some(format!("[{db_type}] {safe_url}"));
@@ -1337,6 +1402,9 @@ impl App {
                 self.spawn_load_tables();
             }
             DbEvent::NoSqlConnected { client, url, db_type } => {
+                self.reconnect_info = Some(ReconnectInfo { url: url.clone(), db_type: db_type.clone() });
+                self.reconnect_attempt = 0;
+                self.reconnecting = false;
                 self.active_client = Some(ActiveClient::NoSql(client));
                 let safe_url = redact_url(&url);
                 self.connected_db_info = Some(format!("[{db_type}] {safe_url}"));
@@ -1358,6 +1426,11 @@ impl App {
             }
             DbEvent::TablesLoadFailed(msg) => {
                 self.table_list_screen.set_error(format!("Error: {msg}"));
+                if !self.reconnecting && is_connection_lost(&msg) {
+                    self.reconnecting = true;
+                    self.reconnect_attempt = 0;
+                    self.spawn_reconnect();
+                }
             }
             DbEvent::DataLoaded(result) => {
                 self.data_grid_screen.set_result(result);
@@ -1369,6 +1442,11 @@ impl App {
                 self.data_grid_screen.set_total(n);
             }
             DbEvent::DataLoadFailed(msg) => {
+                if !self.reconnecting && is_connection_lost(&msg) {
+                    self.reconnecting = true;
+                    self.reconnect_attempt = 0;
+                    self.spawn_reconnect();
+                }
                 self.data_grid_screen.set_error(msg);
             }
             DbEvent::SchemaLoaded(schema) => {
@@ -1393,6 +1471,11 @@ impl App {
                 self.sql_editor_screen.set_affected(n);
             }
             DbEvent::QueryFailed(msg) => {
+                if !self.reconnecting && is_connection_lost(&msg) {
+                    self.reconnecting = true;
+                    self.reconnect_attempt = 0;
+                    self.spawn_reconnect();
+                }
                 self.sql_editor_screen.set_error(msg);
             }
             DbEvent::EditSaved => {
@@ -1425,6 +1508,11 @@ impl App {
                 }
             }
             DbEvent::EditFailed(msg) => {
+                if !self.reconnecting && is_connection_lost(&msg) {
+                    self.reconnecting = true;
+                    self.reconnect_attempt = 0;
+                    self.spawn_reconnect();
+                }
                 self.modal = Some(Modal::error("Save Failed", &msg));
             }
             DbEvent::KvKeyLoaded { detail, key, ttl } => {
@@ -1464,6 +1552,24 @@ impl App {
             }
             DbEvent::StatusUpdate(msg) => {
                 self.connection_screen.status = Some(msg);
+            }
+            DbEvent::Reconnected(client) => {
+                self.active_client = Some(client);
+                self.reconnecting = false;
+                self.reconnect_attempt = 0;
+                self.status_message = Some(("Reconnected".into(), false));
+                self.status_message_ttl = 80;
+            }
+            DbEvent::ReconnectFailed(msg) => {
+                if self.reconnect_attempt < 2 {
+                    self.reconnect_attempt += 1;
+                    self.spawn_reconnect();
+                } else {
+                    self.reconnecting = false;
+                    self.reconnect_attempt = 0;
+                    self.status_message = Some((format!("Reconnect failed: {msg}"), true));
+                    self.status_message_ttl = 100;
+                }
             }
         }
     }

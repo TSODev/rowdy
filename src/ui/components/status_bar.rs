@@ -58,7 +58,11 @@ pub fn draw(f: &mut Frame<'_>, area: Rect, app: &App) {
     }
 
     let is_view = matches!(app.state, AppState::DataGrid) && app.data_grid_screen.is_view;
-    if is_view {
+    if app.reconnecting {
+        let rc_style = Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD);
+        spans.push(Span::styled("  ", bg));
+        spans.push(Span::styled(" RECONNECTING… ", rc_style));
+    } else if is_view {
         let view_style = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
         spans.push(Span::styled("  ", bg));
         spans.push(Span::styled(" VIEW ", view_style));
