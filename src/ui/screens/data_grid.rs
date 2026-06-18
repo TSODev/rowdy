@@ -220,7 +220,7 @@ impl DataGridScreen {
         }
 
         // Search prompt mode
-        if self.search.as_ref().map_or(false, |s| s.prompt_open) {
+        if self.search.as_ref().is_some_and(|s| s.prompt_open) {
             return self.handle_search_key(key);
         }
 
@@ -237,11 +237,11 @@ impl DataGridScreen {
             }
 
             // Search navigation (prompt closed, matches available)
-            KeyCode::Char('n') if self.search.as_ref().map_or(false, |s| !s.matches.is_empty()) => {
+            KeyCode::Char('n') if self.search.as_ref().is_some_and(|s| !s.matches.is_empty()) => {
                 self.search_next();
                 DataGridAction::None
             }
-            KeyCode::Char('N') if self.search.as_ref().map_or(false, |s| !s.matches.is_empty()) => {
+            KeyCode::Char('N') if self.search.as_ref().is_some_and(|s| !s.matches.is_empty()) => {
                 self.search_prev();
                 DataGridAction::None
             }
@@ -566,20 +566,20 @@ impl DataGridScreen {
     }
 
     fn search_next(&mut self) {
-        if let Some(s) = self.search.as_mut() {
-            if !s.matches.is_empty() {
-                s.current = (s.current + 1) % s.matches.len();
-            }
+        if let Some(s) = self.search.as_mut()
+            && !s.matches.is_empty()
+        {
+            s.current = (s.current + 1) % s.matches.len();
         }
         self.jump_to_current_match();
     }
 
     fn search_prev(&mut self) {
-        if let Some(s) = self.search.as_mut() {
-            if !s.matches.is_empty() {
-                let len = s.matches.len();
-                s.current = (s.current + len - 1) % len;
-            }
+        if let Some(s) = self.search.as_mut()
+            && !s.matches.is_empty()
+        {
+            let len = s.matches.len();
+            s.current = (s.current + len - 1) % len;
         }
         self.jump_to_current_match();
     }

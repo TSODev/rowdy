@@ -5,6 +5,28 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.9.0] — 2026-06-18
+
+### Added
+
+#### Recherche plein texte dans la Data Grid (Ctrl+F)
+- `Ctrl+F` ouvre un prompt de recherche sur toutes les cellules chargées en mémoire
+- Saisie en temps réel : calcule les correspondances dans toutes les colonnes (`value_display()`, case-insensitive) et saute au premier match depuis la position courante
+- `n` / `↓` : match suivant (wrap) ; `N` / `↑` : match précédent
+- `Enter` ferme le prompt tout en conservant le highlight vert sur toutes les correspondances et la navigation `n`/`N`
+- `Esc` efface la recherche et tous les highlights
+- Disponible en mode `read_only` et `prod_readonly`
+- Recommandé après `A` (Load All) pour chercher dans la table entière
+- `Ctrl+F: search` affiché dans la barre d'aide dans les trois variantes (normal, read-only, prod-readonly)
+
+#### Persistance du curseur DataGrid entre rechargements
+- Après un filtre, un tri ou une sauvegarde d'enregistrement, le curseur (ligne + colonne) reste sur la même cellule au lieu de revenir en haut
+- `preserved_row: Option<usize>` dans `DataGridScreen` : sauvegardé par `reset_data()`, restauré par `set_result()` (clampé au nouveau nombre de lignes)
+- `col_offset` (scroll horizontal) également préservé lors des rechargements
+- Nouvelles ouvertures de table : comportement inchangé (ligne 0)
+
+---
+
 ## [0.8.5] — 2026-06-18
 
 ### Added
@@ -610,7 +632,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.8.5...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/TSODev/rowdy/compare/v0.8.5...v0.9.0
 [0.8.5]: https://github.com/TSODev/rowdy/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/TSODev/rowdy/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/TSODev/rowdy/compare/v0.8.2...v0.8.3
