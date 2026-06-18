@@ -5,6 +5,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+#### Tests d'intégration par connecteur (117 tests)
+- Modules `#[cfg(test)]` inline dans chaque fichier connecteur (crate binaire sans `lib.rs`) — accès aux types privés sans `pub`
+- Pattern uniforme : variable d'env optionnelle, skip gracieux si absente, `AtomicU32` pour noms uniques, `println!` visibles avec `--nocapture`
+- **SQLite** — 14 tests sur `:memory:` (zéro infrastructure) : connect/disconnect, execute INSERT/UPDATE/erreur, fetch_all vide/count/scalaires/BLOB, TABLE vs VIEW, schema PK+FK via PRAGMA
+- **PostgreSQL** — 14 tests (`POSTGRES_URL`) : casts inline `42::INT4`/`TRUE::BOOL` pour tester les types sans seed ; schema PK+FK+type_names ; TABLE vs VIEW ; `AtomicU32` pour tables `_rowdy_pg_test_N`
+- **MySQL** — 17 tests (`MYSQL_URL`) : 4 tests purs `normalize_ssl_mode` (aucune DB requise) validant `REQUIRED`/`Required`/`required`/sans-param ; BOOLEAN → `tinyint` dans `information_schema` ; ENGINE=InnoDB pour FK ; tables `_rowdy_my_test_N`
+- **Redis** — 15 tests (`REDIS_URL`) : 5 variantes `KvKeyDetail` (String/Hash/List/Set/ZSet) ; setup Hash/List/Set/ZSet via connexion brute `redis::aio` ; TTL = -1 (persistant) et TTL > 0 (expiry 300 s) ; clés préfixées `_rowdy_redis_test_N_*`
+- **DuckDB** — 20 tests sur `:memory:` (zéro infrastructure) : 4 tests purs `parse_url` ; LIST → `NestedArray`, STRUCT → `NestedDoc` avec vérification JSON ; FK via `duckdb_constraints()` ; TABLE vs VIEW ; compilés uniquement avec `--features duckdb`
+- **Turso** — 15 tests (`TURSO_URL`) : 3 tests purs `parse_url` (valid/token-vide/sans-authToken) ; schema FK via `PRAGMA foreign_key_list` ; VIEW via `sqlite_master` ; cleanup `DROP TABLE IF EXISTS` ; tables `_rowdy_ts_test_N`
+- **MongoDB** — 22 tests (`MONGODB_URL`) : 7 tests purs `parse_filter` (vide/`{}`/objet/JSON invalide), `parse_pipeline` (valide/invalide), `id_to_bson` (ObjectId 24-hex/string) ; CRUD complet `insert_one`/`find`/`count`/`replace_one`/`delete_one` ; aggregate `$match + $count` ; pagination limit/offset ; `list_collections` ; cleanup via `get_db().collection.drop()` interne ; validé avec connexion X.509 MongoDB Atlas
+
+---
+
 ## [0.8.4] — 2026-06-18
 
 ### Added
