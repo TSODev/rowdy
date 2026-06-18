@@ -44,6 +44,8 @@ jobs:
   test-duckdb:
     name: Tests DuckDB (:memory:)
     runs-on: ubuntu-latest
+    env:
+      LIBSQLITE3_SYS_USE_PKG_CONFIG: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +53,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install build dependencies
-        run: sudo apt-get install -y cmake build-essential libssl-dev pkg-config
+        run: sudo apt-get install -y cmake build-essential libssl-dev pkg-config libsqlite3-dev
 
       - name: Cache Cargo (DuckDB)
         uses: Swatinem/rust-cache@v2
