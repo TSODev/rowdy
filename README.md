@@ -15,6 +15,8 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 
 ![Rowdy demo](assets/demo.gif)
 
+[![asciicast](https://asciinema.org/a/E1sMnAOldvwcodRj.svg)](https://asciinema.org/a/E1sMnAOldvwcodRj)
+
 ---
 
 ## ✨ Features
