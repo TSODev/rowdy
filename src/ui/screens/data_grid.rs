@@ -506,8 +506,8 @@ impl DataGridScreen {
                     s.prompt_open = false;
                 }
             }
-            KeyCode::Char('n') | KeyCode::Down => self.search_next(),
-            KeyCode::Char('N') | KeyCode::Up   => self.search_prev(),
+            KeyCode::Down => self.search_next(),
+            KeyCode::Up   => self.search_prev(),
             KeyCode::Backspace => {
                 if let Some(s) = self.search.as_mut() { s.query.pop(); }
                 self.recompute_search();
@@ -847,7 +847,7 @@ impl DataGridScreen {
                 } else if s.matches.is_empty() {
                     "  no match".to_string()
                 } else {
-                    format!("  {}/{} matches  —  n/↓: next   N/↑: prev   Enter: keep   Esc: clear",
+                    format!("  {}/{} matches  —  ↓/↑: navigate   Enter: keep & n/N   Esc: clear",
                         s.current + 1, s.matches.len())
                 };
                 let prompt = format!(" / {}", s.query);
