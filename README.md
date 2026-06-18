@@ -46,6 +46,8 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 - **Infinite scroll pagination** — 200 rows/page, next page loads on `j` at last row, parallel `COUNT(*)`
 - **Cumulative column filters** — `f` to filter, `d` to remove, `F` to clear all ; type-aware (`= TRUE/FALSE` for booleans, `= n` for numerics)
 - **Sort by column** — `s` cycles ASC / DESC / reset ; `▲`/`▼` indicator in header
+- **Full-text search** — `Ctrl+F` searches all loaded cells in real time ; green highlight on all matches ; `n`/`N` to navigate ; `Enter` keeps highlights while closing the prompt ; `Esc` clears ; use `A` first to search across all rows
+- **Cursor persistence** — row and column position preserved across filter, sort, and edit-save reloads (no jump back to row 1)
 - **FK navigation** — magenta badge on FK cells ; `Enter` opens a recursive sub-grid ; breadcrumb in info bar
 - **Nested field navigation** (MongoDB) — green `[obj]` / `[arr:N]` badges ; `Enter` drills into sub-grids recursively
 - **Column resize** — `-`/`=` in steps of 5 (min 4, max 80) ; `Space` collapse/expand ; cell cursor highlight
@@ -251,6 +253,10 @@ A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all
 | `f` | Open filter input for selected column |
 | `d` | Remove filter on selected column |
 | `F` | Clear all filters |
+| `s` | Cycle sort on selected column: ASC → DESC → off |
+| `A` | Load all rows (replaces paged data) |
+| `Ctrl+F` | Open full-text search prompt |
+| `n` / `N` | Next / previous search match (when search is active) |
 | `Enter` | FK cell → open linked sub-grid ; other cell → Edit Record |
 | `E` | Export prompt (then `c`=CSV, `j`=JSON, `J`=JSON+FK, `Esc`=cancel) |
 | `q` | Back to table list |
