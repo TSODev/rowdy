@@ -5,6 +5,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+#### Onglets multiples (multi-tab sessions)
+- `App` refactorisé : struct `Tab` isole tout l'état per-connexion (screens, client actif, historique, canaux `mpsc`, flags de reconnexion) ; `App { tabs: Vec<Tab>, active_tab: usize }` est un thin coordinator
+- `Tab::new()` initialise un onglet avec un écran de connexion vierge (profils chargés depuis la config)
+- `Ctrl+T` ouvre un nouvel onglet (écran de connexion indépendant)
+- `[` / `]` navigue entre onglets — actif uniquement quand `tabs.len() > 1` et que l'état courant n'est pas un mode de saisie texte (SQL Editor, EditRecord) pour éviter les conflits de frappe
+- `Ctrl+W` ferme l'onglet courant ; `q` en bas d'écran ferme l'onglet courant si plusieurs sont ouverts, ou quitte Rowdy si c'est le dernier
+- `wants_close: bool` vs `should_quit: bool` dans `Tab` — `wants_close` déclenche la logique close/quit dans `App::run`, `should_quit` est réservé à la sortie absolue
+- Barre d'onglets d'1 ligne affichée en haut lorsque ≥ 2 onglets sont ouverts ; onglet actif jaune gras, inactifs en blanc sur fond gris foncé ; nom dérivé de `connected_db_info` ou "New Tab"
+- Drain de tous les canaux `db_rx` (un par onglet) à chaque tick de l'event loop — les requêtes async de n'importe quel onglet progressent en arrière-plan même si l'onglet n'est pas actif
+
+#### Reconnexion automatique
+- `is_connection_lost(msg: &str) -> bool` : détecte les pertes réseau par matching de mots-clés dans le message d'erreur (`connection reset`, `broken pipe`, `connection closed`, `server closed`, `lost connection`, `transport error`, `network error`, `connection timed out`, `unexpected eof`)
+- Déclenchée sur `DbEvent::DataLoadFailed` / `TablesLoadFailed` / `QueryFailed` / `EditFailed` lorsque `is_connection_lost` retourne `true`
+- `ReconnectInfo { url: String, db_type: String }` stocké dans `Tab` dès la connexion initiale réussie
+- `Tab::spawn_reconnect(attempt)` : délai `Duration::from_secs(1u64 << attempt.min(2))` (1 s / 2 s / 4 s), puis reconnexion via la même factory `connect_sql/kv/nosql`
+- 3 tentatives max (`reconnect_attempt: u8`) ; au-delà : `DbEvent::ReconnectFailed` + retour à l'écran de connexion
+- `DbEvent::Reconnected(ActiveClient)` : remplace le client actif, relance le chargement des tables, flash "Reconnected" vert
+- Badge `RECONNECTING…` fond jaune en barre de statut pendant les tentatives (`tab.reconnecting`)
+- Failure flash : "Reconnect failed: …" rouge + `active_client = None` + retour à `AppState::Connection`
+
+---
+
 ## [0.8.3] — 2026-06-17
 
 ### Added

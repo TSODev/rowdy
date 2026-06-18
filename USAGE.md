@@ -621,6 +621,7 @@ Une ligne permanente est affichée en bas de l'écran depuis tous les écrans. E
 | `[N rows]` | Nombre total de lignes (DataGrid / FK View / SQL Result seulement) |
 | Badge `VIEW` (fond cyan) | Vue SQL ouverte — édition bloquée (les vues sont en lecture seule) |
 | Badge `READ-ONLY` (fond rouge) | Connexion en mode lecture seule — toute écriture est bloquée |
+| Badge `RECONNECTING…` (fond jaune) | Reconnexion automatique en cours après une perte de connexion |
 | Message flash | Confirmation (vert) ou erreur (rouge) pendant ~4 secondes après une action |
 
 ---
@@ -630,7 +631,89 @@ Une ligne permanente est affichée en bas de l'écran depuis tous les écrans. E
 | Touche | Action |
 |--------|--------|
 | `Ctrl-C` | Quitter Rowdy depuis n'importe quel écran |
-| `q` | Quitter / reculer (selon le contexte) |
+| `q` | Fermer l'onglet courant (si plusieurs onglets), sinon quitter Rowdy |
+| `Ctrl+T` | Ouvrir un nouvel onglet (nouvel écran de connexion) |
+| `[` | Aller à l'onglet précédent (disponible hors des modes de saisie texte) |
+| `]` | Aller à l'onglet suivant (disponible hors des modes de saisie texte) |
+| `Ctrl+W` | Fermer l'onglet courant |
+
+---
+
+## Onglets multiples
+
+Rowdy supporte plusieurs connexions simultanées dans des **onglets indépendants**. Chaque onglet possède son propre état : connexion active, écran courant, historique de navigation.
+
+### Ouvrir et gérer des onglets
+
+| Touche | Action |
+|--------|--------|
+| `Ctrl+T` | Ouvrir un nouvel onglet — démarre sur l'écran de connexion avec les profils sauvegardés |
+| `[` | Aller à l'onglet précédent |
+| `]` | Aller à l'onglet suivant |
+| `Ctrl+W` | Fermer l'onglet courant |
+| `q` | Fermer l'onglet courant si plusieurs onglets sont ouverts ; quitter Rowdy si c'est le dernier |
+
+> `[` et `]` ne sont actifs que lorsqu'il y a plusieurs onglets et que l'état courant n'est pas un mode de saisie texte (éditeur SQL ou édition d'enregistrement). Dans ces modes, les touches `[` et `]` font partie de la saisie.
+
+### Barre d'onglets
+
+Lorsque deux onglets ou plus sont ouverts, une barre apparaît en haut de l'écran :
+
+```
+ [postgres] Local Postgres   [sqlite] Dev SQLite   [redis] Cache  
+```
+
+- L'onglet **actif** est affiché en **jaune gras** sur fond sombre.
+- Les onglets **inactifs** sont en blanc sur fond gris foncé.
+- Le nom de l'onglet est dérivé de l'URL de connexion (masquée) ou affiche `New Tab` si non encore connecté.
+
+### Comportement à la fermeture
+
+- `q` depuis n'importe quel écran ferme l'onglet courant si d'autres onglets sont ouverts.
+- Si c'est le **dernier onglet**, `q` exécute le script `post_disconnect` du profil (si défini) puis quitte Rowdy.
+- `Ctrl+W` ferme immédiatement l'onglet courant. S'il s'agit du dernier onglet, Rowdy quitte.
+- `Ctrl-C` quitte Rowdy entièrement, quel que soit le nombre d'onglets.
+
+---
+
+## Reconnexion automatique
+
+Rowdy détecte les pertes de connexion survenant pendant les opérations (chargement de données, exécution de requête, sauvegarde d'enregistrement) et tente de se reconnecter automatiquement.
+
+### Détection
+
+Les erreurs suivantes déclenchent une tentative de reconnexion :
+
+- `connection reset`, `broken pipe`, `connection closed`
+- `server closed the connection`
+- `lost connection`, `connection lost`
+- `transport error`, `network error`
+- `connection timed out`, `unexpected EOF`
+
+### Stratégie de reconnexion
+
+Rowdy effectue jusqu'à **3 tentatives** avec un délai exponentiel :
+
+| Tentative | Délai avant reconnexion |
+|-----------|------------------------|
+| 1 | 1 seconde |
+| 2 | 2 secondes |
+| 3 | 4 secondes |
+
+Pendant les tentatives, la barre de statut affiche un badge jaune :
+
+```
+ DATA GRID   ● [postgres] prod-host/mydb   RECONNECTING…
+```
+
+### Résultat
+
+| Résultat | Message flash |
+|----------|---------------|
+| Succès | `Reconnected` (vert) — la session reprend normalement |
+| Échec (3 tentatives) | `Reconnect failed: <raison>` (rouge) — retour à l'écran de connexion |
+
+> La reconnexion utilise les mêmes paramètres que la connexion initiale (URL, profil, credentials résolus depuis le keyring si applicable). Aucune intervention manuelle n'est requise en cas de succès.
 
 ---
 

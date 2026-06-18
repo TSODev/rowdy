@@ -37,6 +37,8 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 - **Pre/post-connect hooks** — optional shell scripts per profile for SSH tunnels, VPN, proxies
 - **Read-only mode** — append `?readonly=true` to any URL ; red `READ-ONLY` badge ; all writes blocked, filters and export still work
 - **URL redaction** — passwords and tokens masked in the UI everywhere (`user:***@host`, `authToken=***`)
+- **Multi-tab sessions** — `Ctrl+T` opens a new connection tab ; `[`/`]` cycles between tabs ; `Ctrl+W` or `q` closes the current tab (quits only when it is the last one) ; each tab has its own independent connection and state
+- **Auto-reconnect** — on connection loss (broken pipe, server closed, network error…), Rowdy retries up to 3 times with exponential back-off (1 s → 2 s → 4 s) ; yellow `RECONNECTING…` badge in the status bar during retries ; flash message on success or permanent failure
 
 ### Data Grid
 
@@ -301,6 +303,18 @@ The ERD view displays a **star layout**: the selected table in the center (yello
 
 `SELECT`, `WITH`, `EXPLAIN`, `SHOW`, `PRAGMA` → returns rows.  
 `INSERT`, `UPDATE`, `DELETE`, `CREATE`, … → shows rows affected.
+
+### Multi-tab navigation (all screens)
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+T` | Open a new connection tab |
+| `[` | Switch to previous tab (when more than one tab is open, outside text-input screens) |
+| `]` | Switch to next tab (same condition) |
+| `Ctrl+W` | Close the current tab |
+| `q` | Close the current tab if multiple tabs are open ; quit Rowdy if it is the last tab |
+
+A tab bar appears at the top when two or more tabs are open. The active tab is highlighted in yellow.
 
 **`Ctrl-C` quits from anywhere.**
 
