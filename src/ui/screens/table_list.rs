@@ -205,9 +205,9 @@ impl TableListScreen {
             f.set_cursor(help_area.x + 1 + filter_display.len() as u16, help_area.y + 1);
             filter_display
         } else if screen.is_kv {
-            " j/k: move   Enter: open   e: SQL editor   r: ERD   /: filter   Ctrl+T: new tab   Ctrl+W: close tab   q: disconnect ".into()
+            " j/k: move   Enter: open   e: SQL editor   r: ERD   /: filter   Ctrl+T: new tab   [/]: tabs   q: disconnect ".into()
         } else {
-            " j/k: move   Enter: open   e: SQL editor   r: ERD   /: filter   Ctrl+T: new tab   Ctrl+W: close tab   q: disconnect ".into()
+            " j/k: move   Enter: open   e: SQL editor   r: ERD   /: filter   Ctrl+T: new tab   [/]: tabs   q: disconnect ".into()
         };
 
         let help_style = if screen.filter_mode {

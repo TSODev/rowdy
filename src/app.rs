@@ -118,6 +118,7 @@ fn is_connection_lost(msg: &str) -> bool {
 pub struct Tab {
     pub state: AppState,
     pub should_quit: bool,
+    pub wants_close: bool,
     pub connection_screen: ConnectionScreen,
     pub table_list_screen: TableListScreen,
     pub data_grid_screen: DataGridScreen,
@@ -152,6 +153,7 @@ impl Tab {
         Self {
             state: AppState::Connection,
             should_quit: false,
+            wants_close: false,
             connection_screen: ConnectionScreen::new(profiles),
             table_list_screen: TableListScreen::new(),
             data_grid_screen: DataGridScreen::new(String::new()),
@@ -186,7 +188,7 @@ impl Tab {
         match self.state {
             AppState::Connection => {
                 match self.connection_screen.handle_key(key) {
-                    ConnectionAction::Quit => self.should_quit = true,
+                    ConnectionAction::Quit => self.wants_close = true,
                     ConnectionAction::Connect { url, db_type, pre_connect, post_disconnect, profile_name } => {
                         self.spawn_connect(url, db_type, pre_connect, post_disconnect, profile_name);
                     }
@@ -1567,17 +1569,19 @@ impl App {
         &mut self.tabs[self.active_tab]
     }
 
+    fn is_text_input_state(&self) -> bool {
+        matches!(
+            self.tabs[self.active_tab].state,
+            AppState::SqlEditor | AppState::EditRecord
+        )
+    }
+
     fn new_tab(&mut self) {
         self.tabs.push(Tab::new());
         self.active_tab = self.tabs.len() - 1;
     }
 
     fn close_tab(&mut self) {
-        if self.tabs.len() == 1 {
-            self.tabs[0].should_quit = true;
-            return;
-        }
-        // Run post-disconnect script before closing
         self.tabs[self.active_tab].spawn_post_disconnect();
         self.tabs.remove(self.active_tab);
         if self.active_tab >= self.tabs.len() {
@@ -1605,6 +1609,16 @@ impl App {
                 self.tabs[self.active_tab].run_post_disconnect().await;
                 break;
             }
+            if self.tabs[self.active_tab].wants_close {
+                self.tabs[self.active_tab].wants_close = false;
+                if self.tabs.len() == 1 {
+                    // Last tab — quit the app
+                    self.tabs[0].run_post_disconnect().await;
+                    break;
+                } else {
+                    self.close_tab();
+                }
+            }
 
             if let Ok(Some(Ok(Event::Key(key)))) =
                 timeout(Duration::from_millis(50), events.next()).await
@@ -1615,14 +1629,16 @@ impl App {
                     self.new_tab();
                 } else if key.code == KeyCode::Char('w') && key.modifiers.contains(KeyModifiers::CONTROL) {
                     self.close_tab();
-                } else if key.modifiers.contains(KeyModifiers::ALT) {
-                    if let KeyCode::Char(c) = key.code {
-                        if let Some(n) = c.to_digit(10) {
-                            let idx = (n as usize).saturating_sub(1);
-                            if idx < self.tabs.len() {
-                                self.active_tab = idx;
-                            }
-                        }
+                } else if self.tabs.len() > 1 && !self.is_text_input_state() && key.modifiers.is_empty() {
+                    // [ / ] cycle tabs — only outside text-input states to avoid conflicts
+                    if key.code == KeyCode::Char('[') {
+                        self.active_tab = self.active_tab.saturating_sub(1);
+                    } else if key.code == KeyCode::Char(']') {
+                        self.active_tab = (self.active_tab + 1).min(self.tabs.len() - 1);
+                    } else if self.tabs[self.active_tab].modal.is_some() {
+                        self.tabs[self.active_tab].handle_modal_key(key);
+                    } else {
+                        self.tabs[self.active_tab].handle_key(key);
                     }
                 } else if self.tabs[self.active_tab].modal.is_some() {
                     self.tabs[self.active_tab].handle_modal_key(key);
