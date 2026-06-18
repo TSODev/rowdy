@@ -22,6 +22,9 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install system dependencies
+        run: sudo apt-get install -y libssl-dev pkg-config
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
@@ -43,7 +46,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install build dependencies
-        run: sudo apt-get install -y cmake build-essential
+        run: sudo apt-get install -y cmake build-essential libssl-dev pkg-config
 
       - name: Cache Cargo (DuckDB)
         uses: Swatinem/rust-cache@v2
@@ -67,6 +70,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y libssl-dev pkg-config
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+#[cfg(feature = "secure-storage")]
 const KEYRING_SERVICE: &str = "rowdy";
 const KEYRING_PLACEHOLDER: &str = "__keyring__";
 
