@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [0.8.5] — 2026-06-18
 
 ### Added
 
@@ -610,7 +610,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.8.4...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.8.5...HEAD
+[0.8.5]: https://github.com/TSODev/rowdy/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/TSODev/rowdy/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/TSODev/rowdy/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/TSODev/rowdy/compare/v0.8.1...v0.8.2

@@ -1,6 +1,7 @@
 # 🤠 Rowdy
 
 [![Crates.io](https://img.shields.io/crates/v/rowdy-db)](https://crates.io/crates/rowdy-db)
+[![CI](https://github.com/TSODev/rowdy/actions/workflows/ci.yml/badge.svg)](https://github.com/TSODev/rowdy/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#-license)
 ![Rust](https://img.shields.io/badge/rust-2024_edition-orange?logo=rust)
 ![ratatui](https://img.shields.io/badge/ratatui-0.27-blueviolet)
