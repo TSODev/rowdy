@@ -353,6 +353,13 @@ cargo clippy   # lint
 
 ---
 
+## 💬 Feedback & Community
+
+- **Bug reports / feature requests** — [GitHub Issues](https://github.com/TSODev/rowdy/issues)
+- **Questions / ideas / show & tell** — [GitHub Discussions](https://github.com/TSODev/rowdy/discussions)
+
+---
+
 ## 📜 License
 
 Licensed under either of [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE) at your option.
