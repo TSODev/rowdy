@@ -68,6 +68,8 @@ pub struct DataGridScreen {
     pub total_count: Option<u64>,
     pub has_more: bool,
     pub loading: bool,
+    // Preserved cursor across reloads (filter/sort/edit-save)
+    preserved_row: Option<usize>,
 }
 
 impl DataGridScreen {
@@ -99,23 +101,26 @@ impl DataGridScreen {
             total_count: None,
             has_more: true,
             loading: true,
+            preserved_row: None,
         }
     }
 
-    // Initial/replacement load (resets row position; preserves col position for sort/filter reloads)
+    // Initial/replacement load — preserves col position always; restores row when
+    // set by reset_data() (filter/sort/edit-save reloads), defaults to 0 for new tables.
     pub fn set_result(&mut self, result: DbQueryResult) {
         let count = result.rows.len();
         self.has_more = count == PAGE_SIZE;
         self.loaded_count = count;
         self.status = None;
         self.loading = false;
-        // selected_col and col_offset are intentionally NOT reset here:
-        // new tables start with a fresh DataGridScreen (col=0 from new()),
-        // while sort/filter reloads must stay on the same column.
+        // selected_col and col_offset are intentionally NOT reset here
         self.collapsed_cols.clear();
         self.col_widths.clear();
+        let row = self.preserved_row.take()
+            .map(|r| if count > 0 { r.min(count - 1) } else { 0 })
+            .unwrap_or(0);
         self.table_state = TableState::default();
-        self.table_state.select(if count > 0 { Some(0) } else { None });
+        self.table_state.select(if count > 0 { Some(row) } else { None });
         self.result = Some(result);
     }
 
@@ -138,11 +143,12 @@ impl DataGridScreen {
         self.total_count = Some(count);
     }
 
-    // Reset data but keep table_name, filters, selected_col, collapsed_cols
+    // Reset data but keep table_name, filters, selected_col, col_offset, collapsed_cols.
+    // Saves the current row so set_result() can restore it after the reload.
     pub fn reset_data(&mut self) {
+        self.preserved_row = self.table_state.selected();
         self.result = None;
         self.table_state = TableState::default();
-        self.col_offset = 0;
         self.status = Some("Loading…".into());
         self.loaded_count = 0;
         self.total_count = None;
