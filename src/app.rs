@@ -13,12 +13,11 @@ use crate::history::QueryHistory;
 use crate::db::{
     connectors,
     converters::{json_array_to_schema_values, json_object_to_schema_values, json_to_result,
-                 json_val_to_value, json_value_type_and_str, kv_detail_to_result,
-                 mongo_type_name, value_to_string},
+                 kv_detail_to_result, mongo_type_name, value_to_string},
     query_builder::{build_count_query, build_data_query, build_fk_count_query, build_fk_query,
                     is_select_query, parse_count, split_sql_statements},
     traits::{KvClient, NoSqlClient, SqlClient},
-    types::{Column, ColumnSchema, DbQueryResult, KvKeyDetail, Row, TableObject, Value},
+    types::{ColumnSchema, DbQueryResult, KvKeyDetail, TableObject, Value},
 };
 use crate::ui::components::modal::Modal;
 use crate::ui::screens::connection::{ConnectionAction, ConnectionScreen};
