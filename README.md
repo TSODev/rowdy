@@ -1,4 +1,4 @@
-# 🤠 Rowdy
+# 🗄️ Rowdy
 
 [![Crates.io](https://img.shields.io/crates/v/rowdy-db)](https://crates.io/crates/rowdy-db)
 [![CI](https://github.com/TSODev/rowdy/actions/workflows/ci.yml/badge.svg)](https://github.com/TSODev/rowdy/actions/workflows/ci.yml)

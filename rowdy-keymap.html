@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Rowdy — Keyboard Reference</title>
+<style>
+  /* ── Reset & base ────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #ffffff;
+    --text:      #1f2937;
+    --muted:     #6b7280;
+    --key-bg:    #1e3a5f;
+    --key-fg:    #ffffff;
+    --border:    #e5e7eb;
+
+    --c-global:  #0f766e; /* teal   */
+    --c-conn:    #1d4ed8; /* blue   */
+    --c-table:   #7c3aed; /* violet */
+    --c-grid:    #b45309; /* amber  */
+    --c-search:  #0891b2; /* cyan   */
+    --c-edit:    #be123c; /* rose   */
+    --c-sql:     #15803d; /* green  */
+    --c-erd:     #9333ea; /* purple */
+    --c-tab:     #475569; /* slate  */
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 10mm 12mm;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 7.8pt;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.45;
+  }
+
+  /* ── Header ──────────────────────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--text);
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+  header h1 {
+    font-size: 16pt;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  header h1 span {
+    color: var(--c-global);
+  }
+  header .meta {
+    font-size: 7pt;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.6;
+  }
+  header .tagline {
+    font-size: 8.5pt;
+    color: var(--muted);
+    font-style: italic;
+    align-self: center;
+  }
+
+  /* ── Layout ──────────────────────────────────────────────────────────── */
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+
+  /* ── Section ─────────────────────────────────────────────────────────── */
+  .section {
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    overflow: hidden;
+    break-inside: avoid;
+    margin-bottom: 8px;
+  }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: #ffffff;
+  }
+  .section-title .icon { font-size: 9pt; }
+
+  /* colour variants */
+  .global  .section-title { background: var(--c-global); }
+  .conn    .section-title { background: var(--c-conn);   }
+  .table   .section-title { background: var(--c-table);  }
+  .grid    .section-title { background: var(--c-grid);   }
+  .search  .section-title { background: var(--c-search); }
+  .edit    .section-title { background: var(--c-edit);   }
+  .sql     .section-title { background: var(--c-sql);    }
+  .erd     .section-title { background: var(--c-erd);    }
+  .tabs    .section-title { background: var(--c-tab);    }
+
+  /* ── Key table ───────────────────────────────────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  tr:nth-child(even) td { background: #f9fafb; }
+  td {
+    padding: 2.5px 8px;
+    vertical-align: middle;
+  }
+  td:first-child {
+    width: 38%;
+    white-space: nowrap;
+  }
+  td:last-child {
+    color: var(--muted);
+  }
+
+  /* ── Key badge ───────────────────────────────────────────────────────── */
+  kbd {
+    display: inline-block;
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    font-size: 6.8pt;
+    font-weight: 600;
+    background: var(--key-bg);
+    color: var(--key-fg);
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin: 0 1px;
+    white-space: nowrap;
+    letter-spacing: 0.2px;
+  }
+
+  /* sub-row for indent */
+  .sub td { padding-left: 18px; color: var(--muted); font-style: italic; }
+  .sub td:first-child { color: var(--muted); }
+  .sub kbd { background: #6b7280; }
+
+  /* separator row */
+  .sep td { padding: 1px 8px; border-top: 1px solid var(--border); }
+
+  /* ── Footer ──────────────────────────────────────────────────────────── */
+  footer {
+    margin-top: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 4px;
+    font-size: 6.5pt;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🗄️ <span>Rowdy</span></h1>
+    <div class="tagline">Terminal UI database client — vim-style navigation</div>
+  </div>
+  <div class="meta">
+    v0.9.1 &nbsp;·&nbsp; MIT / Apache-2.0<br>
+    crates.io/crates/rowdy-db<br>
+    github.com/TSODev/rowdy
+  </div>
+</header>
+
+<div class="columns">
+
+  <!-- ═══════════════════ COLUMN 1 ═══════════════════ -->
+  <div>
+
+    <!-- Global -->
+    <div class="section global">
+      <div class="section-title"><span class="icon">⌨</span> Global</div>
+      <table>
+        <tr><td><kbd>Ctrl+C</kbd></td><td>Quit from anywhere</td></tr>
+        <tr><td><kbd>Ctrl+T</kbd></td><td>Open new connection tab</td></tr>
+        <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Previous / next tab</td></tr>
+        <tr><td><kbd>Ctrl+W</kbd></td><td>Close current tab</td></tr>
+        <tr><td><kbd>q</kbd></td><td>Close tab (quit if last)</td></tr>
+      </table>
+    </div>
+
+    <!-- Connection -->
+    <div class="section conn">
+      <div class="section-title"><span class="icon">🔌</span> Connection Screen</div>
+      <table>
+        <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>Navigate saved profiles</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Connect to selected profile</td></tr>
+        <tr><td><kbd>n</kbd></td><td>Type a new connection URL</td></tr>
+        <tr><td><kbd>e</kbd></td><td>Edit selected profile</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Cycle fields: Type → URL → Pre → Post</td></tr>
+        <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Change DB type (when Type focused)</td></tr>
+        <tr><td><kbd>Ctrl+S</kbd></td><td>Save profile (prompts for name)</td></tr>
+        <tr><td><kbd>D</kbd></td><td>Delete selected profile</td></tr>
+        <tr><td><kbd>q</kbd></td><td>Quit</td></tr>
+      </table>
+    </div>
+
+    <!-- Table list -->
+    <div class="section table">
+      <div class="section-title"><span class="icon">📋</span> Table List</div>
+      <table>
+        <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>Navigate tables</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Open table in Data Grid</td></tr>
+        <tr><td><kbd>e</kbd></td><td>Open SQL Editor</td></tr>
+        <tr><td><kbd>r</kbd></td><td>Open ERD graph (selected table)</td></tr>
+        <tr><td><kbd>/</kbd></td><td>Filter tables by name</td></tr>
+        <tr><td><kbd>q</kbd></td><td>Disconnect</td></tr>
+      </table>
+    </div>
+
+    <!-- ERD Graph -->
+    <div class="section erd">
+      <div class="section-title"><span class="icon">🕸</span> ERD Graph View</div>
+      <table>
+        <tr><td><kbd>j</kbd> <kbd>k</kbd> or <kbd>Tab</kbd></td><td>Cycle between table boxes</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Re-center on selected box</td></tr>
+        <tr><td><kbd>q</kbd> <kbd>Esc</kbd></td><td>Back to table list</td></tr>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════ COLUMN 2 ═══════════════════ -->
+  <div>
+
+    <!-- Data Grid -->
+    <div class="section grid">
+      <div class="section-title"><span class="icon">📊</span> Data Grid</div>
+      <table>
+        <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>Next / previous row</td></tr>
+        <tr><td><kbd>h</kbd> <kbd>l</kbd></td><td>Previous / next column</td></tr>
+        <tr><td><kbd>g</kbd> <kbd>G</kbd></td><td>First / last row</td></tr>
+        <tr><td><kbd>PgDn</kbd> <kbd>PgUp</kbd></td><td>±10 rows</td></tr>
+        <tr class="sep"><td><kbd>s</kbd></td><td>Sort column: ASC → DESC → off</td></tr>
+        <tr><td><kbd>A</kbd></td><td>Load all rows (replaces pages)</td></tr>
+        <tr class="sep"><td><kbd>f</kbd></td><td>Filter selected column</td></tr>
+        <tr><td><kbd>d</kbd></td><td>Remove filter on selected column</td></tr>
+        <tr><td><kbd>F</kbd></td><td>Clear all filters</td></tr>
+        <tr class="sep"><td><kbd>-</kbd> <kbd>=</kbd></td><td>Shrink / grow column width (step 5)</td></tr>
+        <tr><td><kbd>Space</kbd></td><td>Collapse / expand selected column</td></tr>
+        <tr class="sep"><td><kbd>Enter</kbd></td><td>Edit record — or drill into FK / nested</td></tr>
+        <tr><td><kbd>a</kbd></td><td>Insert document <em>(MongoDB)</em></td></tr>
+        <tr><td><kbd>D</kbd></td><td>Delete document <em>(MongoDB)</em></td></tr>
+        <tr class="sep"><td><kbd>E</kbd></td><td>Export prompt</td></tr>
+        <tr class="sub"><td><kbd>c</kbd></td><td>CSV</td></tr>
+        <tr class="sub"><td><kbd>j</kbd></td><td>JSON simple</td></tr>
+        <tr class="sub"><td><kbd>J</kbd></td><td>JSON + recursive FK resolution</td></tr>
+        <tr class="sub"><td><kbd>Esc</kbd></td><td>Cancel export</td></tr>
+        <tr class="sep"><td><kbd>q</kbd> <kbd>Esc</kbd></td><td>Back to table list</td></tr>
+      </table>
+    </div>
+
+    <!-- Search -->
+    <div class="section search">
+      <div class="section-title"><span class="icon">🔍</span> Full-Text Search (Ctrl+F)</div>
+      <table>
+        <tr><td><kbd>Ctrl+F</kbd></td><td>Open search prompt</td></tr>
+        <tr><td><em>type</em></td><td>Search all loaded cells (real-time)</td></tr>
+        <tr><td><kbd>↓</kbd> <kbd>↑</kbd></td><td>Next / previous match (prompt open)</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Keep highlights — close prompt</td></tr>
+        <tr><td><kbd>n</kbd> <kbd>N</kbd></td><td>Next / previous match (prompt closed)</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Clear search and highlights</td></tr>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════ COLUMN 3 ═══════════════════ -->
+  <div>
+
+    <!-- SQL Editor -->
+    <div class="section sql">
+      <div class="section-title"><span class="icon">✏️</span> SQL Editor</div>
+      <table>
+        <tr><td><kbd>F5</kbd> or <kbd>Ctrl+Enter</kbd></td><td>Execute query</td></tr>
+        <tr><td><kbd>F4</kbd></td><td>Open SELECT result in Data Grid</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Autocomplete popup (tables, columns, keywords)</td></tr>
+        <tr class="sub"><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Tab</kbd></td><td>Navigate suggestions</td></tr>
+        <tr class="sub"><td><kbd>Enter</kbd></td><td>Insert suggestion</td></tr>
+        <tr class="sub"><td><kbd>Esc</kbd></td><td>Close popup</td></tr>
+        <tr><td><kbd>Alt+↑</kbd></td><td>Previous query from history</td></tr>
+        <tr><td><kbd>Alt+↓</kbd></td><td>Next query from history</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Switch focus editor ↔ results</td></tr>
+        <tr><td><kbd>Ctrl+Q</kbd></td><td>Back to table list</td></tr>
+      </table>
+    </div>
+
+    <!-- Edit Record -->
+    <div class="section edit">
+      <div class="section-title"><span class="icon">📝</span> Edit Record</div>
+      <table>
+        <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>Next / previous field</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Edit field — or drill into <code>[obj]</code> / <code>[arr]</code></td></tr>
+        <tr><td><kbd>i</kbd></td><td>Edit <code>[obj]</code> as raw JSON string</td></tr>
+        <tr><td><kbd>Space</kbd></td><td>Toggle boolean field</td></tr>
+        <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Move cursor within field</td></tr>
+        <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>Jump to start / end of field</td></tr>
+        <tr><td><kbd>Backspace</kbd> <kbd>Del</kbd></td><td>Delete character</td></tr>
+        <tr><td><kbd>Ctrl+S</kbd></td><td>Save — confirmation modal before UPDATE</td></tr>
+        <tr><td><kbd>Esc</kbd> <kbd>q</kbd></td><td>Cancel — or confirm nested edit &amp; go up</td></tr>
+      </table>
+    </div>
+
+    <!-- Array editor -->
+    <div class="section edit">
+      <div class="section-title"><span class="icon">🗂</span> Array Editor <em style="font-weight:400;font-size:6.5pt;opacity:.85">(MongoDB arr fields)</em></div>
+      <table>
+        <tr><td><kbd>a</kbd></td><td>Add item at end (enters edit mode)</td></tr>
+        <tr><td><kbd>D</kbd></td><td>Delete selected item</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Edit item — or drill into nested</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Confirm array &amp; go back to parent</td></tr>
+      </table>
+    </div>
+
+    <!-- Tips -->
+    <div class="section tabs">
+      <div class="section-title"><span class="icon">💡</span> Tips</div>
+      <table>
+        <tr><td>Read-only mode</td><td>Append <kbd>?readonly=true</kbd> to URL</td></tr>
+        <tr><td>Credentials</td><td>Stored in OS keychain — <kbd>__keyring__</kbd> in config</td></tr>
+        <tr><td>Pre/post hooks</td><td>Shell scripts per profile (SSH tunnels, VPN…)</td></tr>
+        <tr><td>Config file</td><td><code>~/.config/rowdy/config.toml</code></td></tr>
+        <tr><td>History</td><td><code>~/.config/rowdy/history.toml</code> (200 entries)</td></tr>
+        <tr><td>Search all rows</td><td>Press <kbd>A</kbd> (load all) before <kbd>Ctrl+F</kbd></td></tr>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <span>rowdy-db v0.9.1 &nbsp;·&nbsp; <strong>cargo install rowdy-db</strong></span>
+  <span>github.com/TSODev/rowdy &nbsp;·&nbsp; github.com/TSODev/rowdy/discussions</span>
+</footer>
+
+</body>
+</html>
