@@ -233,3 +233,379 @@ fn pg_value(row: &PgRow, index: usize) -> Value {
         _ => row.try_get::<String, _>(index).map(Value::Text).unwrap_or_else(|_| marker()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::PostgresConnector;
+    use crate::db::{
+        error::DbError,
+        traits::SqlClient,
+        types::{TableKind, Value},
+    };
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    // ── helpers ──────────────────────────────────────────────────────────────────
+
+    fn pg_url() -> Option<String> {
+        std::env::var("POSTGRES_URL").ok()
+    }
+
+    /// Masks password in URL for display: postgres://user:***@host/db
+    fn display_url(url: &str) -> String {
+        if let (Some(p), Some(at)) = (url.find("://"), url.rfind('@')) {
+            return format!("{}***{}", &url[..p + 3], &url[at..]);
+        }
+        url.to_string()
+    }
+
+    /// Each test gets a unique table name to avoid cross-test conflicts.
+    fn unique_table() -> String {
+        static COUNTER: AtomicU32 = AtomicU32::new(0);
+        format!("_rowdy_pg_test_{}", COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+
+    async fn connected(url: &str) -> PostgresConnector {
+        let mut c = PostgresConnector::new();
+        c.connect(url).await.expect("connect failed");
+        println!("  [postgres] connected to {}", display_url(url));
+        c
+    }
+
+    /// Creates a self-referencing test table: id(PK), label, amount, flag, ref_id(FK→id).
+    async fn create_test_table(c: &PostgresConnector, tbl: &str) {
+        c.execute(&format!("DROP TABLE IF EXISTS {tbl} CASCADE")).await.ok();
+        c.execute(&format!(
+            "CREATE TABLE {tbl} (
+                id     SERIAL  PRIMARY KEY,
+                label  TEXT    NOT NULL,
+                amount NUMERIC(10,2),
+                flag   BOOLEAN DEFAULT FALSE,
+                ref_id INTEGER REFERENCES {tbl}(id)
+            )"
+        )).await.expect("CREATE TABLE failed");
+        println!("  [postgres] created {tbl}");
+    }
+
+    async fn drop_test_table(c: &PostgresConnector, tbl: &str) {
+        c.execute(&format!("DROP TABLE IF EXISTS {tbl} CASCADE")).await.ok();
+        println!("  [postgres] dropped {tbl}");
+    }
+
+    // ── connection ───────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_connect() {
+        println!("\n[postgres] test_connect");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let mut c = PostgresConnector::new();
+        let result = c.connect(&url).await;
+        assert!(result.is_ok(), "connect failed: {:?}", result);
+        println!("  ✓ connection OK");
+    }
+
+    #[tokio::test]
+    async fn test_not_connected_returns_error() {
+        println!("\n[postgres] test_not_connected_returns_error");
+        let c = PostgresConnector::new();
+        let e = c.fetch_all("SELECT 1").await.unwrap_err();
+        assert!(matches!(e, DbError::NotConnected));
+        println!("  ✓ fetch_all before connect → NotConnected");
+        let e2 = c.execute("SELECT 1").await.unwrap_err();
+        assert!(matches!(e2, DbError::NotConnected));
+        println!("  ✓ execute before connect → NotConnected");
+    }
+
+    #[tokio::test]
+    async fn test_disconnect() {
+        println!("\n[postgres] test_disconnect");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let mut c = connected(&url).await;
+        assert!(c.disconnect().await.is_ok(), "disconnect should not error");
+        println!("  ✓ disconnect OK");
+    }
+
+    // ── type mapping (inline casts — no tables required) ─────────────────────────
+
+    #[tokio::test]
+    async fn test_fetch_all_scalar_types() {
+        println!("\n[postgres] test_fetch_all_scalar_types");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let result = c.fetch_all(
+            "SELECT
+                42::INT4         AS int_col,
+                3.14::FLOAT8     AS float_col,
+                TRUE::BOOL       AS bool_col,
+                'hello'::TEXT    AS text_col,
+                '99.99'::NUMERIC AS numeric_col,
+                NULL::TEXT       AS null_col",
+        ).await.expect("fetch_all failed");
+
+        println!("  columns: {:?}", result.columns.iter().map(|c| &c.name).collect::<Vec<_>>());
+        println!("  row[0]: {:?}", result.rows[0].values);
+
+        assert_eq!(result.rows.len(), 1);
+        let row = &result.rows[0];
+        assert!(matches!(row.values[0], Value::Int(42)),    "INT4 → Int(42)");
+        assert!(matches!(row.values[1], Value::Float(_)),   "FLOAT8 → Float");
+        assert!(matches!(row.values[2], Value::Bool(true)), "BOOL → Bool(true)");
+        assert!(matches!(row.values[3], Value::Text(_)),    "TEXT → Text");
+        assert!(matches!(row.values[4], Value::Text(_)),    "NUMERIC → Text (formatted decimal)");
+        assert!(matches!(row.values[5], Value::Null),       "NULL → Null");
+        println!("  ✓ INT4, FLOAT8, BOOL, TEXT, NUMERIC, NULL decoded correctly");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_all_date_time_types() {
+        println!("\n[postgres] test_fetch_all_date_time_types");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let result = c.fetch_all(
+            "SELECT
+                '2024-01-15'::DATE              AS date_col,
+                '14:30:00'::TIME                AS time_col,
+                '2024-01-15 14:30:00'::TIMESTAMP AS ts_col,
+                NOW()::TIMESTAMPTZ              AS tstz_col",
+        ).await.expect("fetch_all date types failed");
+
+        println!("  row[0]: {:?}", result.rows[0].values);
+        let row = &result.rows[0];
+        assert!(matches!(row.values[0], Value::Text(_)), "DATE → Text");
+        assert!(matches!(row.values[1], Value::Text(_)), "TIME → Text");
+        assert!(matches!(row.values[2], Value::Text(_)), "TIMESTAMP → Text");
+        assert!(matches!(row.values[3], Value::Text(_)), "TIMESTAMPTZ → Text");
+        println!("  ✓ DATE, TIME, TIMESTAMP, TIMESTAMPTZ decoded as Text");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_all_int_widths() {
+        println!("\n[postgres] test_fetch_all_int_widths");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let result = c.fetch_all(
+            "SELECT 1::INT2 AS i2, 2::INT4 AS i4, 3::INT8 AS i8",
+        ).await.expect("fetch_all int widths failed");
+
+        let row = &result.rows[0];
+        println!("  row[0]: {:?}", row.values);
+        assert!(matches!(row.values[0], Value::Int(1)), "INT2 → Int");
+        assert!(matches!(row.values[1], Value::Int(2)), "INT4 → Int");
+        assert!(matches!(row.values[2], Value::Int(3)), "INT8 → Int");
+        println!("  ✓ INT2, INT4, INT8 all decoded as Int");
+    }
+
+    // ── schema introspection ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_get_table_objects_kinds() {
+        println!("\n[postgres] test_get_table_objects_kinds");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let tbl = unique_table();
+        let view = format!("{tbl}_view");
+
+        create_test_table(&c, &tbl).await;
+        c.execute(&format!(
+            "CREATE OR REPLACE VIEW {view} AS SELECT id, label FROM {tbl}"
+        )).await.expect("CREATE VIEW failed");
+
+        let objects = c.get_table_objects().await.expect("get_table_objects failed");
+        println!("  {} objects in public schema", objects.len());
+
+        let t = objects.iter().find(|o| o.name == tbl);
+        assert!(t.is_some(), "{tbl} not found");
+        assert_eq!(t.unwrap().kind, TableKind::Table, "{tbl} should be Table");
+
+        let v = objects.iter().find(|o| o.name == view);
+        assert!(v.is_some(), "{view} not found");
+        assert_eq!(v.unwrap().kind, TableKind::View, "{view} should be View");
+
+        c.execute(&format!("DROP VIEW IF EXISTS {view}")).await.ok();
+        drop_test_table(&c, &tbl).await;
+        println!("  ✓ TABLE → Table, VIEW → View");
+    }
+
+    #[tokio::test]
+    async fn test_get_schema_pk_and_fk() {
+        println!("\n[postgres] test_get_schema_pk_and_fk");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let tbl = unique_table();
+        create_test_table(&c, &tbl).await;
+
+        let schema = c.get_schema(&tbl).await.expect("get_schema failed");
+        println!("  schema: {:?}", schema.iter().map(|s| (&s.name, s.is_pk, s.fk.is_some())).collect::<Vec<_>>());
+
+        let id = schema.iter().find(|s| s.name == "id").expect("id missing");
+        assert!(id.is_pk, "id should be PK");
+        assert!(id.fk.is_none(), "id should have no FK");
+
+        let label = schema.iter().find(|s| s.name == "label").expect("label missing");
+        assert!(!label.is_pk, "label should not be PK");
+        assert!(label.fk.is_none(), "label should have no FK");
+
+        let ref_id = schema.iter().find(|s| s.name == "ref_id").expect("ref_id missing");
+        let fk = ref_id.fk.as_ref().expect("ref_id should have a FK");
+        assert_eq!(fk.table, tbl, "FK table should be {tbl}");
+        assert_eq!(fk.column, "id");
+
+        drop_test_table(&c, &tbl).await;
+        println!("  ✓ id → PK, label → no FK, ref_id → FK({tbl}.id)");
+    }
+
+    #[tokio::test]
+    async fn test_get_schema_type_names() {
+        println!("\n[postgres] test_get_schema_type_names");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let tbl = unique_table();
+        create_test_table(&c, &tbl).await;
+
+        let schema = c.get_schema(&tbl).await.expect("get_schema failed");
+        let types: Vec<(&str, &str)> = schema.iter()
+            .map(|s| (s.name.as_str(), s.type_name.as_str()))
+            .collect();
+        println!("  types: {:?}", types);
+
+        let amount = schema.iter().find(|s| s.name == "amount").expect("amount missing");
+        assert!(amount.type_name.contains("numeric"), "amount should be numeric type, got '{}'", amount.type_name);
+
+        let flag = schema.iter().find(|s| s.name == "flag").expect("flag missing");
+        assert!(flag.type_name.contains("boolean"), "flag should be boolean type, got '{}'", flag.type_name);
+
+        drop_test_table(&c, &tbl).await;
+        println!("  ✓ NUMERIC and BOOLEAN type names returned correctly");
+    }
+
+    // ── fetch_all ────────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_fetch_all_column_and_row_count() {
+        println!("\n[postgres] test_fetch_all_column_and_row_count");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let tbl = unique_table();
+        create_test_table(&c, &tbl).await;
+
+        c.execute(&format!(
+            "INSERT INTO {tbl} (label, amount) VALUES ('alpha', 10.00), ('beta', 20.50), ('gamma', NULL)"
+        )).await.unwrap();
+
+        let result = c.fetch_all(&format!("SELECT * FROM {tbl} ORDER BY id")).await.expect("fetch_all failed");
+        println!("  columns: {:?}", result.columns.iter().map(|c| &c.name).collect::<Vec<_>>());
+        println!("  rows: {}", result.rows.len());
+
+        assert_eq!(result.columns.len(), 5, "test table has 5 columns");
+        assert_eq!(result.rows.len(), 3);
+        assert_eq!(result.columns[0].name, "id");
+        assert_eq!(result.columns[1].name, "label");
+
+        drop_test_table(&c, &tbl).await;
+        println!("  ✓ 5 columns, 3 rows");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_all_empty_result() {
+        println!("\n[postgres] test_fetch_all_empty_result");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let result = c.fetch_all("SELECT 1 WHERE FALSE").await.expect("fetch_all failed");
+        assert_eq!(result.rows.len(), 0);
+        println!("  ✓ SELECT … WHERE FALSE → 0 rows");
+    }
+
+    // ── execute ──────────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_execute_insert_and_delete() {
+        println!("\n[postgres] test_execute_insert_and_delete");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let tbl = unique_table();
+        create_test_table(&c, &tbl).await;
+
+        let n_ins = c.execute(&format!(
+            "INSERT INTO {tbl} (label) VALUES ('row_a'), ('row_b')"
+        )).await.expect("INSERT failed");
+        println!("  INSERT rows_affected: {n_ins}");
+        assert_eq!(n_ins, 2);
+
+        let n_del = c.execute(&format!(
+            "DELETE FROM {tbl} WHERE label IN ('row_a', 'row_b')"
+        )).await.expect("DELETE failed");
+        println!("  DELETE rows_affected: {n_del}");
+        assert_eq!(n_del, 2);
+
+        drop_test_table(&c, &tbl).await;
+        println!("  ✓ INSERT → 2, DELETE → 2");
+    }
+
+    #[tokio::test]
+    async fn test_execute_update_rows_affected() {
+        println!("\n[postgres] test_execute_update_rows_affected");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let tbl = unique_table();
+        create_test_table(&c, &tbl).await;
+
+        c.execute(&format!(
+            "INSERT INTO {tbl} (label, flag) VALUES ('x', FALSE), ('y', FALSE), ('z', TRUE)"
+        )).await.unwrap();
+
+        let n = c.execute(&format!("UPDATE {tbl} SET flag = TRUE WHERE flag = FALSE")).await.expect("UPDATE failed");
+        println!("  UPDATE rows_affected: {n}");
+        assert_eq!(n, 2, "2 rows had flag=FALSE");
+
+        drop_test_table(&c, &tbl).await;
+        println!("  ✓ UPDATE → rows_affected=2");
+    }
+
+    #[tokio::test]
+    async fn test_execute_invalid_sql() {
+        println!("\n[postgres] test_execute_invalid_sql");
+        let Some(url) = pg_url() else {
+            println!("  POSTGRES_URL not set — skipped");
+            return;
+        };
+        let c = connected(&url).await;
+        let err = c.execute("THIS IS NOT VALID SQL").await.unwrap_err();
+        assert!(matches!(err, DbError::QueryFailed(_)));
+        println!("  ✓ invalid SQL → QueryFailed");
+    }
+}
