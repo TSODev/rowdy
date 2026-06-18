@@ -25,6 +25,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `col_offset` (scroll horizontal) également préservé lors des rechargements
 - Nouvelles ouvertures de table : comportement inchangé (ligne 0)
 
+### Fixed
+
+- **Recherche Ctrl+F** : les caractères `n` et `N` tapés dans le prompt s'ajoutaient à la requête mais déclenchaient aussi la navigation vers le match suivant/précédent ; pendant que le prompt est ouvert, seules les flèches `↓`/`↑` naviguent — `n`/`N` reprennent leur rôle de navigation uniquement après `Enter` (prompt fermé, mode nav)
+
 ---
 
 ## [0.8.5] — 2026-06-18
