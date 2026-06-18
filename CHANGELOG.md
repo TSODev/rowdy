@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.9.1] — 2026-06-18
+
+### Fixed
+
+- **Recherche Ctrl+F** : les caractères `n` et `N` tapés dans le prompt déclenchaient la navigation au lieu de s'ajouter à la requête ; pendant que le prompt est ouvert, seules les flèches `↓`/`↑` naviguent — `n`/`N` reprennent leur rôle après `Enter` (mode nav)
+
+---
+
 ## [0.9.0] — 2026-06-18
 
 ### Added
@@ -636,7 +644,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/TSODev/rowdy/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/TSODev/rowdy/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/TSODev/rowdy/compare/v0.8.5...v0.9.0
 [0.8.5]: https://github.com/TSODev/rowdy/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/TSODev/rowdy/compare/v0.8.3...v0.8.4
