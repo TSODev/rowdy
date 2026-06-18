@@ -502,7 +502,7 @@ fn draw_help(f: &mut Frame<'_>, screen: &ConnectionScreen, area: Rect) {
     let confirm_text;
     let text: &str = match screen.input_mode {
         InputMode::Normal =>
-            " j/k: move   Enter: connect   n: new   e: edit   D: delete   q: quit ",
+            " j/k: move   Enter: connect   n: new   e: edit   D: delete   Ctrl+T: new tab   q: quit ",
         InputMode::Editing =>
             " Tab: field   ← →: type   Enter: connect   Ctrl+S: save   Esc: cancel ",
         InputMode::SavingName =>
