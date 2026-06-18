@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Tests sans infrastructure (rapide) ──────────────────────────────────────
+  # SQLite :memory: (14), MongoDB purs (8), MySQL/Turso/Redis/PG purs (~9)
+  # ~31 tests garantis, aucun service externe requis.
+  test:
+    name: Tests (SQLite + purs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --no-default-features --features mongodb
+
+      - name: Test
+        run: cargo test --no-default-features --features mongodb -- --nocapture
+
+  # ── Tests DuckDB :memory: (compilation C++ bundled, mise en cache) ───────────
+  # DuckDB (20 tests :memory:, zéro infrastructure)
+  test-duckdb:
+    name: Tests DuckDB (:memory:)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install build dependencies
+        run: sudo apt-get install -y cmake build-essential
+
+      - name: Cache Cargo (DuckDB)
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: duckdb
+
+      - name: Build
+        run: cargo build --no-default-features --features duckdb
+
+      - name: Test
+        run: cargo test --no-default-features --features duckdb duckdb -- --nocapture
+
+  # ── Clippy ───────────────────────────────────────────────────────────────────
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy
+
+      - name: Clippy
+        run: cargo clippy --no-default-features --features mongodb -- -D warnings
