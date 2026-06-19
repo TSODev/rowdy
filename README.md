@@ -212,6 +212,34 @@ url = "postgres://user:pass@prod-host/mydb?sslmode=require&readonly=true"
 
 A red `READ-ONLY` badge appears in the status bar. `Enter` (edit record) and all DML statements in the SQL editor are disabled. Filters, pagination, and export still work normally.
 
+### SQL Snippets
+
+Save frequently used queries in `~/.config/rowdy/snippets.toml` to recall them instantly with `Ctrl+P` in the SQL editor:
+
+```toml
+[[snippets]]
+name = "orders with customer"
+sql = """
+SELECT o.id, o.ordered_at, o.status, o.total,
+       c.first_name || ' ' || c.last_name AS customer
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+ORDER BY o.ordered_at DESC"""
+
+[[snippets]]
+name = "revenue by category"
+sql = """
+SELECT c.name AS category,
+       SUM(oi.quantity * oi.unit_price) AS revenue
+FROM order_items oi
+JOIN books b ON b.id = oi.book_id
+JOIN categories c ON c.id = b.category_id
+GROUP BY c.name
+ORDER BY revenue DESC"""
+```
+
+Snippets are managed entirely from the SQL editor: `Ctrl+S` saves the current query under a name you choose, `Ctrl+P` opens the palette to search, insert or delete.
+
 ---
 
 ## ⌨️ Keyboard shortcuts

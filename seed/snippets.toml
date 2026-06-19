@@ -1,0 +1,435 @@
+# Rowdy — SQL Snippets for seed data
+# Compatible avec les seeds : postgres.sql, sqlite.sql, mysql.sql, duckdb.sql
+#
+# Copier vers ~/.config/rowdy/snippets.toml
+# Préfixes de nommage :
+#   [all]    — fonctionne sur PostgreSQL, SQLite, MySQL et DuckDB
+#   [pg]     — PostgreSQL uniquement
+#   [mysql]  — MySQL / MariaDB uniquement
+#   [sqlite] — SQLite uniquement
+#   [duck]   — DuckDB uniquement
+
+# ── Exploration générale ────────────────────────────────────────────────────
+
+[[snippets]]
+name = "[all] livres avec auteur"
+sql = """
+SELECT b.id, b.title, b.published_year, b.price, b.stock,
+       a.first_name || ' ' || a.last_name AS author,
+       c.name AS category
+FROM books b
+JOIN authors a ON a.id = b.author_id
+JOIN categories c ON c.id = b.category_id
+ORDER BY b.title"""
+
+[[snippets]]
+name = "[all] livres disponibles en stock"
+sql = """
+SELECT b.title, a.first_name || ' ' || a.last_name AS author,
+       c.name AS category, b.price, b.stock
+FROM books b
+JOIN authors a ON a.id = b.author_id
+JOIN categories c ON c.id = b.category_id
+WHERE b.available = 1 AND b.stock > 0
+ORDER BY b.stock DESC"""
+
+[[snippets]]
+name = "[all] commandes avec client"
+sql = """
+SELECT o.id, o.ordered_at, o.status,
+       c.first_name || ' ' || c.last_name AS customer,
+       c.city, o.total
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+ORDER BY o.ordered_at DESC"""
+
+[[snippets]]
+name = "[all] detail commande"
+sql = """
+SELECT o.id AS order_id, o.ordered_at, o.status,
+       c.first_name || ' ' || c.last_name AS customer,
+       b.title, oi.quantity, oi.unit_price,
+       oi.quantity * oi.unit_price AS line_total
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+JOIN order_items oi ON oi.order_id = o.id
+JOIN books b ON b.id = oi.book_id
+ORDER BY o.id, b.title"""
+
+[[snippets]]
+name = "[all] top livres vendus"
+sql = """
+SELECT b.title, a.first_name || ' ' || a.last_name AS author,
+       SUM(oi.quantity) AS qty_sold,
+       SUM(oi.quantity * oi.unit_price) AS revenue
+FROM order_items oi
+JOIN books b ON b.id = oi.book_id
+JOIN authors a ON a.id = b.author_id
+GROUP BY b.id, b.title, a.first_name, a.last_name
+ORDER BY qty_sold DESC"""
+
+[[snippets]]
+name = "[all] CA par categorie"
+sql = """
+SELECT c.name AS category,
+       COUNT(DISTINCT oi.order_id) AS nb_orders,
+       SUM(oi.quantity) AS qty_sold,
+       SUM(oi.quantity * oi.unit_price) AS revenue
+FROM order_items oi
+JOIN books b ON b.id = oi.book_id
+JOIN categories c ON c.id = b.category_id
+GROUP BY c.id, c.name
+ORDER BY revenue DESC"""
+
+[[snippets]]
+name = "[all] auteurs avec nb livres"
+sql = """
+SELECT a.first_name || ' ' || a.last_name AS author,
+       a.country, a.birth_year,
+       COUNT(b.id) AS nb_books,
+       ROUND(AVG(b.price), 2) AS avg_price
+FROM authors a
+LEFT JOIN books b ON b.author_id = a.id
+GROUP BY a.id, a.first_name, a.last_name, a.country, a.birth_year
+ORDER BY nb_books DESC"""
+
+[[snippets]]
+name = "[all] clients top acheteurs"
+sql = """
+SELECT c.first_name || ' ' || c.last_name AS customer,
+       c.city,
+       COUNT(o.id) AS nb_orders,
+       SUM(o.total) AS total_spent
+FROM customers c
+LEFT JOIN orders o ON o.customer_id = c.id
+GROUP BY c.id, c.first_name, c.last_name, c.city
+ORDER BY total_spent DESC"""
+
+[[snippets]]
+name = "[all] commandes par statut"
+sql = """
+SELECT status,
+       COUNT(*) AS nb_orders,
+       SUM(total) AS total_revenue
+FROM orders
+GROUP BY status
+ORDER BY nb_orders DESC"""
+
+[[snippets]]
+name = "[all] historique client"
+sql = """
+SELECT o.id, o.ordered_at, o.status, o.total,
+       b.title, oi.quantity, oi.unit_price
+FROM customers c
+JOIN orders o ON o.customer_id = c.id
+JOIN order_items oi ON oi.order_id = o.id
+JOIN books b ON b.id = oi.book_id
+WHERE c.id = 1
+ORDER BY o.ordered_at DESC, b.title"""
+
+[[snippets]]
+name = "[all] livres sans commande"
+sql = """
+SELECT b.title, a.first_name || ' ' || a.last_name AS author, b.stock
+FROM books b
+JOIN authors a ON a.id = b.author_id
+WHERE b.id NOT IN (SELECT DISTINCT book_id FROM order_items)
+ORDER BY b.title"""
+
+[[snippets]]
+name = "[all] prix moyen par categorie"
+sql = """
+SELECT c.name AS category,
+       COUNT(b.id) AS nb_books,
+       MIN(b.price) AS price_min,
+       ROUND(AVG(b.price), 2) AS price_avg,
+       MAX(b.price) AS price_max
+FROM categories c
+LEFT JOIN books b ON b.category_id = c.id
+GROUP BY c.id, c.name
+ORDER BY price_avg DESC"""
+
+# ── PostgreSQL ──────────────────────────────────────────────────────────────
+
+[[snippets]]
+name = "[pg] commandes recentes 30j"
+sql = """
+SELECT o.id, o.ordered_at, o.status, o.total,
+       c.first_name || ' ' || c.last_name AS customer
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+WHERE o.ordered_at >= NOW() - INTERVAL '30 days'
+ORDER BY o.ordered_at DESC"""
+
+[[snippets]]
+name = "[pg] livres publies depuis N ans"
+sql = """
+SELECT title, published_year, price, stock
+FROM books
+WHERE published_year >= EXTRACT(YEAR FROM NOW()) - 20
+ORDER BY published_year DESC"""
+
+[[snippets]]
+name = "[pg] CA mensuel"
+sql = """
+SELECT DATE_TRUNC('month', o.ordered_at) AS month,
+       COUNT(*) AS nb_orders,
+       SUM(o.total) AS revenue
+FROM orders o
+WHERE o.status != 'cancelled'
+GROUP BY 1
+ORDER BY 1 DESC"""
+
+[[snippets]]
+name = "[pg] clients enregistres par mois"
+sql = """
+SELECT DATE_TRUNC('month', registered_at) AS month,
+       COUNT(*) AS new_customers
+FROM customers
+GROUP BY 1
+ORDER BY 1"""
+
+[[snippets]]
+name = "[pg] schema tables rowdy"
+sql = """
+SELECT t.table_name, c.column_name, c.data_type,
+       c.is_nullable, c.column_default
+FROM information_schema.tables t
+JOIN information_schema.columns c
+  ON c.table_name = t.table_name
+WHERE t.table_schema = 'public'
+ORDER BY t.table_name, c.ordinal_position"""
+
+[[snippets]]
+name = "[pg] foreign keys"
+sql = """
+SELECT tc.table_name, kcu.column_name,
+       ccu.table_name AS foreign_table,
+       ccu.column_name AS foreign_column
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON kcu.constraint_name = tc.constraint_name
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY'
+ORDER BY tc.table_name"""
+
+[[snippets]]
+name = "[pg] taille tables"
+sql = """
+SELECT relname AS table_name,
+       pg_size_pretty(pg_total_relation_size(relid)) AS total_size,
+       n_live_tup AS live_rows
+FROM pg_stat_user_tables
+ORDER BY pg_total_relation_size(relid) DESC"""
+
+[[snippets]]
+name = "[pg] explain commandes"
+sql = """
+EXPLAIN ANALYZE
+SELECT o.id, o.total, c.email
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+WHERE o.status = 'delivered'"""
+
+# ── MySQL / MariaDB ──────────────────────────────────────────────────────────
+
+[[snippets]]
+name = "[mysql] commandes recentes 30j"
+sql = """
+SELECT o.id, o.ordered_at, o.status, o.total,
+       CONCAT(c.first_name, ' ', c.last_name) AS customer
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+WHERE o.ordered_at >= NOW() - INTERVAL 30 DAY
+ORDER BY o.ordered_at DESC"""
+
+[[snippets]]
+name = "[mysql] CA mensuel"
+sql = """
+SELECT DATE_FORMAT(o.ordered_at, '%Y-%m') AS month,
+       COUNT(*) AS nb_orders,
+       SUM(o.total) AS revenue
+FROM orders o
+WHERE o.status != 'cancelled'
+GROUP BY DATE_FORMAT(o.ordered_at, '%Y-%m')
+ORDER BY month DESC"""
+
+[[snippets]]
+name = "[mysql] livres disponibles"
+sql = """
+SELECT b.title, CONCAT(a.first_name, ' ', a.last_name) AS author,
+       c.name AS category, b.price, b.stock
+FROM books b
+JOIN authors a ON a.id = b.author_id
+JOIN categories c ON c.id = b.category_id
+WHERE b.available = 1 AND b.stock > 0
+ORDER BY b.stock DESC"""
+
+[[snippets]]
+name = "[mysql] schema colonnes"
+sql = """
+SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE,
+       IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME, ORDINAL_POSITION"""
+
+[[snippets]]
+name = "[mysql] foreign keys"
+sql = """
+SELECT TABLE_NAME, COLUMN_NAME,
+       REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE TABLE_SCHEMA = DATABASE()
+  AND REFERENCED_TABLE_NAME IS NOT NULL
+ORDER BY TABLE_NAME"""
+
+[[snippets]]
+name = "[mysql] top clients ce mois"
+sql = """
+SELECT CONCAT(c.first_name, ' ', c.last_name) AS customer,
+       COUNT(o.id) AS nb_orders,
+       SUM(o.total) AS total_spent
+FROM customers c
+JOIN orders o ON o.customer_id = c.id
+WHERE MONTH(o.ordered_at) = MONTH(CURRENT_DATE)
+  AND YEAR(o.ordered_at) = YEAR(CURRENT_DATE)
+GROUP BY c.id, c.first_name, c.last_name
+ORDER BY total_spent DESC"""
+
+# ── SQLite ───────────────────────────────────────────────────────────────────
+
+[[snippets]]
+name = "[sqlite] livres avec auteur"
+sql = """
+SELECT b.title, a.first_name || ' ' || a.last_name AS author,
+       c.name AS category, b.price, b.stock, b.available
+FROM books b
+JOIN authors a ON a.id = b.author_id
+JOIN categories c ON c.id = b.category_id
+ORDER BY b.title"""
+
+[[snippets]]
+name = "[sqlite] commandes recentes 30j"
+sql = """
+SELECT o.id, o.ordered_at, o.status, o.total,
+       c.first_name || ' ' || c.last_name AS customer
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+WHERE o.ordered_at >= DATE('now', '-30 days')
+ORDER BY o.ordered_at DESC"""
+
+[[snippets]]
+name = "[sqlite] CA par mois"
+sql = """
+SELECT STRFTIME('%Y-%m', o.ordered_at) AS month,
+       COUNT(*) AS nb_orders,
+       ROUND(SUM(o.total), 2) AS revenue
+FROM orders o
+WHERE o.status != 'cancelled'
+GROUP BY STRFTIME('%Y-%m', o.ordered_at)
+ORDER BY month DESC"""
+
+[[snippets]]
+name = "[sqlite] pragma schema"
+sql = "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') ORDER BY type, name"
+
+[[snippets]]
+name = "[sqlite] pragma colonnes books"
+sql = "PRAGMA table_info(books)"
+
+[[snippets]]
+name = "[sqlite] foreign keys books"
+sql = "PRAGMA foreign_key_list(books)"
+
+[[snippets]]
+name = "[sqlite] stats tables"
+sql = """
+SELECT name,
+       (SELECT COUNT(*) FROM categories) AS categories,
+       (SELECT COUNT(*) FROM authors) AS authors,
+       (SELECT COUNT(*) FROM books) AS books,
+       (SELECT COUNT(*) FROM customers) AS customers,
+       (SELECT COUNT(*) FROM orders) AS orders,
+       (SELECT COUNT(*) FROM order_items) AS order_items
+FROM (SELECT 1 AS name)"""
+
+# ── DuckDB ───────────────────────────────────────────────────────────────────
+
+[[snippets]]
+name = "[duck] livres avec auteur"
+sql = """
+SELECT b.title, a.first_name || ' ' || a.last_name AS author,
+       c.name AS category, b.price, b.stock
+FROM books b
+JOIN authors a ON a.id = b.author_id
+JOIN categories c ON c.id = b.category_id
+ORDER BY b.title"""
+
+[[snippets]]
+name = "[duck] revenue mensuel"
+sql = """
+SELECT DATE_TRUNC('month', sale_date) AS month,
+       SUM(revenue) AS total_revenue,
+       SUM(units_sold) AS total_units
+FROM daily_sales
+GROUP BY DATE_TRUNC('month', sale_date)
+ORDER BY month DESC"""
+
+[[snippets]]
+name = "[duck] revenue par categorie"
+sql = """
+SELECT c.name AS category,
+       SUM(ds.revenue) AS total_revenue,
+       SUM(ds.units_sold) AS total_units,
+       ROUND(SUM(ds.revenue) / SUM(ds.units_sold), 2) AS avg_unit_price
+FROM daily_sales ds
+JOIN categories c ON c.id = ds.category_id
+GROUP BY c.id, c.name
+ORDER BY total_revenue DESC"""
+
+[[snippets]]
+name = "[duck] tendance hebdo 12 semaines"
+sql = """
+SELECT DATE_TRUNC('week', sale_date) AS week,
+       SUM(revenue) AS revenue,
+       SUM(units_sold) AS units_sold
+FROM daily_sales
+WHERE sale_date >= CURRENT_DATE - INTERVAL 84 DAYS
+GROUP BY DATE_TRUNC('week', sale_date)
+ORDER BY week"""
+
+[[snippets]]
+name = "[duck] window part de marche categorie"
+sql = """
+SELECT c.name AS category,
+       SUM(ds.revenue) AS revenue,
+       ROUND(100.0 * SUM(ds.revenue) / SUM(SUM(ds.revenue)) OVER (), 2) AS market_share_pct,
+       RANK() OVER (ORDER BY SUM(ds.revenue) DESC) AS rank
+FROM daily_sales ds
+JOIN categories c ON c.id = ds.category_id
+GROUP BY c.id, c.name
+ORDER BY rank"""
+
+[[snippets]]
+name = "[duck] commandes recentes 30j"
+sql = """
+SELECT o.id, o.ordered_at, o.status,
+       c.first_name || ' ' || c.last_name AS customer
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+WHERE o.ordered_at >= CURRENT_DATE - INTERVAL 30 DAYS
+ORDER BY o.ordered_at DESC"""
+
+[[snippets]]
+name = "[duck] describe books"
+sql = "DESCRIBE books"
+
+[[snippets]]
+name = "[duck] lire parquet"
+sql = "SELECT * FROM read_parquet('/chemin/vers/fichier.parquet') LIMIT 100"
+
+[[snippets]]
+name = "[duck] lire csv"
+sql = "SELECT * FROM read_csv_auto('/chemin/vers/fichier.csv') LIMIT 100"
