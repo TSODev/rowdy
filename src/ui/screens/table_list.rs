@@ -28,6 +28,7 @@ pub struct TableListScreen {
     pub is_kv: bool,
     pub all_schemas: HashMap<String, Vec<ColumnSchema>>,
     pub schemas_loading: bool,
+    pub schemas_supported: bool,
 }
 
 impl TableListScreen {
@@ -42,6 +43,7 @@ impl TableListScreen {
             is_kv: false,
             all_schemas: HashMap::new(),
             schemas_loading: false,
+            schemas_supported: true,
         }
     }
 
@@ -275,6 +277,16 @@ impl TableListScreen {
             );
             return;
         };
+
+        if !screen.schemas_supported {
+            f.render_widget(
+                Paragraph::new("Schema not available for this connector type")
+                    .block(Block::default().title(format!(" {} ", table_name)).borders(Borders::ALL))
+                    .style(Style::default().fg(Color::Gray)),
+                area,
+            );
+            return;
+        }
 
         if screen.schemas_loading {
             f.render_widget(

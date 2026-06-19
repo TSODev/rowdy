@@ -846,6 +846,10 @@ impl Tab {
     // ── ERD graph (level 2) ───────────────────────────────────────────────────
 
     fn open_erd_graph(&mut self, name: String) {
+        if !self.table_list_screen.schemas_supported {
+            self.table_list_screen.status = Some("ERD not available for this connector type".into());
+            return;
+        }
         if self.table_list_screen.schemas_loading {
             self.table_list_screen.status = Some("Schema still loading…".into());
             return;
@@ -876,6 +880,9 @@ impl Tab {
                 }
                 let _ = tx.send(DbEvent::AllSchemasLoaded(schema)).await;
             });
+        } else {
+            // KV and NoSQL connectors have no SQL schema; reset loading state directly
+            self.table_list_screen.schemas_loading = false;
         }
     }
 
@@ -1376,6 +1383,7 @@ impl Tab {
                 self.connection_screen.status = None;
                 self.table_list_screen = TableListScreen::new();
                 self.table_list_screen.db_info = format!("[{db_type}] {safe_url}");
+                self.table_list_screen.schemas_supported = false;
                 self.state = AppState::TableList;
                 self.spawn_load_tables();
             }
@@ -1383,6 +1391,7 @@ impl Tab {
                 self.connection_screen.status = Some(format!("Error: {msg}"));
             }
             DbEvent::TablesLoaded(names) => {
+                self.table_list_screen.schemas_supported = false;
                 self.table_list_screen.set_tables_kv(names);
             }
             DbEvent::TableObjectsLoaded(objects) => {

@@ -11,6 +11,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Package crates.io** : fichiers `*.cast` et `*.pdf` exclus du package publié via `.gitignore` et le champ `exclude` dans `Cargo.toml` — réduit la taille du crate de 1.96 MB à 178 KB compressé
 - **README** : remplacement du badge image asciinema (bloqué par la CSP de crates.io) par un lien texte vers la démo
+- **Panneau schéma / ERD — MongoDB et Redis** : `schemas_loading` restait bloqué à `true` pour les connecteurs non-SQL car `spawn_load_all_schemas()` ne déclenchait rien mais ne réinitialisait jamais le flag — le panneau affichait « Loading schema… » indéfiniment, et la touche `r` (ERD) était bloquée sur « Schema still loading… » ; nouveau champ `schemas_supported: bool` dans `TableListScreen` (défaut `true`, mis à `false` pour NoSQL et KV) : le panneau affiche désormais « Schema not available for this connector type » et l'ERD « ERD not available for this connector type » immédiatement à la connexion
 
 ---
 
