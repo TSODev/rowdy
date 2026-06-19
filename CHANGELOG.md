@@ -5,6 +5,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.9.3] — 2026-06-19
+
+### Added
+
+- **Snippets SQL** — `Ctrl+P` ouvre une palette flottante centrée avec filtre live (saisie en temps réel), navigation `↑/↓`, `Enter` pour insérer le snippet dans l'éditeur, `D` pour supprimer, `Esc` pour fermer ; `Ctrl+S` dans l'éditeur ouvre un prompt « Save Snippet » pour nommer et sauvegarder la requête courante ; snippets persistés dans `~/.config/rowdy/snippets.toml` (upsert par nom) ; help bar dynamique adaptée selon le popup actif ; flash message de confirmation à la sauvegarde et à la suppression
+
+### Fixed
+
+- **Panneau schéma / ERD — MongoDB et Redis** : `schemas_loading` restait bloqué à `true` pour les connecteurs non-SQL — le panneau affichait « Loading schema… » indéfiniment et la touche `r` (ERD) était bloquée sur « Schema still loading… » ; nouveau champ `schemas_supported: bool` dans `TableListScreen` (défaut `true`, mis à `false` pour NoSQL et KV) : affichage immédiat de « Schema not available for this connector type »
+- **Palette snippets — contraste** : ligne sélectionnée en `White Bold` sur fond `Magenta` (nom) et `LightCyan` sur `Magenta` (aperçu SQL) pour une meilleure lisibilité
+
+---
+
 ## [0.9.2] — 2026-06-19
 
 ### Fixed
