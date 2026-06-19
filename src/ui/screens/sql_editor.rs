@@ -657,10 +657,9 @@ fn draw_editor(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
         let rows: Vec<RatRow> = filtered.iter().enumerate()
             .skip(scroll_offset)
             .take(max_visible)
-            .map(|(display_idx, &snippet_idx)| {
+            .map(|(abs_idx, &snippet_idx)| {
                 let s = &p.snippets[snippet_idx];
-                let real_idx = display_idx + scroll_offset;
-                let selected = real_idx == p.selected;
+                let selected = abs_idx == p.selected;
                 let preview: String = s.sql.lines().next().unwrap_or("").chars().take(popup_w as usize - 20).collect();
                 let line = if selected {
                     Line::from(vec![

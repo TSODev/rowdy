@@ -15,6 +15,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Panneau schéma / ERD — MongoDB et Redis** : `schemas_loading` restait bloqué à `true` pour les connecteurs non-SQL — le panneau affichait « Loading schema… » indéfiniment et la touche `r` (ERD) était bloquée sur « Schema still loading… » ; nouveau champ `schemas_supported: bool` dans `TableListScreen` (défaut `true`, mis à `false` pour NoSQL et KV) : affichage immédiat de « Schema not available for this connector type »
 - **Palette snippets — contraste** : ligne sélectionnée en `White Bold` sur fond `Magenta` (nom) et `LightCyan` sur `Magenta` (aperçu SQL) pour une meilleure lisibilité
+- **Palette snippets — scroll** : la sélection n'était plus visible au-delà des premiers items ; `enumerate()` étant appelé avant `.skip()`, `display_idx` était déjà l'index absolu — ajouter `scroll_offset` en plus doublait le décalage et rendait `real_idx == p.selected` toujours faux après le premier scroll ; suppression de `real_idx`, utilisation directe de `abs_idx`
 
 ---
 
