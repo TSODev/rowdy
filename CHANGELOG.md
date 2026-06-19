@@ -16,6 +16,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - **Snippets SQL** — `Ctrl+P` ouvre une palette flottante centrée avec filtre live (saisie en temps réel), navigation `↑/↓`, `Enter` pour insérer le snippet dans l'éditeur, `D` pour supprimer, `Esc` pour fermer ; `Ctrl+S` dans l'éditeur ouvre un prompt « Save Snippet » pour nommer et sauvegarder la requête courante ; snippets persistés dans `~/.config/rowdy/snippets.toml` (upsert par nom) ; help bar dynamique adaptée selon le popup actif ; flash message de confirmation à la sauvegarde et à la suppression
+- **Palette snippets — contraste** : ligne sélectionnée en `White Bold` sur fond `Magenta` (nom) et `LightCyan` sur `Magenta` (aperçu SQL) au lieu de `Black/Magenta` illisible
 
 ---
 
