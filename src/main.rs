@@ -4,6 +4,7 @@ mod db;
 mod events;
 mod export;
 mod history;
+mod snippets;
 mod ui;
 
 use clap::Parser;

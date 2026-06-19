@@ -2,11 +2,13 @@ use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
+    text::{Line, Span},
     widgets::{Block, Borders, Cell, Clear, Paragraph, Row as RatRow, Table, TableState},
     Frame,
 };
 use tui_textarea::{Input, Key, TextArea};
 use crate::db::types::{DbQueryResult, Value};
+use crate::snippets::Snippet;
 
 // ── SQL keywords for autocomplete ────────────────────────────────────────────
 
@@ -73,6 +75,9 @@ pub enum SqlEditorAction {
     OpenGrid(DbQueryResult),
     HistoryPrev,
     HistoryNext,
+    OpenSnippetPalette,       // app.rs calls open_snippet_palette() with current list
+    SaveSnippet(String),      // name entered by user
+    DeleteSnippet(usize),     // index into snippet list
 }
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────
@@ -81,6 +86,24 @@ struct AutocompletePopup {
     suggestions: Vec<String>,
     selected: usize,
     prefix: String,
+}
+
+// ── Snippet palette ───────────────────────────────────────────────────────────
+
+struct SnippetPalette {
+    snippets: Vec<Snippet>,
+    query: String,
+    selected: usize,
+}
+
+impl SnippetPalette {
+    fn filtered_indices(&self) -> Vec<usize> {
+        let q = self.query.to_lowercase();
+        self.snippets.iter().enumerate()
+            .filter(|(_, s)| q.is_empty() || s.name.to_lowercase().contains(&q))
+            .map(|(i, _)| i)
+            .collect()
+    }
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -97,6 +120,9 @@ pub struct SqlEditorScreen {
     // Autocomplete
     completion_items: Vec<String>,
     autocomplete: Option<AutocompletePopup>,
+    // Snippets
+    snippet_palette: Option<SnippetPalette>,
+    snippet_save_name: Option<String>, // None = not prompting, Some(s) = typing name
 }
 
 impl SqlEditorScreen {
@@ -116,11 +142,21 @@ impl SqlEditorScreen {
             nosql_collection: None,
             completion_items: Vec::new(),
             autocomplete: None,
+            snippet_palette: None,
+            snippet_save_name: None,
         }
     }
 
     pub fn set_completions(&mut self, items: Vec<String>) {
         self.completion_items = items;
+    }
+
+    pub fn open_snippet_palette(&mut self, snippets: Vec<Snippet>) {
+        self.snippet_palette = Some(SnippetPalette {
+            snippets,
+            query: String::new(),
+            selected: 0,
+        });
     }
 
     pub fn set_nosql_collection(&mut self, collection: Option<String>) {
@@ -177,6 +213,90 @@ impl SqlEditorScreen {
         let input = Input::from(key);
         match self.focus {
             EditorFocus::Editor => {
+                // ── Snippet save prompt active ────────────────────────────────
+                if let Some(ref mut name) = self.snippet_save_name {
+                    match input {
+                        Input { key: Key::Esc, .. } => {
+                            self.snippet_save_name = None;
+                        }
+                        Input { key: Key::Enter, .. } => {
+                            let n = name.trim().to_string();
+                            self.snippet_save_name = None;
+                            if !n.is_empty() {
+                                let sql = self.editor.lines().join("\n").trim().to_string();
+                                if !sql.is_empty() {
+                                    return SqlEditorAction::SaveSnippet(n);
+                                }
+                            }
+                        }
+                        Input { key: Key::Backspace, .. } => { name.pop(); }
+                        Input { key: Key::Char(c), ctrl: false, alt: false, .. } => {
+                            name.push(c);
+                        }
+                        _ => {}
+                    }
+                    return SqlEditorAction::None;
+                }
+
+                // ── Snippet palette active ────────────────────────────────────
+                if self.snippet_palette.is_some() {
+                    match input {
+                        Input { key: Key::Esc, .. } => {
+                            self.snippet_palette = None;
+                        }
+                        Input { key: Key::Up, .. } => {
+                            if let Some(ref mut p) = self.snippet_palette {
+                                let filtered = p.filtered_indices();
+                                if p.selected > 0 && !filtered.is_empty() {
+                                    p.selected -= 1;
+                                }
+                            }
+                        }
+                        Input { key: Key::Down, .. } => {
+                            if let Some(ref mut p) = self.snippet_palette {
+                                let filtered = p.filtered_indices();
+                                if p.selected + 1 < filtered.len() {
+                                    p.selected += 1;
+                                }
+                            }
+                        }
+                        Input { key: Key::Enter, .. } => {
+                            if let Some(p) = self.snippet_palette.take() {
+                                let filtered = p.filtered_indices();
+                                if let Some(&idx) = filtered.get(p.selected) {
+                                    let sql = p.snippets[idx].sql.clone();
+                                    self.set_editor_content(&sql);
+                                }
+                            }
+                        }
+                        Input { key: Key::Char('d'), ctrl: false, alt: false, .. }
+                        | Input { key: Key::Char('D'), ctrl: false, alt: false, .. } => {
+                            if let Some(ref p) = self.snippet_palette {
+                                let filtered = p.filtered_indices();
+                                if let Some(&idx) = filtered.get(p.selected) {
+                                    let idx_to_delete = idx;
+                                    self.snippet_palette = None;
+                                    return SqlEditorAction::DeleteSnippet(idx_to_delete);
+                                }
+                            }
+                        }
+                        Input { key: Key::Backspace, .. } => {
+                            if let Some(ref mut p) = self.snippet_palette {
+                                p.query.pop();
+                                p.selected = 0;
+                            }
+                        }
+                        Input { key: Key::Char(c), ctrl: false, alt: false, .. } => {
+                            if let Some(ref mut p) = self.snippet_palette {
+                                p.query.push(c);
+                                p.selected = 0;
+                            }
+                        }
+                        _ => {}
+                    }
+                    return SqlEditorAction::None;
+                }
+
                 // ── Autocomplete popup active ─────────────────────────────────
                 if self.autocomplete.is_some() {
                     match input {
@@ -257,6 +377,17 @@ impl SqlEditorScreen {
                     }
                     Input { key: Key::Down, alt: true, .. } => {
                         return SqlEditorAction::HistoryNext;
+                    }
+                    // Snippet palette: Ctrl+P
+                    Input { key: Key::Char('p'), ctrl: true, .. } => {
+                        return SqlEditorAction::OpenSnippetPalette;
+                    }
+                    // Save current SQL as snippet: Ctrl+S
+                    Input { key: Key::Char('s'), ctrl: true, .. } => {
+                        let sql = self.editor.lines().join("\n").trim().to_string();
+                        if !sql.is_empty() {
+                            self.snippet_save_name = Some(String::new());
+                        }
                     }
                     // Regular input — pass to textarea, then refresh autocomplete
                     _ => {
@@ -487,6 +618,102 @@ fn draw_editor(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
             popup_area,
         );
     }
+
+    // ── Snippet palette popup ─────────────────────────────────────────────────
+    if let Some(ref p) = screen.snippet_palette {
+        let filtered = p.filtered_indices();
+        let max_visible = 10usize;
+        let popup_w = (area.width / 2).max(40).min(area.width.saturating_sub(4));
+        let popup_h = (filtered.len().min(max_visible) as u16 + 4).min(area.height.saturating_sub(2));
+        let popup_x = area.x + (area.width.saturating_sub(popup_w)) / 2;
+        let popup_y = area.y + (area.height.saturating_sub(popup_h)) / 2;
+        let popup_area = Rect::new(popup_x, popup_y, popup_w, popup_h);
+        f.render_widget(Clear, popup_area);
+
+        let inner = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(1)])
+            .margin(1)
+            .split(popup_area);
+
+        let title = format!(" Snippets  {} results ", filtered.len());
+        f.render_widget(
+            Block::default()
+                .title(title)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Magenta)),
+            popup_area,
+        );
+
+        // Search bar
+        let search = format!(" Filter: {}_", p.query);
+        f.render_widget(
+            Paragraph::new(search).style(Style::default().fg(Color::Yellow)),
+            inner[0],
+        );
+
+        // Snippet list
+        let scroll_offset = p.selected.saturating_sub(max_visible - 1);
+        let rows: Vec<RatRow> = filtered.iter().enumerate()
+            .skip(scroll_offset)
+            .take(max_visible)
+            .map(|(display_idx, &snippet_idx)| {
+                let s = &p.snippets[snippet_idx];
+                let real_idx = display_idx + scroll_offset;
+                let selected = real_idx == p.selected;
+                let preview: String = s.sql.lines().next().unwrap_or("").chars().take(popup_w as usize - 20).collect();
+                let style = if selected {
+                    Style::default().fg(Color::Black).bg(Color::Magenta).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+                let line = Line::from(vec![
+                    Span::styled(format!(" {:.<20}", s.name), style),
+                    Span::styled(format!(" {}", preview), style.fg(if selected { Color::Black } else { Color::Gray })),
+                ]);
+                RatRow::new(vec![Cell::from(line).style(style)])
+            })
+            .collect();
+
+        if filtered.is_empty() {
+            f.render_widget(
+                Paragraph::new(if p.snippets.is_empty() {
+                    " No snippets yet. Use Ctrl+S to save one."
+                } else {
+                    " No match"
+                })
+                .style(Style::default().fg(Color::Gray)),
+                inner[1],
+            );
+        } else {
+            f.render_widget(
+                Table::new(rows, vec![Constraint::Fill(1)]),
+                inner[1],
+            );
+        }
+    }
+
+    // ── Snippet save prompt ───────────────────────────────────────────────────
+    if let Some(ref name) = screen.snippet_save_name {
+        let popup_w = 50u16.min(area.width.saturating_sub(4));
+        let popup_h = 3u16;
+        let popup_x = area.x + (area.width.saturating_sub(popup_w)) / 2;
+        let popup_y = area.y + (area.height.saturating_sub(popup_h)) / 2;
+        let popup_area = Rect::new(popup_x, popup_y, popup_w, popup_h);
+        f.render_widget(Clear, popup_area);
+        let text = format!(" Name: {}_", name);
+        f.render_widget(
+            Paragraph::new(text)
+                .block(
+                    Block::default()
+                        .title(" Save Snippet ")
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Green)),
+                )
+                .style(Style::default().fg(Color::White)),
+            popup_area,
+        );
+    }
 }
 
 // ── Results pane ──────────────────────────────────────────────────────────────
@@ -640,11 +867,17 @@ fn draw_results(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
 // ── Help bar ──────────────────────────────────────────────────────────────────
 
 fn draw_help(f: &mut Frame<'_>, screen: &SqlEditorScreen, area: Rect) {
-    let text = match screen.focus {
-        EditorFocus::Editor =>
-            " F5/Ctrl+Enter: run   Alt+↑/↓: history   Tab: results   F4: grid   Ctrl+Q: back ",
-        EditorFocus::Results =>
-            " j/k: rows   h/l: cols   g/G: first/last   PgUp/Dn: page   F4: open in grid   Tab/Esc: editor ",
+    let text = if screen.snippet_palette.is_some() {
+        " ↑/↓: navigate   Enter: insert   D: delete   Type to filter   Esc: close "
+    } else if screen.snippet_save_name.is_some() {
+        " Type snippet name   Enter: save   Esc: cancel "
+    } else {
+        match screen.focus {
+            EditorFocus::Editor =>
+                " F5/Ctrl+Enter: run   Alt+↑/↓: history   Ctrl+P: snippets   Ctrl+S: save snippet   Tab: autocomplete   F4: grid   Ctrl+Q: back ",
+            EditorFocus::Results =>
+                " j/k: rows   h/l: cols   g/G: first/last   PgUp/Dn: page   F4: open in grid   Tab/Esc: editor ",
+        }
     };
     f.render_widget(
         Paragraph::new(text)

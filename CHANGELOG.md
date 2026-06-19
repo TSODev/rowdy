@@ -13,6 +13,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **README** : remplacement du badge image asciinema (bloqué par la CSP de crates.io) par un lien texte vers la démo
 - **Panneau schéma / ERD — MongoDB et Redis** : `schemas_loading` restait bloqué à `true` pour les connecteurs non-SQL car `spawn_load_all_schemas()` ne déclenchait rien mais ne réinitialisait jamais le flag — le panneau affichait « Loading schema… » indéfiniment, et la touche `r` (ERD) était bloquée sur « Schema still loading… » ; nouveau champ `schemas_supported: bool` dans `TableListScreen` (défaut `true`, mis à `false` pour NoSQL et KV) : le panneau affiche désormais « Schema not available for this connector type » et l'ERD « ERD not available for this connector type » immédiatement à la connexion
 
+### Added
+
+- **Snippets SQL** — `Ctrl+P` ouvre une palette flottante centrée avec filtre live (saisie en temps réel), navigation `↑/↓`, `Enter` pour insérer le snippet dans l'éditeur, `D` pour supprimer, `Esc` pour fermer ; `Ctrl+S` dans l'éditeur ouvre un prompt « Save Snippet » pour nommer et sauvegarder la requête courante ; snippets persistés dans `~/.config/rowdy/snippets.toml` (upsert par nom) ; help bar dynamique adaptée selon le popup actif ; flash message de confirmation à la sauvegarde et à la suppression
+
 ---
 
 ## [0.9.1] — 2026-06-18

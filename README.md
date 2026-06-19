@@ -62,6 +62,7 @@ Rowdy is designed for developers, DBAs, and terminal enthusiasts who want to ins
 - **Multi-statement execution** — splits on `;`, executes sequentially, per-statement error report
 - **SQL autocomplete** — `Tab` triggers a floating popup with tables, columns and 80 SQL keywords ; case-insensitive matching
 - **Query history** — `Alt+↑/↓` to browse ; persisted in `~/.config/rowdy/history.toml` (200 entries, deduped)
+- **SQL snippets** — `Ctrl+P` opens a palette with live filter and navigation ; `Enter` inserts into editor ; `D` deletes ; `Ctrl+S` saves current SQL as a named snippet ; persisted in `~/.config/rowdy/snippets.toml`
 - **F4** — opens the current SELECT result in a full read-only Data Grid
 
 ### Record editing
@@ -304,7 +305,9 @@ The ERD view displays a **star layout**: the selected table in the center (yello
 | `F4` | Open SELECT result in full Data Grid (read-only) |
 | `Alt+↑` | Recall previous query from history |
 | `Alt+↓` | Recall next query from history (empty = clear) |
-| `Tab` | Switch focus to results pane |
+| `Ctrl+P` | Open snippet palette (live filter, `↑/↓` navigate, `Enter` insert, `D` delete, `Esc` close) |
+| `Ctrl+S` | Save current SQL as a named snippet |
+| `Tab` | Trigger autocomplete popup, or switch focus to results pane |
 | `Tab` / `Esc` | Switch focus back to editor |
 | `Ctrl+Q` | Back to table list |
 

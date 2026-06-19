@@ -10,6 +10,7 @@ use tokio::{
 use crate::config::{Config, ConnectionProfile, redact_url, strip_readonly_param, resolve_credential};
 use crate::export;
 use crate::history::QueryHistory;
+use crate::snippets::SnippetStore;
 use crate::db::{
     connectors,
     converters::{json_array_to_schema_values, json_object_to_schema_values, json_to_result,
@@ -141,6 +142,7 @@ pub struct Tab {
     pub status_message: Option<(String, bool)>,
     pub status_message_ttl: u8,
     pub history: QueryHistory,
+    pub snippets: SnippetStore,
     edit_origin: AppState,
     db_tx: mpsc::Sender<DbEvent>,
     pub(crate) db_rx: mpsc::Receiver<DbEvent>,
@@ -176,6 +178,7 @@ impl Tab {
             status_message: None,
             status_message_ttl: 0,
             history: QueryHistory::load(),
+            snippets: SnippetStore::load(),
             edit_origin: AppState::DataGrid,
             db_tx,
             db_rx,
@@ -424,6 +427,26 @@ impl Tab {
                     SqlEditorAction::HistoryNext => {
                         let content = self.history.next();
                         self.sql_editor_screen.set_editor_content(content.unwrap_or(""));
+                    }
+                    SqlEditorAction::OpenSnippetPalette => {
+                        let list = self.snippets.snippets.clone();
+                        self.sql_editor_screen.open_snippet_palette(list);
+                    }
+                    SqlEditorAction::SaveSnippet(name) => {
+                        let sql = self.sql_editor_screen.editor.lines().join("\n").trim().to_string();
+                        if !name.is_empty() && !sql.is_empty() {
+                            self.snippets.add(name.clone(), sql);
+                            self.status_message = Some((format!("Snippet '{}' saved", name), false));
+                            self.status_message_ttl = 60;
+                        }
+                    }
+                    SqlEditorAction::DeleteSnippet(idx) => {
+                        if let Some(s) = self.snippets.snippets.get(idx) {
+                            let name = s.name.clone();
+                            self.snippets.delete(idx);
+                            self.status_message = Some((format!("Snippet '{}' deleted", name), false));
+                            self.status_message_ttl = 60;
+                        }
                     }
                     SqlEditorAction::None => {}
                 }

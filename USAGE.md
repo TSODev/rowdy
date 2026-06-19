@@ -459,8 +459,10 @@ Depuis la vue liste des tables, appuyez sur `e` pour ouvrir l'éditeur SQL.
 | `Ctrl+Enter` | Exécuter la requête |
 | `Alt+↑` | Rappeler la requête précédente depuis l'historique |
 | `Alt+↓` | Rappeler la requête suivante (vide = effacer) |
+| `Ctrl+P` | Ouvrir la palette de snippets |
+| `Ctrl+S` | Sauvegarder la requête courante comme snippet nommé |
+| `Tab` | Déclencher l'autocomplétion, ou basculer vers le panneau Résultats |
 | `F4` | Ouvrir le résultat SELECT dans le Data Grid complet |
-| `Tab` | Basculer vers le panneau Résultats (si résultat disponible) |
 | `Ctrl+Q` | Retour à la liste des tables |
 
 Toutes les touches d'édition standard sont supportées : flèches, `Backspace`, `Delete`, `Home`, `End`, `Ctrl+A` (tout sélectionner), `Ctrl+Z` (annuler), copier/coller selon le terminal.
@@ -470,6 +472,63 @@ Toutes les touches d'édition standard sont supportées : flèches, `Backspace`,
 Chaque requête exécutée est sauvegardée automatiquement dans `~/.config/rowdy/history.toml` (jusqu'à 200 entrées, dédoublonnées). Utilisez `Alt+↑` pour remonter dans l'historique et `Alt+↓` pour revenir vers les requêtes plus récentes. Revenir à zéro avec `Alt+↓` efface l'éditeur.
 
 Le curseur d'historique se réinitialise dès qu'une nouvelle requête est exécutée.
+
+### Snippets SQL
+
+Les snippets permettent de sauvegarder et réutiliser des requêtes fréquentes en 2 touches, sans quitter le TUI.
+
+#### Sauvegarder un snippet (`Ctrl+S`)
+
+Depuis l'éditeur, appuyez sur `Ctrl+S` pour ouvrir le prompt de sauvegarde :
+
+```
+┌─ Save Snippet ───────────────────────────────┐
+│ Name: monthly_report_                        │
+└──────────────────────────────────────────────┘
+```
+
+| Touche | Action |
+|--------|--------|
+| _(frappe)_ | Saisir le nom du snippet |
+| `Backspace` | Effacer un caractère |
+| `Enter` | Sauvegarder dans `~/.config/rowdy/snippets.toml` |
+| `Esc` | Annuler |
+
+Si un snippet portant le même nom existe déjà, il est **mis à jour** (upsert). Un message flash confirme : `Snippet 'monthly_report' saved`.
+
+#### Utiliser un snippet (`Ctrl+P`)
+
+`Ctrl+P` ouvre la palette centrée sur l'écran :
+
+```
+┌─ Snippets  3 results ────────────────────────────────┐
+│ Filter: rep_                                          │
+│ monthly_report......... SELECT * FROM reports WHERE   │
+│ weekly_kpis............ WITH kpis AS (SELECT …        │
+└──────────────────────────────────────────────────────┘
+  ↑/↓: navigate   Enter: insert   D: delete   Type to filter   Esc: close
+```
+
+| Touche | Action |
+|--------|--------|
+| _(frappe)_ | Filtrer les snippets par nom en temps réel |
+| `Backspace` | Effacer un caractère du filtre |
+| `↑` / `↓` | Naviguer dans la liste filtrée |
+| `Enter` | Insérer le snippet sélectionné dans l'éditeur |
+| `D` | Supprimer le snippet sélectionné (avec flash de confirmation) |
+| `Esc` | Fermer la palette sans rien insérer |
+
+Les snippets sont persistés dans `~/.config/rowdy/snippets.toml` :
+
+```toml
+[[snippets]]
+name = "monthly_report"
+sql = "SELECT date_trunc('month', created_at) AS month, COUNT(*) FROM orders GROUP BY 1 ORDER BY 1"
+
+[[snippets]]
+name = "active_users"
+sql = "SELECT * FROM users WHERE active = TRUE ORDER BY created_at DESC LIMIT 100"
+```
 
 ### Mode Résultats (focus jaune sur le tableau)
 
