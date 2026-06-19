@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.9.2] — 2026-06-19
+
+### Fixed
+
+- **Package crates.io** : fichiers `*.cast` et `*.pdf` exclus du package publié via `.gitignore` et le champ `exclude` dans `Cargo.toml` — réduit la taille du crate de 1.96 MB à 178 KB compressé
+- **README** : remplacement du badge image asciinema (bloqué par la CSP de crates.io) par un lien texte vers la démo
+
+---
+
 ## [0.9.1] — 2026-06-18
 
 ### Fixed
