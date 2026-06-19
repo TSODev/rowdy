@@ -662,16 +662,24 @@ fn draw_editor(f: &mut Frame<'_>, screen: &mut SqlEditorScreen, area: Rect) {
                 let real_idx = display_idx + scroll_offset;
                 let selected = real_idx == p.selected;
                 let preview: String = s.sql.lines().next().unwrap_or("").chars().take(popup_w as usize - 20).collect();
-                let style = if selected {
-                    Style::default().fg(Color::Black).bg(Color::Magenta).add_modifier(Modifier::BOLD)
+                let line = if selected {
+                    Line::from(vec![
+                        Span::styled(
+                            format!(" {:.<20}", s.name),
+                            Style::default().fg(Color::White).bg(Color::Magenta).add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            format!(" {}", preview),
+                            Style::default().fg(Color::LightCyan).bg(Color::Magenta),
+                        ),
+                    ])
                 } else {
-                    Style::default()
+                    Line::from(vec![
+                        Span::styled(format!(" {:.<20}", s.name), Style::default()),
+                        Span::styled(format!(" {}", preview), Style::default().fg(Color::Gray)),
+                    ])
                 };
-                let line = Line::from(vec![
-                    Span::styled(format!(" {:.<20}", s.name), style),
-                    Span::styled(format!(" {}", preview), style.fg(if selected { Color::Black } else { Color::Gray })),
-                ]);
-                RatRow::new(vec![Cell::from(line).style(style)])
+                RatRow::new(vec![Cell::from(line)])
             })
             .collect();
 
