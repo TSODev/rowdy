@@ -2,3 +2,5 @@
 .DS_Store
 memory/
 MARKETING.md
+*.cast
+*.pdf

@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 keywords = ["database", "tui", "terminal", "postgres", "sqlite"]
 categories = ["development-tools", "database"]
 repository = "https://github.com/TSODev/rowdy"
+exclude = ["*.cast", "*.pdf", "seed/", "memory/"]
 
 [features]
 default = ["secure-storage"]
