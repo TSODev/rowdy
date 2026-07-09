@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.9.4] — 2026-07-09
+
+### Fixed
+
+- **`cargo install rowdy-db` — conflit de symboles SQLite au link** : `libsql` activait sa feature `core` par défaut (via `default-features`), ce qui compilait `libsql-ffi` et embarquait une seconde copie statique de `sqlite3.c` en plus de celle de `sqlx` (`libsqlite3-sys`) — `rust-lld` échouait avec des dizaines d'erreurs `duplicate symbol` (`sqlite3_value_type`, `sqlite3_str_length`, etc.) empêchant toute installation via `cargo install`. Seule la feature `remote` de `libsql` est utilisée (connecteur Turso) ; `default-features = false` sur la dépendance `libsql` élimine `libsql-ffi` de l'arbre de compilation
+
+---
+
 ## [0.9.3] — 2026-06-19
 
 ### Added

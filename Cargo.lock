@@ -3482,7 +3482,7 @@ dependencies = [
 
 [[package]]
 name = "rowdy-db"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "async-trait",
  "bigdecimal",
