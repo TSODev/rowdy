@@ -43,7 +43,7 @@ toml = "0.8"
 thiserror = "1"
 tui-textarea = "0.5"
 clap = { version = "4", features = ["derive"] }
-libsql = { version = "0.9.30", features = ["remote"] }
+libsql = { version = "0.9.30", default-features = false, features = ["remote"] }
 mongodb = { version = "3", optional = true }
 duckdb = { version = "1", features = ["bundled"], optional = true }
 keyring = { version = "4", optional = true }
