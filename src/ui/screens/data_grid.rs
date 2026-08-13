@@ -387,8 +387,23 @@ impl DataGridScreen {
 
     fn start_filter(&mut self) {
         if let Some(name) = self.selected_col_name() {
-            let existing = self.filters.get(&name).cloned().unwrap_or_default();
-            self.filter_input = Some(FilterInput { col_name: name, value: existing });
+            // Refining an already-filtered column keeps its current value; otherwise
+            // seed the prompt with the selected cell so `f` + `Enter` narrows to it.
+            let value = self.filters.get(&name).cloned()
+                .unwrap_or_else(|| self.selected_cell_filter_seed());
+            self.filter_input = Some(FilterInput { col_name: name, value });
+        }
+    }
+
+    fn selected_cell_filter_seed(&self) -> String {
+        let Some(result) = &self.result else { return String::new() };
+        let Some(row_idx) = self.table_state.selected() else { return String::new() };
+        match result.rows.get(row_idx).and_then(|r| r.values.get(self.selected_col)) {
+            Some(Value::Text(s)) => s.clone(),
+            Some(Value::Int(i)) => i.to_string(),
+            Some(Value::Float(f)) => format_float(*f),
+            Some(Value::Bool(b)) => b.to_string(),
+            _ => String::new(),
         }
     }
 

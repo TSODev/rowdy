@@ -304,7 +304,7 @@ Les données sont chargées par pages de **200 lignes**. Appuyer sur `j` à la d
 
 | Touche | Action |
 |--------|--------|
-| `f` | Ouvrir la saisie de filtre pour la colonne sélectionnée |
+| `f` | Ouvrir la saisie de filtre pour la colonne sélectionnée — pré-remplie avec la valeur de la cellule courante si la colonne n'est pas déjà filtrée, ou avec le filtre actif sinon |
 | `Enter` | Appliquer le filtre (recharge depuis le début) |
 | `Esc` | Annuler la saisie sans appliquer |
 | `d` | Supprimer le filtre de la colonne courante et recharger |
@@ -312,7 +312,9 @@ Les données sont chargées par pages de **200 lignes**. Appuyer sur `j` à la d
 
 Les filtres utilisent `LIKE '%valeur%'` et s'accumulent sur plusieurs colonnes (AND). La valeur de filtre active s'affiche dans la barre d'info : `[name≈bob] [email≈@gmail]`.
 
-> **Note :** `LIKE` est sensible à la casse sur PostgreSQL. Sur SQLite et MySQL les comparaisons ASCII sont insensibles à la casse. Pour les colonnes non-texte (entiers, dates), PostgreSQL peut retourner une erreur — filtrer de préférence sur des colonnes de type texte.  
+Toutes les colonnes sont filtrables en `LIKE`, y compris les types non-texte (`UUID`, `INTEGER`, `BOOLEAN`, `DATE`…) : ces colonnes sont automatiquement enveloppées dans un `CAST(... AS TEXT)` (`CHAR` sous MySQL) avant comparaison, ce qui évite les erreurs de type que PostgreSQL renvoie sur un `LIKE` appliqué directement à une colonne non-texte.
+
+> **Note :** `LIKE` est sensible à la casse sur PostgreSQL. Sur SQLite et MySQL les comparaisons ASCII sont insensibles à la casse.  
 > Redis n'est pas supporté dans le Data Grid (utiliser l'éditeur SQL).
 
 ### Cellule sélectionnée

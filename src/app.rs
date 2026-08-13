@@ -1100,6 +1100,10 @@ impl Tab {
 
     // ── Async data loading ────────────────────────────────────────────────────
 
+    fn sql_db_type(&self) -> &str {
+        self.reconnect_info.as_ref().map(|r| r.db_type.as_str()).unwrap_or("")
+    }
+
     fn spawn_load_data(&mut self, table_name: String) {
         self.data_grid_screen = DataGridScreen::new(table_name.clone());
         self.data_grid_screen.prod_readonly = self.prod_readonly;
@@ -1110,8 +1114,9 @@ impl Tab {
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
             let empty = BTreeMap::new();
-            spawn_sql_page(Arc::clone(c), &table_name, &empty, 0, true, vec![], None, None, self.db_tx.clone());
-            spawn_sql_count(Arc::clone(c), &table_name, &empty, vec![], self.db_tx.clone());
+            let db_type = self.sql_db_type().to_string();
+            spawn_sql_page(Arc::clone(c), &table_name, &empty, 0, true, vec![], None, None, &db_type, self.db_tx.clone());
+            spawn_sql_count(Arc::clone(c), &table_name, &empty, vec![], &db_type, self.db_tx.clone());
             let tx = self.db_tx.clone();
             let client = Arc::clone(c);
             tokio::spawn(async move {
@@ -1177,7 +1182,8 @@ impl Tab {
             .map(|n| (n.clone(), self.data_grid_screen.sort_asc));
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
-            spawn_sql_page(Arc::clone(c), &table, &filters, offset, false, schema, order_by, None, self.db_tx.clone());
+            let db_type = self.sql_db_type().to_string();
+            spawn_sql_page(Arc::clone(c), &table, &filters, offset, false, schema, order_by, None, &db_type, self.db_tx.clone());
         } else if let Some(ActiveClient::NoSql(c)) = &self.active_client {
             let c = Arc::clone(c);
             let tx = self.db_tx.clone();
@@ -1201,8 +1207,9 @@ impl Tab {
         self.data_grid_screen.total_count = None;
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
-            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), order_by, None, self.db_tx.clone());
-            spawn_sql_count(Arc::clone(c), &table, &filters, schema, self.db_tx.clone());
+            let db_type = self.sql_db_type().to_string();
+            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), order_by, None, &db_type, self.db_tx.clone());
+            spawn_sql_count(Arc::clone(c), &table, &filters, schema, &db_type, self.db_tx.clone());
         } else {
             self.data_grid_screen.set_error("Not connected to a SQL database".into());
         }
@@ -1220,7 +1227,8 @@ impl Tab {
         let total    = self.data_grid_screen.total_count.unwrap_or(10_000) as usize;
 
         if let Some(ActiveClient::Sql(c)) = &self.active_client {
-            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema, order_by, Some(total.max(10_000)), self.db_tx.clone());
+            let db_type = self.sql_db_type().to_string();
+            spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema, order_by, Some(total.max(10_000)), &db_type, self.db_tx.clone());
         }
     }
 
@@ -1483,8 +1491,9 @@ impl Tab {
                 self.data_grid_screen.reset_data();
                 self.data_grid_screen.total_count = None;
                 if let Some(ActiveClient::Sql(c)) = &self.active_client {
-                    spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), order_by, None, self.db_tx.clone());
-                    spawn_sql_count(Arc::clone(c), &table, &filters, schema, self.db_tx.clone());
+                    let db_type = self.sql_db_type().to_string();
+                    spawn_sql_page(Arc::clone(c), &table, &filters, 0, true, schema.clone(), order_by, None, &db_type, self.db_tx.clone());
+                    spawn_sql_count(Arc::clone(c), &table, &filters, schema, &db_type, self.db_tx.clone());
                 } else if let Some(ActiveClient::NoSql(c)) = &self.active_client {
                     let c = Arc::clone(c);
                     let tx = self.db_tx.clone();
@@ -1708,10 +1717,11 @@ fn spawn_sql_page(
     schema: Vec<ColumnSchema>,
     order_by: Option<(String, bool)>,
     limit: Option<usize>,
+    db_type: &str,
     tx: mpsc::Sender<DbEvent>,
 ) {
     let ob_ref = order_by.as_ref().map(|(c, a)| (c.as_str(), *a));
-    let query = build_data_query(table, filters, offset, &schema, ob_ref, limit);
+    let query = build_data_query(table, filters, offset, &schema, ob_ref, limit, db_type);
     tokio::spawn(async move {
         let ev = match client.fetch_all(&query).await {
             Ok(r)  => if initial { DbEvent::DataLoaded(r) } else { DbEvent::DataPageLoaded(r) },
@@ -1726,9 +1736,10 @@ fn spawn_sql_count(
     table: &str,
     filters: &BTreeMap<String, String>,
     schema: Vec<ColumnSchema>,
+    db_type: &str,
     tx: mpsc::Sender<DbEvent>,
 ) {
-    let query = build_count_query(table, filters, &schema);
+    let query = build_count_query(table, filters, &schema, db_type);
     tokio::spawn(async move {
         if let Ok(r) = client.fetch_all(&query).await {
             let _ = tx.send(DbEvent::DataCountLoaded(parse_count(&r))).await;

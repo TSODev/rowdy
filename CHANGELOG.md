@@ -5,6 +5,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Data Grid — filtres colonnes : LIKE partout, plus d'égalité stricte** : les colonnes numériques et booléennes utilisaient `= valeur` / `= TRUE/FALSE` au lieu de `LIKE`, ce qui empêchait tout filtrage par sous-chaîne sur ces colonnes. `build_where` applique désormais `LIKE '%valeur%'` à toutes les colonnes ; les types non-texte (`UUID`, `INTEGER`, `BOOLEAN`, `DATE`, `JSON`…) sont enveloppés dans `CAST("col" AS TEXT)` (`CAST("col" AS CHAR)` sous MySQL, seul moteur à refuser `TEXT` comme cible de `CAST`) pour rester compatibles avec `LIKE`. `db_type` est propagé jusqu'à `build_where`/`build_data_query`/`build_count_query` via un nouveau `Tab::sql_db_type()`
+- **Data Grid — pré-remplissage du filtre depuis la cellule sélectionnée** : `f` sur une colonne sans filtre actif pré-remplit désormais la saisie avec la valeur de la cellule courante (`DataGridScreen::selected_cell_filter_seed()`) au lieu de partir d'un champ vide ; si un filtre est déjà actif sur la colonne, sa valeur reste affichée pour permettre de l'affiner
+
+### Fixed
+
+- **Filtre `LIKE` sur colonnes non-texte (UUID notamment)** : filtrer une colonne `UUID` échouait sur PostgreSQL avec `operator does not exist: uuid ~~ unknown` — même classe de bug que celui corrigé en v0.5.5 pour les colonnes `BOOLEAN`/numériques (à l'époque contourné en repassant en `=` plutôt qu'en castant vers du texte) ; le `CAST` explicite ci-dessus résout le problème pour tous les types non-texte, UUID compris
+
+---
+
 ## [0.9.4] — 2026-07-09
 
 ### Fixed

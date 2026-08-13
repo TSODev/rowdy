@@ -43,8 +43,18 @@ pub fn is_select_query(sql: &str) -> bool {
 
 // ── WHERE / ORDER BY builders ─────────────────────────────────────────────────
 
-pub fn build_where(filters: &BTreeMap<String, String>, schema: &[ColumnSchema]) -> String {
+// Columns whose SQL type is already textual don't need a cast before LIKE.
+// Everything else (numeric, boolean, uuid, date/time, json, inet…) does — most
+// engines (notably PostgreSQL) reject `LIKE` on non-text operands outright.
+fn is_text_type(tn: &str) -> bool {
+    tn.contains("CHAR") || tn.contains("TEXT") || tn.contains("CLOB")
+        || tn.contains("STRING") || tn.contains("ENUM") || tn.contains("SET")
+}
+
+pub fn build_where(filters: &BTreeMap<String, String>, schema: &[ColumnSchema], db_type: &str) -> String {
     if filters.is_empty() { return String::new(); }
+    // MySQL only accepts CHAR as a CAST target; every other engine here accepts TEXT.
+    let cast_type = if db_type.eq_ignore_ascii_case("mysql") { "CHAR" } else { "TEXT" };
     let clauses: Vec<String> = filters.iter()
         .map(|(col, val)| {
             let type_name = schema.iter()
@@ -52,22 +62,12 @@ pub fn build_where(filters: &BTreeMap<String, String>, schema: &[ColumnSchema]) 
                 .map(|cs| cs.type_name.as_str())
                 .unwrap_or("");
             let tn = type_name.to_uppercase();
+            let escaped = val.replace('\'', "''");
 
-            if tn.contains("BOOL") || tn == "TINYINT(1)" {
-                let b = matches!(
-                    val.to_lowercase().as_str(),
-                    "true" | "t" | "1" | "yes" | "on"
-                );
-                format!("\"{}\" = {}", col, if b { "TRUE" } else { "FALSE" })
-            } else if (tn.contains("INT") || tn.contains("FLOAT") || tn.contains("REAL")
-                || tn.contains("NUMERIC") || tn.contains("DECIMAL") || tn.contains("DOUBLE")
-                || tn.contains("NUMBER"))
-                && val.parse::<f64>().is_ok()
-            {
-                format!("\"{}\" = {}", col, val)
-            } else {
-                let escaped = val.replace('\'', "''");
+            if is_text_type(&tn) {
                 format!("\"{}\" LIKE '%{}%'", col, escaped)
+            } else {
+                format!("CAST(\"{}\" AS {}) LIKE '%{}%'", col, cast_type, escaped)
             }
         })
         .collect();
@@ -81,8 +81,9 @@ pub fn build_data_query(
     schema: &[ColumnSchema],
     order_by: Option<(&str, bool)>,
     limit: Option<usize>,
+    db_type: &str,
 ) -> String {
-    let wh = build_where(filters, schema);
+    let wh = build_where(filters, schema, db_type);
     let ob = order_by.map_or(String::new(), |(col, asc)| {
         let safe = col.replace('"', "");
         format!(" ORDER BY \"{}\" {}", safe, if asc { "ASC" } else { "DESC" })
@@ -95,8 +96,9 @@ pub fn build_count_query(
     table: &str,
     filters: &BTreeMap<String, String>,
     schema: &[ColumnSchema],
+    db_type: &str,
 ) -> String {
-    let wh = build_where(filters, schema);
+    let wh = build_where(filters, schema, db_type);
     format!("SELECT COUNT(*) AS _count FROM \"{table}\"{wh}")
 }
 
